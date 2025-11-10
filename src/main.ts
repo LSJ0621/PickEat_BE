@@ -1,10 +1,13 @@
+import { config } from 'dotenv';
+config(); // .env 파일 로드
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useLogger(app.get(Logger))
+  app.useLogger(app.get(Logger));
   app.enableCors({
     origin: 'http://localhost:8080', // Vue 개발 서버 주소
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
@@ -13,4 +16,4 @@ async function bootstrap() {
   });
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+void bootstrap();

@@ -9,7 +9,6 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
 import { JwtStrategy } from './strategy/jwt.strategy';
-import { LocalStrategy } from './strategy/local.strategy';
 
 @Module({
   imports: [
@@ -18,12 +17,12 @@ import { LocalStrategy } from './strategy/local.strategy';
     PassportModule,
     UserModule,
     JwtModule.register({
-      secret: 'secret',               
-      signOptions: { expiresIn: '1h' }
+      secret: 'secret',
+      signOptions: { expiresIn: '1h' },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JwtStrategy, JwtTokenProvider],
+  providers: [AuthService, JwtStrategy, JwtTokenProvider],
   exports: [JwtStrategy],
 })
 export class AuthModule {}

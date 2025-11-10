@@ -11,8 +11,9 @@ import { JwtTokenProvider } from './provider/jwt-token.provider';
 
 @Injectable()
 export class AuthService {
-  private readonly kakaoClientIdEnv = "b82967657cb741bb3c4173fdfe1dc0b7";
-  private readonly kakaoRedirectUriEnv = "http://localhost:8080/oauth/kakao/redirect";
+  private readonly kakaoClientIdEnv = 'b82967657cb741bb3c4173fdfe1dc0b7';
+  private readonly kakaoRedirectUriEnv =
+    'http://localhost:8080/oauth/kakao/redirect';
 
   constructor(
     private readonly httpService: HttpService,
@@ -40,7 +41,9 @@ export class AuthService {
     const clientId = this.kakaoClientIdEnv;
     const redirectUri = this.kakaoRedirectUriEnv;
     if (!clientId || !redirectUri) {
-      throw new Error('Kakao OAuth env missing: OAUTH_KAKAO_CLIENT_ID or OAUTH_KAKAO_REDIRECT_URI');
+      throw new Error(
+        'Kakao OAuth env missing: OAUTH_KAKAO_CLIENT_ID or OAUTH_KAKAO_REDIRECT_URI',
+      );
     }
     const params = new URLSearchParams();
     params.append('code', code);
@@ -48,7 +51,7 @@ export class AuthService {
     params.append('redirect_uri', redirectUri);
     params.append('grant_type', 'authorization_code');
 
-    const response = (await firstValueFrom(
+    const response = await firstValueFrom<AxiosResponse<AccessTokenDto>>(
       this.httpService.post<AccessTokenDto>(
         'https://kauth.kakao.com/oauth/token',
         params.toString(),
@@ -58,14 +61,14 @@ export class AuthService {
           },
         },
       ),
-    )) as AxiosResponse<AccessTokenDto>;
+    );
 
     console.log('응답 accesstoken JSON', response.data);
     return response.data;
   }
 
   private async getKakaoProfile(token: string): Promise<KakaoProfileDto> {
-    const response = (await firstValueFrom(
+    const response = await firstValueFrom<AxiosResponse<KakaoProfileDto>>(
       this.httpService.get<KakaoProfileDto>(
         'https://kapi.kakao.com/v2/user/me',
         {
@@ -74,7 +77,7 @@ export class AuthService {
           },
         },
       ),
-    )) as AxiosResponse<KakaoProfileDto>;
+    );
 
     console.log('profile JSON', response.data);
     return response.data;
@@ -88,7 +91,9 @@ export class AuthService {
     if (!originalUser) {
       const email = kakaoProfileDto.kakao_account.email;
       if (!email) {
-        throw new Error('Kakao profile does not include email. Enable email scope.');
+        throw new Error(
+          'Kakao profile does not include email. Enable email scope.',
+        );
       }
       const profileImage = kakaoProfileDto.properties?.profile_image;
       originalUser = await this.userService.createOauth(
