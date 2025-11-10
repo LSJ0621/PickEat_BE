@@ -4,4 +4,3 @@ export class AppKakaoLoginDto {
   @IsString()
   accessToken: string;
 }
-

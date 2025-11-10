@@ -4,7 +4,10 @@ import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { MenuModule } from './menu/menu.module';
 import { UserModule } from './user/user.module';
+import { SearchModule } from './search/search.module';
+import { MapModule } from './map/map.module';
 
 @Module({
   imports: [
@@ -20,8 +23,11 @@ import { UserModule } from './user/user.module';
       dropSchema: false,
     }),
     LoggerModule.forRoot(),
-    UserModule,
     AuthModule,
+    UserModule,
+    MenuModule,
+    SearchModule,
+    MapModule,
   ],
   controllers: [AppController],
   providers: [AppService],
