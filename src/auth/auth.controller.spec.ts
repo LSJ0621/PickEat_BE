@@ -4,11 +4,21 @@ import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
+  const authService = {
+    kakaoLogin: jest.fn(),
+    kakaoLoginWithToken: jest.fn(),
+  };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [AuthService],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: authService,
+        },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);

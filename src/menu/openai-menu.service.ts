@@ -24,7 +24,7 @@ interface RecommendationPayload {
 @Injectable()
 export class OpenAiMenuService {
   private readonly logger = new Logger(OpenAiMenuService.name);
-  private readonly defaultModel = 'gpt-5';
+  private readonly defaultModel = 'gpt-4o';
   private readonly defaultUrl = 'https://api.openai.com/v1/chat/completions';
 
   constructor(private readonly httpService: HttpService) {}
