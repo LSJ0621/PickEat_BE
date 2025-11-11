@@ -1,182 +1,179 @@
-import { HttpService } from '@nestjs/axios';
 import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
-import { AxiosError, AxiosResponse } from 'axios';
-import { firstValueFrom } from 'rxjs';
+import OpenAI from 'openai';
+import {
+  buildUserPrompt,
+  MENU_RECOMMENDATIONS_JSON_SCHEMA,
+  SYSTEM_PROMPT,
+} from './prompts/menu-recommendation.prompts';
 
-interface ChatCompletionResponse {
-  choices: Array<{
-    message?: {
-      content?: string;
-    };
-  }>;
-}
-
-interface RecommendationPayload {
-  recommendations?: unknown;
-  menus?: unknown;
-  items?: unknown;
+interface MenuRecommendationsResponse {
+  recommendations: string[];
 }
 
 @Injectable()
-export class OpenAiMenuService {
+export class OpenAiMenuService implements OnModuleInit {
   private readonly logger = new Logger(OpenAiMenuService.name);
-  private readonly defaultModel = 'gpt-4o';
-  private readonly defaultUrl = 'https://api.openai.com/v1/chat/completions';
+  private readonly defaultModel = 'gpt-5';
+  private openai: OpenAI;
 
-  constructor(private readonly httpService: HttpService) {}
+  onModuleInit() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      this.logger.error('OPENAI_API_KEY is not configured');
+      return;
+    }
+
+    this.openai = new OpenAI({
+      apiKey,
+    });
+  }
 
   async generateMenuRecommendations(
     prompt: string,
     tags: string[],
   ): Promise<string[]> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      this.logger.error('OPENAI_API_KEY is not configured');
+    if (!this.openai) {
       throw new InternalServerErrorException(
         'OpenAI API key is not configured',
       );
     }
 
     const model = process.env.OPENAI_MODEL ?? this.defaultModel;
-    const url = process.env.OPENAI_API_URL ?? this.defaultUrl;
-    const normalizedTags = tags?.filter(Boolean) ?? [];
-    const promptForModel = [
-      `User prompt: ${prompt}`,
-      `User preferences: ${normalizedTags.length ? normalizedTags.join(', ') : 'none provided'}`,
-      'Respond ONLY with JSON shaped as {"recommendations":["menu1","menu2"]} where each item is a concrete dish.',
-    ].join('\n');
 
-    const requestBody = {
-      model,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a culinary assistant for the Pick-Eat app. Recommend diverse Korean-friendly menus that align with user mood and preferences.',
-        },
-        { role: 'user', content: promptForModel },
-      ],
-    };
+    // 프롬프트 파일에서 가져온 프롬프트 사용
+    const systemPrompt = SYSTEM_PROMPT;
+    const userPrompt = buildUserPrompt(prompt, tags);
+    const jsonSchema = MENU_RECOMMENDATIONS_JSON_SCHEMA;
 
-    const maskedHeaders = {
-      Authorization: 'Bearer ***',
-      'Content-Type': 'application/json',
-    };
     const startedAt = Date.now();
+    
+    // 프롬프트 내용 로그 출력 (디버깅용)
     this.logger.log(
-      `📤 [OpenAI 요청]
-        URL: ${url}
-        Headers: ${JSON.stringify(maskedHeaders, null, 2)}
-        Body: ${JSON.stringify(requestBody, null, 2)}
-        시작 시간: ${new Date(startedAt).toISOString()}`,
+      `📤 [OpenAI 요청 시작] model=${model}`,
+    );
+    this.logger.log(
+      `📋 [System Prompt]\n${systemPrompt}`,
+    );
+    this.logger.log(
+      `📋 [User Prompt]\n${userPrompt}`,
+    );
+    this.logger.log(
+      `📋 [JSON Schema]\n${JSON.stringify(jsonSchema, null, 2)}`,
+    );
+    this.logger.log(
+      `📤 [OpenAI 요청] 사용자 요청: "${prompt.substring(0, 50)}..."`,
     );
 
     try {
-      const response = await firstValueFrom<
-        AxiosResponse<ChatCompletionResponse>
-      >(
-        this.httpService.post<ChatCompletionResponse>(url, requestBody, {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+      // GPT-5 모델은 temperature를 지원하지 않음
+      const isGpt5 = model.startsWith('gpt-5');
+      const requestParams: any = {
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'menu_recommendations',
+            schema: jsonSchema,
+            strict: true,
           },
-        }),
-      );
+        },
+        // GPT-5는 reasoning tokens를 사용하므로 더 많은 토큰이 필요
+        max_completion_tokens: isGpt5 ? 2000 : 500,
+      };
+
+      // GPT-5가 아닌 경우에만 temperature 설정
+      if (!isGpt5) {
+        requestParams.temperature = 0.9;
+      }
+
+      const response = await this.openai.chat.completions.create(requestParams);
+
       const duration = Date.now() - startedAt;
+      
+      // 응답 디버깅을 위한 로깅
       this.logger.log(
-        `📥 [OpenAI 응답]
-          상태 코드: ${response.status}
-          소요 시간: ${duration}ms
-          응답 내용: ${JSON.stringify(response.data, null, 2)}`,
+        `📥 [OpenAI 응답 원본] ${JSON.stringify(response, null, 2)}`,
       );
-      const content = response.data.choices?.[0]?.message?.content;
-      const recommendations = this.extractRecommendations(content);
+      
+      const choice = response.choices[0];
+      if (!choice) {
+        throw new Error('OpenAI returned no choices');
+      }
+
+      const content = choice.message?.content;
+      const finishReason = choice.finish_reason;
+
+      this.logger.log(
+        `📥 [OpenAI 응답 상세] finish_reason=${finishReason}, has_content=${!!content}`,
+      );
+
+      if (!content) {
+        throw new Error(
+          `OpenAI returned no content. finish_reason: ${finishReason}`,
+        );
+      }
+
+      const parsed = JSON.parse(content) as MenuRecommendationsResponse;
+      const recommendations = parsed.recommendations || [];
+
       if (!recommendations.length) {
         throw new Error('OpenAI returned no recommendations');
       }
-      return recommendations;
+
+      // 메뉴명 정규화 (추가 안전장치)
+      const normalized = this.normalizeMenuNames(recommendations);
+
+      this.logger.log(
+        `✅ [OpenAI 응답] 소요 시간: ${duration}ms, 추천 개수: ${normalized.length}`,
+      );
+
+      return normalized;
     } catch (error) {
       const duration = Date.now() - startedAt;
-      const axiosError = error as AxiosError;
-      const response = axiosError.response;
-      if (response) {
-        this.logger.error(
-          `❌ [OpenAI 에러]
-            상태 코드: ${response.status}
-            소요 시간: ${duration}ms
-            에러 내용: ${JSON.stringify(response.data, null, 2)}
-            스택 트레이스: ${axiosError.stack}`,
-        );
-      } else {
-        this.logger.error(
-          `❌ [OpenAI 에러]
-            소요 시간: ${duration}ms
-            에러 메시지: ${axiosError.message}
-            스택 트레이스: ${axiosError.stack}`,
-        );
-      }
+      const errorMessage =
+        error instanceof Error ? error.message : 'unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
+      this.logger.error(
+        `❌ [OpenAI 에러] 소요 시간: ${duration}ms, 에러: ${errorMessage}`,
+        errorStack,
+      );
+
       throw new InternalServerErrorException(
         'Failed to fetch menu recommendations',
       );
     }
   }
 
-  private extractRecommendations(content?: string): string[] {
-    if (!content) {
-      return [];
-    }
+  /**
+   * 메뉴명 정규화: 영어 주석, 괄호, 불필요한 문자 제거
+   */
+  private normalizeMenuNames(menuNames: string[]): string[] {
+    return menuNames
+      .map((name) => {
+        // 괄호와 그 안의 내용 제거 (예: "떡볶이 (Tteokbokki)" → "떡볶이")
+        let normalized = name.replace(/\([^)]*\)/g, '').trim();
 
-    const normalized = this.stripCodeFence(content).trim();
-    try {
-      const parsed = JSON.parse(normalized) as RecommendationPayload;
-      const recommendations =
-        this.toStringArray(parsed.recommendations) ??
-        this.toStringArray(parsed.menus) ??
-        this.toStringArray(parsed.items);
-      if (recommendations) {
-        return this.normalizeList(recommendations);
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Failed to parse OpenAI JSON payload: ${error instanceof Error ? error.message : error}`,
-      );
-    }
+        // 영어 문자 제거
+        normalized = normalized.replace(/[a-zA-Z]/g, '').trim();
 
-    return this.normalizeList(
-      normalized
-        .split(/\n|,/)
-        .map((item) =>
-          item
-            .replace(/^\d+\.?/g, '')
-            .replace(/^-/, '')
-            .trim(),
-        )
-        .filter((item) => item.length > 0),
-    );
-  }
+        // 한글만 남기기 (공백 제거)
+        normalized = normalized.replace(/\s+/g, '');
 
-  private stripCodeFence(content: string): string {
-    if (!content.startsWith('```')) {
-      return content;
-    }
-    return content.replace(/```(json)?/g, ' ');
-  }
-
-  private toStringArray(value: unknown): string[] | null {
-    if (!Array.isArray(value)) {
-      return null;
-    }
-    return value
-      .map((item) => (typeof item === 'string' ? item : String(item)))
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-  }
-
-  private normalizeList(items: string[]): string[] {
-    return Array.from(new Set(items));
+        // 한글만 허용 (글자수 제한 없음)
+        const match = normalized.match(/^[가-힣]+$/);
+        return match ? match[0] : null;
+      })
+      .filter((name): name is string => name !== null && name.length > 0)
+      .filter((name, index, array) => array.indexOf(name) === index); // 중복 제거
   }
 }
