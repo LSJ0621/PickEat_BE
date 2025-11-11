@@ -1,4 +1,3 @@
-import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from '../user/user.module';
@@ -9,7 +8,6 @@ import { OpenAiMenuService } from './openai-menu.service';
 
 @Module({
   imports: [
-    HttpModule,
     TypeOrmModule.forFeature([MenuRecommendation]),
     UserModule,
   ],
