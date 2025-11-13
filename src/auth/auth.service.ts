@@ -112,6 +112,9 @@ export class AuthService {
     return {
       id: originalUser.id,
       token: jwtToken,
+      address: originalUser.address,
+      latitude: originalUser.latitude,
+      longitude: originalUser.longitude,
     };
   }
 }

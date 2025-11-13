@@ -1,11 +1,11 @@
 import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-  VersionColumn,
+    Column,
+    CreateDateColumn,
+    Entity,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    VersionColumn,
 } from 'typeorm';
 import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
@@ -35,6 +35,15 @@ export class User {
 
   @Column({ type: 'jsonb', nullable: true })
   preferences: UserPreferences | null;
+
+  @Column({ nullable: true })
+  address: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitude: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitude: number | null;
 
   @CreateDateColumn()
   createdAt: Date;
