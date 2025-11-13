@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,8 +15,10 @@ import {
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { CreateUserDto } from './dto/create-user.dto';
+import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { UpdateUserAddressDto } from './dto/update-user-address.dto';
 import { UserService } from './user.service';
 
 @Controller('user')
@@ -40,6 +43,26 @@ export class UserController {
     const tags = preferencesDto.tags ?? [];
     const preferences = await this.userService.updatePreferences(user.id, tags);
     return { preferences };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('address/search')
+  async searchAddress(@Query() searchDto: SearchAddressDto) {
+    return this.userService.searchAddress(searchDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('address')
+  async updateUserAddress(
+    @Body() updateDto: UpdateUserAddressDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const user = await this.userService.getOrFailByEmail(authUser.email);
+    const updatedUser = await this.userService.updateAddress(
+      user.id,
+      updateDto.selectedAddress,
+    );
+    return { address: updatedUser.address };
   }
 
   @Post()
