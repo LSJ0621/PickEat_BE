@@ -12,12 +12,9 @@ import { lastValueFrom } from 'rxjs';
 import { MapService } from '../map/map.service';
 import { SearchRestaurantsDto } from './dto/search-restaurants.dto';
 
-const NAVER_LOCAL_SEARCH_URL =
-  'https://openapi.naver.com/v1/search/local.json';
-const NAVER_CLIENT_ID =
-  process.env.NAVER_CLIENT_ID || '<<PUT_YOUR_NAVER_CLIENT_ID_HERE>>';
-const NAVER_CLIENT_SECRET =
-  process.env.NAVER_CLIENT_SECRET || '<<PUT_YOUR_NAVER_CLIENT_SECRET_HERE>>';
+const NAVER_LOCAL_SEARCH_URL = 'https://openapi.naver.com/v1/search/local.json';
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
 interface NaverLocalSearchItem {
   title: string;

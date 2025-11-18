@@ -1,11 +1,11 @@
 import {
-    Column,
-    CreateDateColumn,
-    Entity,
-    OneToMany,
-    PrimaryGeneratedColumn,
-    UpdateDateColumn,
-    VersionColumn,
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+  VersionColumn,
 } from 'typeorm';
 import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
@@ -19,16 +19,13 @@ export class User {
   email: string;
 
   @Column({ nullable: true })
+  password: string;
+
+  @Column({ nullable: true })
   name: string;
 
   @Column({ nullable: true })
   profileImage: string;
-
-  @Column()
-  socialId: string;
-
-  @Column()
-  socialType: string;
 
   @Column({ default: 'USER' })
   role: string;
