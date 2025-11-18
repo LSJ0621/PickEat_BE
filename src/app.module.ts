@@ -4,10 +4,10 @@ import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { MenuModule } from './menu/menu.module';
-import { UserModule } from './user/user.module';
-import { SearchModule } from './search/search.module';
 import { MapModule } from './map/map.module';
+import { MenuModule } from './menu/menu.module';
+import { SearchModule } from './search/search.module';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -19,8 +19,8 @@ import { MapModule } from './map/map.module';
       password: 'postgres',
       database: 'pickeat',
       autoLoadEntities: true,
-      synchronize: true,
-      dropSchema: false,
+      synchronize: true, 
+      dropSchema: false, 
     }),
     LoggerModule.forRoot(),
     AuthModule,

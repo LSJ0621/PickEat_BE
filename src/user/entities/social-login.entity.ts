@@ -1,25 +1,26 @@
 import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-  VersionColumn,
+    Column,
+    CreateDateColumn,
+    Entity,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+    VersionColumn,
 } from 'typeorm';
-import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
 
-@Entity()
-export class User {
+@Entity('social_login')
+export class SocialLogin {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ unique: true })
   email: string;
 
-  @Column({ nullable: true })
-  password: string;
+  @Column()
+  socialId: string;
+
+  @Column()
+  socialType: string;
 
   @Column({ nullable: true })
   name: string;
@@ -50,7 +51,5 @@ export class User {
 
   @VersionColumn()
   version: number;
-
-  @OneToMany(() => MenuRecommendation, (recommendation) => recommendation.user)
-  recommendations: MenuRecommendation[];
 }
+

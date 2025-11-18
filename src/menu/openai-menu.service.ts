@@ -42,8 +42,9 @@ export class OpenAiMenuService {
 
   async generateMenuRecommendations(
     prompt: string,
-    tags: string[],
+    likes: string[],
+    dislikes: string[],
   ): Promise<string[]> {
-    return this.menuService.generateMenuRecommendations(prompt, tags);
+    return this.menuService.generateMenuRecommendations(prompt, likes, dislikes);
   }
 }
