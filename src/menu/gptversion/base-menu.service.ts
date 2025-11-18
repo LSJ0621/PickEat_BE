@@ -1,14 +1,14 @@
 import {
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  OnModuleInit,
+    Injectable,
+    InternalServerErrorException,
+    Logger,
+    OnModuleInit,
 } from '@nestjs/common';
 import OpenAI from 'openai';
 import {
-  buildUserPrompt,
-  MENU_RECOMMENDATIONS_JSON_SCHEMA,
-  SYSTEM_PROMPT,
+    buildUserPrompt,
+    MENU_RECOMMENDATIONS_JSON_SCHEMA,
+    SYSTEM_PROMPT,
 } from '../prompts/menu-recommendation.prompts';
 
 interface MenuRecommendationsResponse {
@@ -41,7 +41,8 @@ export abstract class BaseMenuService implements OnModuleInit {
 
   async generateMenuRecommendations(
     prompt: string,
-    tags: string[],
+    likes: string[],
+    dislikes: string[],
   ): Promise<string[]> {
     if (!this.openai) {
       throw new InternalServerErrorException(
@@ -50,7 +51,7 @@ export abstract class BaseMenuService implements OnModuleInit {
     }
 
     const systemPrompt = SYSTEM_PROMPT;
-    const userPrompt = buildUserPrompt(prompt, tags);
+    const userPrompt = buildUserPrompt(prompt, likes, dislikes);
     const jsonSchema = MENU_RECOMMENDATIONS_JSON_SCHEMA;
 
     const startedAt = Date.now();

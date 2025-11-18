@@ -25,17 +25,32 @@ export const SYSTEM_PROMPT = [
 /**
  * User 프롬프트 생성 함수
  * @param userPrompt 사용자가 입력한 요청
- * @param tags 사용자의 취향 정보 (태그 배열)
+ * @param likes 사용자가 좋아하는 것 (태그 배열)
+ * @param dislikes 사용자가 싫어하는 것 (태그 배열)
  * @returns 완성된 User 프롬프트
  */
-export function buildUserPrompt(userPrompt: string, tags: string[]): string {
-  const normalizedTags = tags?.filter(Boolean) ?? [];
-  const hasTags = normalizedTags.length > 0;
+export function buildUserPrompt(
+  userPrompt: string,
+  likes: string[],
+  dislikes: string[],
+): string {
+  const normalizedLikes = likes?.filter(Boolean) ?? [];
+  const normalizedDislikes = dislikes?.filter(Boolean) ?? [];
+  const hasLikes = normalizedLikes.length > 0;
+  const hasDislikes = normalizedDislikes.length > 0;
+
+  const preferenceParts: string[] = [];
+  if (hasLikes) {
+    preferenceParts.push(`좋아하는 것: ${normalizedLikes.join(', ')}`);
+  }
+  if (hasDislikes) {
+    preferenceParts.push(`싫어하는 것: ${normalizedDislikes.join(', ')}`);
+  }
 
   return [
     `사용자 요청: ${userPrompt}`,
-    hasTags
-      ? `참고할 취향 정보: ${normalizedTags.join(', ')}`
+    preferenceParts.length > 0
+      ? `참고할 취향 정보: ${preferenceParts.join(' | ')}`
       : '참고할 취향 정보: 없음',
   ].join('\n');
 }

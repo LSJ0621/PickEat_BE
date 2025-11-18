@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import {
-  CurrentUser,
   AuthUserPayload,
+  CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { UserService } from '../user/user.service';
@@ -22,8 +22,20 @@ export class MenuController {
     @Body() recommendMenuDto: RecommendMenuDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const user = await this.userService.getOrFailByEmail(authUser.email);
-    return this.menuService.recommendForUser(user, recommendMenuDto.prompt);
+    const result = await this.userService.findUserOrSocialLoginByEmail(
+      authUser.email,
+    );
+    if (result.type === 'user') {
+      return this.menuService.recommendForUser(
+        result.user!,
+        recommendMenuDto.prompt,
+      );
+    } else {
+      return this.menuService.recommendForSocialLogin(
+        result.socialLogin!,
+        recommendMenuDto.prompt,
+      );
+    }
   }
 
   @Get('recommendations/history')
@@ -31,7 +43,16 @@ export class MenuController {
     @Query() query: RecommendationHistoryQueryDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const user = await this.userService.getOrFailByEmail(authUser.email);
-    return this.menuService.getHistory(user, query.date);
+    const result = await this.userService.findUserOrSocialLoginByEmail(
+      authUser.email,
+    );
+    if (result.type === 'user') {
+      return this.menuService.getHistory(result.user!, query.date);
+    } else {
+      return this.menuService.getHistoryForSocialLogin(
+        result.socialLogin!,
+        query.date,
+      );
+    }
   }
 }

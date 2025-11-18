@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SocialLogin } from './entities/social-login.entity';
 import { User } from './entities/user.entity';
 import { SocialType } from './enum/social-type.enum';
 import {
@@ -26,6 +27,8 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(SocialLogin)
+    private readonly socialLoginRepository: Repository<SocialLogin>,
   ) {
     this.kakaoApiKey = process.env.KAKAO_REST_API_KEY || '';
     if (!this.kakaoApiKey) {
@@ -48,8 +51,29 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
+  async createUser(userData: {
+    email: string;
+    password: string;
+    role?: string;
+    name?: string | null;
+    profileImage?: string | null;
+  }): Promise<User> {
+    const user = this.userRepository.create({
+      email: userData.email,
+      password: userData.password,
+      role: userData.role,
+      name: userData.name ?? undefined,
+      profileImage: userData.profileImage ?? undefined,
+    });
+    return this.userRepository.save(user);
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
+  }
+
+  async findSocialLoginByEmail(email: string): Promise<SocialLogin | null> {
+    return this.socialLoginRepository.findOne({ where: { email } });
   }
 
   async getOrFailByEmail(email: string): Promise<User> {
@@ -60,26 +84,90 @@ export class UserService {
     return user;
   }
 
-  async getUserBySocialId(socialId: number): Promise<User | null> {
-    return this.userRepository.findOne({
+  async getOrFailSocialLoginByEmail(email: string): Promise<SocialLogin> {
+    const socialLogin = await this.findSocialLoginByEmail(email);
+    if (!socialLogin) {
+      throw new NotFoundException(`SocialLogin with email ${email} not found`);
+    }
+    return socialLogin;
+  }
+
+  // User 또는 SocialLogin 중 하나를 찾는 메서드 (JWT 토큰에서 타입을 알 수 없을 때 사용)
+  async findUserOrSocialLoginByEmail(email: string): Promise<{
+    type: 'user' | 'social';
+    user?: User;
+    socialLogin?: SocialLogin;
+  }> {
+    const user = await this.findByEmail(email);
+    if (user) {
+      return { type: 'user', user };
+    }
+    const socialLogin = await this.findSocialLoginByEmail(email);
+    if (socialLogin) {
+      return { type: 'social', socialLogin };
+    }
+    throw new NotFoundException(`User or SocialLogin with email ${email} not found`);
+  }
+
+  async getUserBySocialId(socialId: string | number): Promise<SocialLogin | null> {
+    return this.socialLoginRepository.findOne({
       where: { socialId: socialId.toString() },
     });
   }
 
   async createOauth(
-    socialId: number,
+    socialId: string | number,
     email: string,
     socialType: SocialType,
     profileImage?: string,
-  ): Promise<User> {
-    const user = this.userRepository.create({
+    name?: string,
+  ): Promise<SocialLogin> {
+    const socialLogin = this.socialLoginRepository.create({
       email,
       socialId: socialId.toString(),
       socialType,
       role: 'USER',
       profileImage,
+      name,
     });
-    return this.userRepository.save(user);
+    return this.socialLoginRepository.save(socialLogin);
+  }
+
+  async updateSocialLoginAddress(
+    socialLoginId: number,
+    selectedAddress: AddressSearchResult,
+  ): Promise<SocialLogin> {
+    const socialLogin = await this.socialLoginRepository.findOne({
+      where: { id: socialLoginId },
+    });
+    if (!socialLogin) {
+      throw new NotFoundException('SocialLogin not found');
+    }
+    socialLogin.address =
+      selectedAddress.roadAddress || selectedAddress.address;
+    socialLogin.latitude =
+      selectedAddress.latitude && selectedAddress.latitude !== ''
+        ? parseFloat(selectedAddress.latitude)
+        : null;
+    socialLogin.longitude =
+      selectedAddress.longitude && selectedAddress.longitude !== ''
+        ? parseFloat(selectedAddress.longitude)
+        : null;
+    return this.socialLoginRepository.save(socialLogin);
+  }
+
+  async updateSocialLoginName(
+    socialLoginId: number,
+    name: string,
+  ): Promise<SocialLogin> {
+    const socialLogin = await this.socialLoginRepository.findOne({
+      where: { id: socialLoginId },
+    });
+    if (!socialLogin) {
+      throw new NotFoundException('SocialLogin not found');
+    }
+    socialLogin.name = name;
+    return this.socialLoginRepository.save(socialLogin);
   }
 
   findAll() {
@@ -97,8 +185,17 @@ export class UserService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
-    await this.userRepository.update(id, updateUserDto);
-    return this.findOne(id);
+    const user = await this.findOne(id);
+    
+    // 보내준 필드만 업데이트 (undefined인 필드는 업데이트하지 않음)
+    if (updateUserDto.name !== undefined) {
+      user.name = updateUserDto.name;
+    }
+    if (updateUserDto.profileImage !== undefined) {
+      user.profileImage = updateUserDto.profileImage;
+    }
+    
+    return this.userRepository.save(user);
   }
 
   async remove(id: number) {
@@ -114,13 +211,65 @@ export class UserService {
 
   async updatePreferences(
     userId: number,
-    tags: string[],
+    likes?: string[],
+    dislikes?: string[],
   ): Promise<UserPreferences> {
     const user = await this.findOne(userId);
-    const normalizedTags = this.normalizeTags(tags);
-    user.preferences = { tags: normalizedTags };
+    const currentPreferences = user.preferences ?? defaultUserPreferences();
+    
+    // 좋아하는 것과 싫어하는 것을 각각 정규화
+    const normalizedLikes = likes !== undefined 
+      ? this.normalizeTags(likes) 
+      : currentPreferences.likes;
+    const normalizedDislikes = dislikes !== undefined 
+      ? this.normalizeTags(dislikes) 
+      : currentPreferences.dislikes;
+    
+    user.preferences = {
+      likes: normalizedLikes,
+      dislikes: normalizedDislikes,
+    };
     await this.userRepository.save(user);
     return user.preferences;
+  }
+
+  async getSocialLoginPreferences(socialLoginId: number): Promise<UserPreferences> {
+    const socialLogin = await this.socialLoginRepository.findOne({
+      where: { id: socialLoginId },
+    });
+    if (!socialLogin) {
+      throw new NotFoundException('SocialLogin not found');
+    }
+    return socialLogin.preferences ?? defaultUserPreferences();
+  }
+
+  async updateSocialLoginPreferences(
+    socialLoginId: number,
+    likes?: string[],
+    dislikes?: string[],
+  ): Promise<UserPreferences> {
+    const socialLogin = await this.socialLoginRepository.findOne({
+      where: { id: socialLoginId },
+    });
+    if (!socialLogin) {
+      throw new NotFoundException('SocialLogin not found');
+    }
+    const currentPreferences = socialLogin.preferences ?? defaultUserPreferences();
+    
+    // 좋아하는 것과 싫어하는 것을 각각 정규화
+    const normalizedLikes = likes !== undefined 
+      ? this.normalizeTags(likes) 
+      : currentPreferences.likes;
+    const normalizedDislikes = dislikes !== undefined 
+      ? this.normalizeTags(dislikes) 
+      : currentPreferences.dislikes;
+    
+    socialLogin.preferences = {
+      likes: normalizedLikes,
+      dislikes: normalizedDislikes,
+    };
+    await this.socialLoginRepository.save(socialLogin);
+    return socialLogin.preferences;
   }
 
   async searchAddress(searchDto: SearchAddressDto): Promise<AddressSearchResponse> {
