@@ -9,16 +9,8 @@ import { Gpt4MenuService } from './gptversion/gpt4-menu.service';
 import { Gpt5MenuService } from './gptversion/gpt5-menu.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([MenuRecommendation]),
-    UserModule,
-  ],
+  imports: [TypeOrmModule.forFeature([MenuRecommendation]), UserModule],
   controllers: [MenuController],
-  providers: [
-    MenuService,
-    OpenAiMenuService,
-    Gpt4MenuService,
-    Gpt5MenuService,
-  ],
+  providers: [MenuService, OpenAiMenuService, Gpt4MenuService, Gpt5MenuService],
 })
 export class MenuModule {}

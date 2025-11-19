@@ -34,4 +34,3 @@ export interface NaverReverseGeocodeResponse {
   };
   results: NaverReverseGeocodeResult[];
 }
-

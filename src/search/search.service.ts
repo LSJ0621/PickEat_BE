@@ -36,7 +36,6 @@ interface NaverLocalSearchResponse {
   items: NaverLocalSearchItem[];
 }
 
-
 export interface RestaurantSummary {
   name: string;
   address: string;
@@ -91,13 +90,10 @@ export class SearchService {
         display: 5,
       };
       const response = await lastValueFrom(
-        this.httpService.get<NaverLocalSearchResponse>(
-          NAVER_LOCAL_SEARCH_URL,
-          {
-            headers,
-            params,
-          },
-        ),
+        this.httpService.get<NaverLocalSearchResponse>(NAVER_LOCAL_SEARCH_URL, {
+          headers,
+          params,
+        }),
       );
 
       const restaurants = (response.data.items ?? []).map((item) =>
@@ -114,9 +110,7 @@ export class SearchService {
       const status = axiosError.response?.status;
       const data = axiosError.response?.data;
       this.logger.error(
-        `❌ [네이버 검색 에러] query="${query}", status=${
-          status ?? 'unknown'
-        }`,
+        `❌ [네이버 검색 에러] query="${query}", status=${status ?? 'unknown'}`,
         axiosError.stack,
       );
       if (data) {
@@ -198,5 +192,4 @@ export class SearchService {
     // Naver distance is returned in meters, convert to kilometers.
     return Number((parsed / 1000).toFixed(2));
   }
-
 }

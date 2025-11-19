@@ -42,4 +42,3 @@ export interface KakaoLocalAddressDocument {
     y: string;
   };
 }
-

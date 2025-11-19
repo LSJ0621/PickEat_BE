@@ -42,4 +42,3 @@ export class Gpt5MenuService extends BaseMenuService {
     };
   }
 }
-

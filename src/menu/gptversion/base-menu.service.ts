@@ -1,14 +1,14 @@
 import {
-    Injectable,
-    InternalServerErrorException,
-    Logger,
-    OnModuleInit,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import OpenAI from 'openai';
 import {
-    buildUserPrompt,
-    MENU_RECOMMENDATIONS_JSON_SCHEMA,
-    SYSTEM_PROMPT,
+  buildUserPrompt,
+  MENU_RECOMMENDATIONS_JSON_SCHEMA,
+  SYSTEM_PROMPT,
 } from '../prompts/menu-recommendation.prompts';
 
 interface MenuRecommendationsResponse {
@@ -59,9 +59,7 @@ export abstract class BaseMenuService implements OnModuleInit {
     this.logger.log(`📤 [OpenAI 요청 시작] model=${this.getModel()}`);
     this.logger.log(`📋 [System Prompt]\n${systemPrompt}`);
     this.logger.log(`📋 [User Prompt]\n${userPrompt}`);
-    this.logger.log(
-      `📋 [JSON Schema]\n${JSON.stringify(jsonSchema, null, 2)}`,
-    );
+    this.logger.log(`📋 [JSON Schema]\n${JSON.stringify(jsonSchema, null, 2)}`);
     this.logger.log(
       `📤 [OpenAI 요청] 사용자 요청: "${prompt.substring(0, 50)}..."`,
     );
@@ -161,4 +159,3 @@ export abstract class BaseMenuService implements OnModuleInit {
       .filter((name, index, array) => array.indexOf(name) === index);
   }
 }
-

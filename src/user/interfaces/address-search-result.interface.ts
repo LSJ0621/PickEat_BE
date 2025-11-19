@@ -14,4 +14,3 @@ export interface AddressSearchResponse {
   };
   addresses: AddressSearchResult[];
 }
-

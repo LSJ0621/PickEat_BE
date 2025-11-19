@@ -45,6 +45,10 @@ export class OpenAiMenuService {
     likes: string[],
     dislikes: string[],
   ): Promise<string[]> {
-    return this.menuService.generateMenuRecommendations(prompt, likes, dislikes);
+    return this.menuService.generateMenuRecommendations(
+      prompt,
+      likes,
+      dislikes,
+    );
   }
 }

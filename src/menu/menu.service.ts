@@ -37,10 +37,7 @@ export class MenuService {
     };
   }
 
-  async recommendForSocialLogin(
-    socialLogin: SocialLogin,
-    prompt: string,
-  ) {
+  async recommendForSocialLogin(socialLogin: SocialLogin, prompt: string) {
     // 좋아하는 것과 싫어하는 것을 모두 전달
     const likes = socialLogin.preferences?.likes ?? [];
     const dislikes = socialLogin.preferences?.dislikes ?? [];
