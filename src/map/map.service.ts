@@ -2,14 +2,8 @@ import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { lastValueFrom } from 'rxjs';
 import { SearchRestaurantsDto } from '../search/dto/search-restaurants.dto';
-import {
-  RestaurantSummary,
-  SearchService,
-} from '../search/search.service';
-import {
-  MapMarker,
-  MapRestaurantsResponse,
-} from './interfaces/map.interface';
+import { RestaurantSummary, SearchService } from '../search/search.service';
+import { MapMarker, MapRestaurantsResponse } from './interfaces/map.interface';
 import {
   NaverReverseGeocodeResponse,
   NaverReverseGeocodeResult,
@@ -18,8 +12,7 @@ import {
 const NAVER_MAP_REVERSE_GEOCODE_URL =
   'https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc';
 const NAVER_MAP_CLIENT_ID =
-  process.env.NAVER_MAP_CLIENT_ID ||
-  '<<PUT_YOUR_NAVER_MAP_CLIENT_ID_HERE>>';
+  process.env.NAVER_MAP_CLIENT_ID || '<<PUT_YOUR_NAVER_MAP_CLIENT_ID_HERE>>';
 const NAVER_MAP_CLIENT_SECRET =
   process.env.NAVER_MAP_CLIENT_SECRET ||
   '<<PUT_YOUR_NAVER_MAP_CLIENT_SECRET_HERE>>';
@@ -39,9 +32,7 @@ export class MapService {
   ): Promise<MapRestaurantsResponse> {
     const { restaurants } = await this.searchService.searchRestaurants(dto);
     return {
-      markers: restaurants.map((restaurant) =>
-        this.toMarker(restaurant),
-      ),
+      markers: restaurants.map((restaurant) => this.toMarker(restaurant)),
     };
   }
 
@@ -60,9 +51,7 @@ export class MapService {
       return null;
     }
 
-    this.logger.log(
-      `🔍 [역지오코딩 요청] lat=${latitude}, lng=${longitude}`,
-    );
+    this.logger.log(`🔍 [역지오코딩 요청] lat=${latitude}, lng=${longitude}`);
 
     try {
       const response = await lastValueFrom(
@@ -93,8 +82,7 @@ export class MapService {
 
       return address;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'unknown error';
+      const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(
         `❌ [역지오코딩 에러] lat=${latitude}, lng=${longitude}, error=${message}`,
         error instanceof Error ? error.stack : undefined,

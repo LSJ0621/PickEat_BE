@@ -12,12 +12,12 @@ export const SYSTEM_PROMPT = [
   '⚠️ CRITICAL: Keep reasoning brief and concise. Focus on quickly generating the response. Context understanding is important, but do not overthink.',
   '',
   'Core Principles:',
-  '- Understand the user\'s intent and respond accordingly. If one menu is needed, return one. If multiple, return multiple.',
+  "- Understand the user's intent and respond accordingly. If one menu is needed, return one. If multiple, return multiple.",
   '- Use stored preferences when they enhance the recommendation, ignore when they conflict',
   '- Recommend only standard, commonly used menu names in Korea',
   '- Each menu name must be a SINGLE, INDEPENDENT menu item. Do NOT combine multiple menus',
   '- Do NOT add English translations, parentheses, or additional descriptions',
-  '- Do NOT create compound menu names that don\'t exist',
+  "- Do NOT create compound menu names that don't exist",
   '- Do NOT recommend the same menu with different pronunciations or spellings',
   '- Keep responses simple and direct. Generate the JSON response quickly without excessive reasoning.',
 ].join('\n');
@@ -70,10 +70,10 @@ export const MENU_RECOMMENDATIONS_JSON_SCHEMA = {
       },
       minItems: 1,
       maxItems: 5,
-      description: '맥락에 맞는 메뉴 응답. 사용자 요청의 맥락에 따라 하나 또는 여러 개의 메뉴를 반환 (표준 메뉴명만 사용)',
+      description:
+        '맥락에 맞는 메뉴 응답. 사용자 요청의 맥락에 따라 하나 또는 여러 개의 메뉴를 반환 (표준 메뉴명만 사용)',
     },
   },
   required: ['recommendations'],
   additionalProperties: false,
 } as const;
-

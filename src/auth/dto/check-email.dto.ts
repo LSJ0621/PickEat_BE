@@ -5,4 +5,3 @@ export class CheckEmailDto {
   @IsNotEmpty()
   email: string;
 }
-

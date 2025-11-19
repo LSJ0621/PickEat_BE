@@ -1,17 +1,17 @@
 import {
-    Body,
-    Controller,
-    Delete,
-    Get,
-    Param,
-    Patch,
-    Post,
-    Query,
-    UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
-    AuthUserPayload,
-    CurrentUser,
+  AuthUserPayload,
+  CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -32,7 +32,9 @@ export class UserController {
       authUser.email,
     );
     if (result.type === 'user') {
-      const preferences = await this.userService.getPreferences(result.user!.id);
+      const preferences = await this.userService.getPreferences(
+        result.user!.id,
+      );
       return { preferences };
     } else {
       const preferences = await this.userService.getSocialLoginPreferences(
@@ -92,10 +94,11 @@ export class UserController {
       );
       return { address: updatedUser.address };
     } else {
-      const updatedSocialLogin = await this.userService.updateSocialLoginAddress(
-        result.socialLogin!.id,
-        updateDto.selectedAddress,
-      );
+      const updatedSocialLogin =
+        await this.userService.updateSocialLoginAddress(
+          result.socialLogin!.id,
+          updateDto.selectedAddress,
+        );
       return { address: updatedSocialLogin.address };
     }
   }

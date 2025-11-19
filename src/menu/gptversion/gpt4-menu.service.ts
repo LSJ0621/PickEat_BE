@@ -41,4 +41,3 @@ export class Gpt4MenuService extends BaseMenuService {
     };
   }
 }
-

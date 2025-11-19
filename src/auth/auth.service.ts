@@ -5,9 +5,14 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosResponse } from 'axios';
 import * as bcrypt from 'bcrypt';
 import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
+import { SocialLogin } from '../user/entities/social-login.entity';
+import { User } from '../user/entities/user.entity';
 import { SocialType } from '../user/enum/social-type.enum';
 import { UserService } from '../user/user.service';
 import { AccessTokenDto } from './dto/access-token.dto';
@@ -16,6 +21,28 @@ import { KakaoProfileDto } from './dto/kakao-profile.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
+
+export interface AuthResult {
+  id: number;
+  token: string;
+  refreshToken: string;
+  email: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  name: string | null;
+}
+
+export interface AuthProfile {
+  id: number;
+  email: string;
+  name: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+type AuthEntity = User | SocialLogin;
 
 @Injectable()
 export class AuthService {
@@ -28,14 +55,22 @@ export class AuthService {
     process.env.OAUTH_GOOGLE_CLIENT_SECRET;
   private readonly googleRedirectUriEnv =
     process.env.OAUTH_GOOGLE_REDIRECT_URI;
+  private readonly refreshTokenSecret =
+    process.env.JWT_REFRESH_SECRET ?? 'refreshSecret';
+  private readonly refreshTokenExpiresIn = '7d';
 
   constructor(
     private readonly httpService: HttpService,
     private readonly userService: UserService,
     private readonly jwtTokenProvider: JwtTokenProvider,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(SocialLogin)
+    private readonly socialLoginRepository: Repository<SocialLogin>,
+    private readonly jwtService: JwtService,
   ) {}
 
-  async kakaoLogin(code: string) {
+  async kakaoLogin(code: string): Promise<AuthResult> {
     // 1) 인가코드로 액세스 토큰 발급
     const accessTokenDto = await this.getKakaoAccessToken(code);
 
@@ -46,7 +81,7 @@ export class AuthService {
     return this.processKakaoProfile(kakaoProfileDto);
   }
 
-  async kakaoLoginWithToken(accessToken: string) {
+  async kakaoLoginWithToken(accessToken: string): Promise<AuthResult> {
     const kakaoProfileDto = await this.getKakaoProfile(accessToken);
     return this.processKakaoProfile(kakaoProfileDto);
   }
@@ -126,7 +161,9 @@ export class AuthService {
     return response.data;
   }
 
-  private async processKakaoProfile(kakaoProfileDto: KakaoProfileDto) {
+  private async processKakaoProfile(
+    kakaoProfileDto: KakaoProfileDto,
+  ): Promise<AuthResult> {
     let originalUser = await this.userService.getUserBySocialId(
       kakaoProfileDto.id,
     );
@@ -147,22 +184,10 @@ export class AuthService {
       );
     }
 
-    const jwtToken = this.jwtTokenProvider.createToken(
-      originalUser.email,
-      originalUser.role.toString(),
-    );
-
-    return {
-      id: originalUser.id,
-      token: jwtToken,
-      address: originalUser.address,
-      latitude: originalUser.latitude,
-      longitude: originalUser.longitude,
-      name: originalUser.name,
-    };
+    return this.buildAuthResult(originalUser);
   }
 
-  async googleLogin(code: string) {
+  async googleLogin(code: string): Promise<AuthResult> {
     // 1) 인가코드로 액세스 토큰 발급
     const accessTokenDto = await this.getGoogleAccessToken(code);
 
@@ -250,7 +275,9 @@ export class AuthService {
     return response.data;
   }
 
-  private async processGoogleProfile(googleProfileDto: GoogleProfileDto) {
+  private async processGoogleProfile(
+    googleProfileDto: GoogleProfileDto,
+  ): Promise<AuthResult> {
     let originalUser = await this.userService.getUserBySocialId(
       googleProfileDto.sub,
     );
@@ -273,19 +300,7 @@ export class AuthService {
       );
     }
 
-    const jwtToken = this.jwtTokenProvider.createToken(
-      originalUser.email,
-      originalUser.role.toString(),
-    );
-
-    return {
-      id: originalUser.id,
-      token: jwtToken,
-      address: originalUser.address,
-      latitude: originalUser.latitude,
-      longitude: originalUser.longitude,
-      name: originalUser.name,
-    };
+    return this.buildAuthResult(originalUser);
   }
 
   async register(registerDto: RegisterDto) {
@@ -312,7 +327,7 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto): Promise<AuthResult> {
     // 사용자 조회
     const user = await this.userService.findByEmail(loginDto.email);
     if (!user) {
@@ -332,20 +347,7 @@ export class AuthService {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
-    // JWT 토큰 생성
-    const jwtToken = this.jwtTokenProvider.createToken(
-      user.email,
-      user.role.toString(),
-    );
-
-    return {
-      id: user.id,
-      token: jwtToken,
-      address: user.address,
-      latitude: user.latitude,
-      longitude: user.longitude,
-      name: user.name,
-    };
+    return this.buildAuthResult(user);
   }
 
   async checkEmail(email: string) {
@@ -356,5 +358,154 @@ export class AuthService {
         ? '이미 사용 중인 이메일입니다.'
         : '사용 가능한 이메일입니다.',
     };
+  }
+
+  async refreshAccessToken(
+    refreshToken: string,
+  ): Promise<{ token: string; refreshToken: string }> {
+    try {
+      // refresh token 검증
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.refreshTokenSecret,
+      });
+
+      // refresh token 타입 확인
+      if (payload.type !== 'refresh') {
+        throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+      }
+
+      // 사용자 조회 (User 또는 SocialLogin)
+      const user = await this.userService.findByEmail(payload.email);
+      const socialLogin = user
+        ? null
+        : await this.userService.findSocialLoginByEmail(payload.email);
+
+      if (!user && !socialLogin) {
+        throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
+      }
+
+      // 저장된 refresh token과 비교
+      const storedRefreshToken = user?.refreshToken || socialLogin?.refreshToken;
+      if (storedRefreshToken !== refreshToken) {
+        throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+      }
+
+      // 새로운 access token 발급
+      const targetUser = user || socialLogin;
+      if (!targetUser) {
+        throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
+      }
+      const newAccessToken = this.jwtTokenProvider.createToken(
+        targetUser.email,
+        targetUser.role.toString(),
+      );
+      const newRefreshToken = this.jwtTokenProvider.createRefreshToken(
+        targetUser.email,
+        targetUser.role.toString(),
+      );
+      await this.persistRefreshToken(targetUser, newRefreshToken);
+      console.log('refresh token으로 access token 재발급 성공');
+
+      return {
+        token: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        if (error.message === 'jwt expired') {
+          console.warn('access token이 만료되었습니다.');
+        }
+        throw error;
+      }
+      if (error instanceof Error && error.message === 'jwt expired') {
+        console.warn('access token이 만료되었습니다.');
+      }
+      throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+    }
+  }
+
+  async logout(refreshToken: string | undefined): Promise<void> {
+    if (!refreshToken) {
+      return;
+    }
+    try {
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.refreshTokenSecret,
+      });
+      const entity =
+        (await this.userService.findByEmail(payload.email)) ??
+        (await this.userService.findSocialLoginByEmail(payload.email));
+      if (entity && entity.refreshToken === refreshToken) {
+        await this.persistRefreshToken(entity, null);
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        console.warn('logout refresh token 검증 실패:', error.message);
+      }
+    }
+  }
+
+  async getUserProfile(email: string): Promise<AuthProfile> {
+    const { user, socialLogin } =
+      await this.userService.findUserOrSocialLoginByEmail(email);
+    const entity = user ?? socialLogin;
+    if (!entity) {
+      throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
+    }
+    return {
+      id: entity.id,
+      email: entity.email,
+      name: this.nullableString(entity.name),
+      address: this.nullableString(entity.address),
+      latitude: this.nullableNumber(entity.latitude),
+      longitude: this.nullableNumber(entity.longitude),
+    };
+  }
+
+  private async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
+    const { token, refreshToken } = await this.issueTokens(entity);
+    return {
+      id: entity.id,
+      email: entity.email,
+      token,
+      refreshToken,
+      address: this.nullableString(entity.address),
+      latitude: this.nullableNumber(entity.latitude),
+      longitude: this.nullableNumber(entity.longitude),
+      name: this.nullableString(entity.name),
+    };
+  }
+
+  private async issueTokens(entity: AuthEntity) {
+    const token = this.jwtTokenProvider.createToken(
+      entity.email,
+      entity.role.toString(),
+    );
+    const refreshToken = this.jwtTokenProvider.createRefreshToken(
+      entity.email,
+      entity.role.toString(),
+    );
+    await this.persistRefreshToken(entity, refreshToken);
+    return { token, refreshToken };
+  }
+
+  private async persistRefreshToken(
+    entity: AuthEntity,
+    refreshToken: string | null,
+  ): Promise<void> {
+    entity.refreshToken = refreshToken;
+    if (entity instanceof User) {
+      await this.userRepository.save(entity);
+    } else {
+      await this.socialLoginRepository.save(entity);
+    }
+  }
+
+  private nullableString(value: string | null | undefined): string | null {
+    return value ?? null;
+  }
+
+  private nullableNumber(value: number | null | undefined): number | null {
+    return value ?? null;
   }
 }

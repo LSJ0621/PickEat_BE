@@ -9,4 +9,3 @@ export class UpdateUserAddressDto {
   @IsNotEmpty()
   selectedAddress: AddressSearchResult;
 }
-

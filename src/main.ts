@@ -2,14 +2,16 @@ import { config } from 'dotenv';
 config(); // .env 파일 로드
 
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import * as cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useLogger(app.get(Logger));
+  app.use(cookieParser());
   app.enableCors({
-    origin: 'http://localhost:8080', // Vue 개발 서버 주소
+    origin: 'http://localhost:8080',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,

@@ -12,4 +12,3 @@ export interface MapMarker {
 export interface MapRestaurantsResponse {
   markers: MapMarker[];
 }
-

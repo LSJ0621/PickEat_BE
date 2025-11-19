@@ -8,4 +8,3 @@ export class GoogleProfileDto {
   given_name?: string;
   family_name?: string;
 }
-
