@@ -19,7 +19,8 @@ import { JwtStrategy } from './strategy/jwt.strategy';
     UserModule,
     JwtModule.register({
       secret: 'secret',
-      signOptions: { expiresIn: '30s' },
+      // access token 만료 시간: 15분
+      signOptions: { expiresIn: '15m' },
     }),
   ],
   controllers: [AuthController],
