@@ -17,6 +17,9 @@ const NAVER_MAP_CLIENT_SECRET =
   process.env.NAVER_MAP_CLIENT_SECRET ||
   '<<PUT_YOUR_NAVER_MAP_CLIENT_SECRET_HERE>>';
 
+const GOOGLE_PLACES_API_URL = 'https://places.googleapis.com/v1/places:searchText';
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+
 @Injectable()
 export class MapService {
   private readonly logger = new Logger(MapService.name);
@@ -202,5 +205,49 @@ export class MapService {
       distance: restaurant.distance,
       link: restaurant.link,
     };
+  }
+
+  async getGooglePlacePhoto(
+    photoName: string,
+    maxHeightPx: number = 400,
+    maxWidthPx: number = 400,
+  ) {
+    if (!GOOGLE_API_KEY) {
+      throw new Error('GOOGLE_API_KEY가 설정되지 않았습니다.');
+    }
+
+    this.logger.log(`🔍 [Google Places 사진 요청] name="${photoName}"`);
+
+    try {
+      const url = `https://places.googleapis.com/v1/${photoName}/media`;
+      const response = await lastValueFrom(
+        this.httpService.get(url, {
+          params: {
+            key: GOOGLE_API_KEY,
+            maxHeightPx,
+            maxWidthPx,
+            skipHttpRedirect: true,
+          },
+          headers: {
+            Referer: 'http://localhost:3000',
+          },
+        }),
+      );
+
+      const photoUri = response.data?.photoUri;
+      this.logger.log(`✅ [Google Places 사진 응답] uri=${photoUri}`);
+      return { photoUri };
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      const statusCode = error?.response?.status;
+      const errorData = error?.response?.data;
+      this.logger.error(
+        `❌ [Google Places 사진 에러] name="${photoName}", status=${statusCode}, error=${message}`,
+      );
+      if (errorData) {
+        this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
+      }
+      throw error;
+    }
   }
 }
