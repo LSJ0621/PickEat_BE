@@ -31,7 +31,13 @@ export class MenuService {
 
   private readonly logger = new Logger(MenuService.name);
 
-  async recommendForUser(user: User, prompt: string) {
+  async recommendForUser(
+    user: User,
+    prompt: string,
+    requestAddress?: string,
+    requestLocationLat?: number,
+    requestLocationLng?: number,
+  ) {
     // 좋아하는 것과 싫어하는 것을 모두 전달
     const likes = user.preferences?.likes ?? [];
     const dislikes = user.preferences?.dislikes ?? [];
@@ -46,15 +52,35 @@ export class MenuService {
       prompt,
       recommendations,
       recommendedAt: new Date(),
+      requestAddress: requestAddress ?? null,
+      requestLocationLat:
+        typeof requestLocationLat === 'number' ? requestLocationLat : null,
+      requestLocationLng:
+        typeof requestLocationLng === 'number' ? requestLocationLng : null,
     });
     await this.recommendationRepository.save(record);
     return {
+      id: record.id,
       recommendations: record.recommendations,
       recommendedAt: record.recommendedAt,
+      requestAddress: record.requestAddress,
+      requestLocation:
+        record.requestLocationLat != null && record.requestLocationLng != null
+          ? {
+              lat: record.requestLocationLat,
+              lng: record.requestLocationLng,
+            }
+          : null,
     };
   }
 
-  async recommendForSocialLogin(socialLogin: SocialLogin, prompt: string) {
+  async recommendForSocialLogin(
+    socialLogin: SocialLogin,
+    prompt: string,
+    requestAddress?: string,
+    requestLocationLat?: number,
+    requestLocationLng?: number,
+  ) {
     // 좋아하는 것과 싫어하는 것을 모두 전달
     const likes = socialLogin.preferences?.likes ?? [];
     const dislikes = socialLogin.preferences?.dislikes ?? [];
@@ -69,11 +95,25 @@ export class MenuService {
       prompt,
       recommendations,
       recommendedAt: new Date(),
+      requestAddress: requestAddress ?? null,
+      requestLocationLat:
+        typeof requestLocationLat === 'number' ? requestLocationLat : null,
+      requestLocationLng:
+        typeof requestLocationLng === 'number' ? requestLocationLng : null,
     });
     await this.recommendationRepository.save(record);
     return {
+      id: record.id,
       recommendations: record.recommendations,
       recommendedAt: record.recommendedAt,
+      requestAddress: record.requestAddress,
+      requestLocation:
+        record.requestLocationLat != null && record.requestLocationLng != null
+          ? {
+              lat: record.requestLocationLat,
+              lng: record.requestLocationLng,
+            }
+          : null,
     };
   }
 
@@ -94,7 +134,6 @@ export class MenuService {
     return {
       history: history.map((item) => ({
         id: item.id,
-        type: item.type,
         recommendations: item.recommendations,
         prompt: item.prompt,
         recommendedAt: item.recommendedAt,
@@ -132,7 +171,6 @@ export class MenuService {
     return {
       history: history.map((item) => ({
         id: item.id,
-        type: item.type,
         recommendations: item.recommendations,
         prompt: item.prompt,
         recommendedAt: item.recommendedAt,
@@ -295,7 +333,6 @@ export class MenuService {
   ) {
     const base = {
       id: recommendation.id,
-      type: recommendation.type,
       prompt: recommendation.prompt,
       recommendedAt: recommendation.recommendedAt,
       requestAddress: recommendation.requestAddress,
@@ -361,6 +398,7 @@ export class MenuService {
         return {
           placeId: pr.placeId,
           reason: pr.reason,
+          menuName: pr.menuName,
           name: detail.displayName?.text ?? null,
           address: detail.formattedAddress ?? null,
           rating: detail.rating ?? null,
@@ -494,7 +532,41 @@ export class MenuService {
   async recommendRestaurantsWithGooglePlacesAndLlmForUser(
     user: User,
     textQuery: string,
+    menuName: string,
+    menuRecommendationId?: number,
   ) {
+    if (!menuName) {
+      throw new BadRequestException('menuName이 필요합니다.');
+    }
+
+    if (typeof menuRecommendationId !== 'number') {
+      throw new BadRequestException(
+        'menuRecommendationId가 필요합니다. 먼저 메뉴 추천 이력을 생성한 뒤 사용하세요.',
+      );
+    }
+
+    const menuRecord = await this.recommendationRepository.findOne({
+      where: {
+        id: menuRecommendationId,
+        user: { id: user.id },
+      } as any,
+      relations: ['placeRecommendations'],
+    });
+
+    if (!menuRecord) {
+      throw new BadRequestException('연결할 메뉴 추천 이력을 찾을 수 없습니다.');
+    }
+
+    if (
+      menuRecord.placeRecommendations?.some(
+        (pr) => pr.menuName === menuName,
+      )
+    ) {
+      throw new BadRequestException(
+        '이 메뉴는 이미 AI 가게 추천을 받았습니다. 기존 결과를 확인하세요.',
+      );
+    }
+
     this.logger.log(
       `🔁 [가게 추천 플로우 시작] query="${textQuery}" - Google Places 검색 후 LLM 추천`,
     );
@@ -505,36 +577,16 @@ export class MenuService {
         places,
       );
 
-    // 이력을 MenuRecommendation / PlaceRecommendation 으로 저장
-    const menuRecord = this.recommendationRepository.create({
-      user,
-      socialLogin: null,
-      type: 'PLACE',
-      prompt: textQuery,
-      // Google 응답에서 온 이름/주소 등은 약관상 저장하지 않고,
-      // 기존 recommendations 배열은 빈 배열로 유지
-      recommendations: [],
-      recommendedAt: new Date(),
-      requestAddress: textQuery,
-      requestLocationLat: null,
-      requestLocationLng: null,
-    });
-
-    await this.recommendationRepository.save(menuRecord);
-
-    const placeRecsToSave =
-      recommendations.recommendations?.map((rec, index) =>
+    await this.placeRecommendationRepository.save(
+      recommendations.recommendations?.map((rec) =>
         this.placeRecommendationRepository.create({
           menuRecommendation: menuRecord,
           placeId: rec.placeId,
           reason: rec.reason,
-          order: index + 1,
+          menuName,
         }),
-      ) ?? [];
-
-    if (placeRecsToSave.length > 0) {
-      await this.placeRecommendationRepository.save(placeRecsToSave);
-    }
+      ) ?? [],
+    );
 
     this.logger.log(
       `✅ [가게 추천 플로우 완료] query="${textQuery}", recommended=${recommendations.recommendations.length}`,
@@ -545,7 +597,41 @@ export class MenuService {
   async recommendRestaurantsWithGooglePlacesAndLlmForSocialLogin(
     socialLogin: SocialLogin,
     textQuery: string,
+    menuName: string,
+    menuRecommendationId?: number,
   ) {
+    if (!menuName) {
+      throw new BadRequestException('menuName이 필요합니다.');
+    }
+
+    if (typeof menuRecommendationId !== 'number') {
+      throw new BadRequestException(
+        'menuRecommendationId가 필요합니다. 먼저 메뉴 추천 이력을 생성한 뒤 사용하세요.',
+      );
+    }
+
+    const menuRecord = await this.recommendationRepository.findOne({
+      where: {
+        id: menuRecommendationId,
+        socialLogin: { id: socialLogin.id },
+      } as any,
+      relations: ['placeRecommendations'],
+    });
+
+    if (!menuRecord) {
+      throw new BadRequestException('연결할 메뉴 추천 이력을 찾을 수 없습니다.');
+    }
+
+    if (
+      menuRecord.placeRecommendations?.some(
+        (pr) => pr.menuName === menuName,
+      )
+    ) {
+      throw new BadRequestException(
+        '이 메뉴는 이미 AI 가게 추천을 받았습니다. 기존 결과를 확인하세요.',
+      );
+    }
+
     this.logger.log(
       `🔁 [가게 추천 플로우 시작] query="${textQuery}" - Google Places 검색 후 LLM 추천 (소셜 로그인)`,
     );
@@ -556,33 +642,16 @@ export class MenuService {
         places,
       );
 
-    const menuRecord = this.recommendationRepository.create({
-      user: null,
-      socialLogin,
-      type: 'PLACE',
-      prompt: textQuery,
-      recommendations: [],
-      recommendedAt: new Date(),
-      requestAddress: textQuery,
-      requestLocationLat: null,
-      requestLocationLng: null,
-    });
-
-    await this.recommendationRepository.save(menuRecord);
-
-    const placeRecsToSave =
-      recommendations.recommendations?.map((rec, index) =>
+    await this.placeRecommendationRepository.save(
+      recommendations.recommendations?.map((rec) =>
         this.placeRecommendationRepository.create({
           menuRecommendation: menuRecord,
           placeId: rec.placeId,
           reason: rec.reason,
-          order: index + 1,
+          menuName,
         }),
-      ) ?? [];
-
-    if (placeRecsToSave.length > 0) {
-      await this.placeRecommendationRepository.save(placeRecsToSave);
-    }
+      ) ?? [],
+    );
 
     this.logger.log(
       `✅ [가게 추천 플로우 완료] query="${textQuery}", recommended=${recommendations.recommendations.length} (소셜 로그인)`,

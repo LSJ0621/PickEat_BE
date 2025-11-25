@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -37,11 +38,17 @@ export class MenuController {
       return this.menuService.recommendForUser(
         result.user!,
         recommendMenuDto.prompt,
+        recommendMenuDto.requestAddress,
+        recommendMenuDto.requestLocation?.lat,
+        recommendMenuDto.requestLocation?.lng,
       );
     } else {
       return this.menuService.recommendForSocialLogin(
         result.socialLogin!,
         recommendMenuDto.prompt,
+        recommendMenuDto.requestAddress,
+        recommendMenuDto.requestLocation?.lat,
+        recommendMenuDto.requestLocation?.lng,
       );
     }
   }
@@ -87,20 +94,33 @@ export class MenuController {
   @UseGuards(JwtAuthGuard)
   async recommendRestaurantsWithGooglePlacesAndLlm(
     @Query('query') query: string,
+    @Query('menuName') menuName: string,
+    @Query('historyId') historyId: string | undefined,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
+    if (!menuName) {
+      throw new BadRequestException('menuName 쿼리 파라미터가 필요합니다.');
+    }
     const result = await this.userService.findUserOrSocialLoginByEmail(
       authUser.email,
     );
+    const numericHistoryId =
+      historyId !== undefined && historyId !== null
+        ? Number(historyId)
+        : undefined;
     if (result.type === 'user') {
       return this.menuService.recommendRestaurantsWithGooglePlacesAndLlmForUser(
         result.user!,
         query,
+        menuName,
+        numericHistoryId,
       );
     } else {
       return this.menuService.recommendRestaurantsWithGooglePlacesAndLlmForSocialLogin(
         result.socialLogin!,
         query,
+        menuName,
+        numericHistoryId,
       );
     }
   }
