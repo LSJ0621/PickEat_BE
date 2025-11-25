@@ -26,8 +26,8 @@ export class PlaceRecommendation {
   @Column({ type: 'text' })
   reason: string;
 
-  @Column({ type: 'int', nullable: true })
-  order: number | null;
+  @Column({ type: 'text', nullable: true })
+  menuName: string | null;
 }
 
 
