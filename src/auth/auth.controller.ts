@@ -17,11 +17,19 @@ import { CheckEmailDto } from './dto/check-email.dto';
 import { LoginDto } from './dto/login.dto';
 import { RedirectDto } from './dto/redirect.dto';
 import { RegisterDto } from './dto/register.dto';
+import { EmailPurpose, SendEmailCodeDto } from './dto/send-email-code.dto';
+import { VerifyEmailCodeDto } from './dto/verify-email-code.dto';
 import { JwtAuthGuard } from './guard/jwt.guard';
+import { EmailVerificationService } from './services/email-verification.service';
+import { UserService } from '../user/user.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly emailVerificationService: EmailVerificationService,
+    private readonly userService: UserService,
+  ) {}
 
   @Post('kakao/doLogin')
   async kakaoLogin(
@@ -72,6 +80,35 @@ export class AuthController {
   @Get('check-email')
   async checkEmail(@Query() checkEmailDto: CheckEmailDto) {
     return this.authService.checkEmail(checkEmailDto.email);
+  }
+
+  @Post('email/send-code')
+  async sendEmailCode(@Body() sendEmailCodeDto: SendEmailCodeDto) {
+    await this.emailVerificationService.sendCode(
+      sendEmailCodeDto.email,
+      sendEmailCodeDto.purpose,
+    );
+    return { success: true };
+  }
+
+  @Post('email/verify-code')
+  async verifyEmailCode(@Body() verifyEmailCodeDto: VerifyEmailCodeDto) {
+    const purpose = verifyEmailCodeDto.purpose ?? EmailPurpose.SIGNUP;
+    const verified = await this.emailVerificationService.verifyCode(
+      verifyEmailCodeDto.email,
+      verifyEmailCodeDto.code,
+      purpose,
+    );
+
+    // 회원가입 목적이고 사용자가 이미 존재하는 경우에만 emailVerified 업데이트
+    if (verified && purpose === EmailPurpose.SIGNUP) {
+      const user = await this.userService.findByEmail(verifyEmailCodeDto.email);
+      if (user) {
+        await this.userService.markEmailVerified(verifyEmailCodeDto.email);
+      }
+    }
+
+    return { success: true };
   }
 
   @UseGuards(JwtAuthGuard)

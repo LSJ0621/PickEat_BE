@@ -72,6 +72,21 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  async markEmailVerified(email: string): Promise<void> {
+    const user = await this.findByEmail(email);
+    if (!user) {
+      this.logger.warn(
+        `User with email ${email} not found while marking email verified`,
+      );
+      return;
+    }
+    if (user.emailVerified) {
+      return;
+    }
+    user.emailVerified = true;
+    await this.userRepository.save(user);
+  }
+
   async findSocialLoginByEmail(email: string): Promise<SocialLogin | null> {
     return this.socialLoginRepository.findOne({ where: { email } });
   }
