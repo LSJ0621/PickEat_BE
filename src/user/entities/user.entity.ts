@@ -45,6 +45,9 @@ export class User {
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;
 
+  @Column({ default: false })
+  emailVerified: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
