@@ -21,6 +21,8 @@ import { KakaoProfileDto } from './dto/kakao-profile.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
+import { EmailVerificationService } from './services/email-verification.service';
+import { EmailPurpose } from './dto/send-email-code.dto';
 
 export interface AuthResult {
   id: number;
@@ -68,6 +70,7 @@ export class AuthService {
     @InjectRepository(SocialLogin)
     private readonly socialLoginRepository: Repository<SocialLogin>,
     private readonly jwtService: JwtService,
+    private readonly emailVerificationService: EmailVerificationService,
   ) {}
 
   async kakaoLogin(code: string): Promise<AuthResult> {
@@ -310,16 +313,27 @@ export class AuthService {
       throw new BadRequestException('이미 등록된 이메일입니다.');
     }
 
+    // 이메일 인증 완료 여부 확인
+    const isEmailVerified = await this.emailVerificationService.isEmailVerified(
+      registerDto.email,
+      EmailPurpose.SIGNUP,
+    );
+
     // 비밀번호 해싱
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
     // 일반 회원가입은 User 테이블에 저장
-    await this.userService.createUser({
+    const user = await this.userService.createUser({
       email: registerDto.email,
       password: hashedPassword,
       role: 'USER',
       name: registerDto.name,
     });
+
+    // 이메일 인증이 완료된 경우 emailVerified 설정
+    if (isEmailVerified) {
+      await this.userService.markEmailVerified(registerDto.email);
+    }
 
     // 회원가입 성공 메시지만 반환
     return {
