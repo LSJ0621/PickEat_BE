@@ -24,8 +24,8 @@
                 <tr>
                   <td align="center">
                     <!-- Logo Box -->
-                    <div style="display: inline-block; width: 64px; height: 64px; background: linear-gradient(135deg, #fb923c 0%, #ec4899 50%, #d946ef 100%); border-radius: 16px; box-shadow: 0 10px 30px rgba(251, 146, 60, 0.3); margin-bottom: 16px;">
-                      <div style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 32px; font-weight: bold; color: #0f172a;">P</div>
+                    <div style="display: inline-block; width: 64px; height: 64px; background: linear-gradient(135deg, #fb923c 0%, #ec4899 50%, #d946ef 100%); border-radius: 16px; box-shadow: 0 10px 30px rgba(251, 146, 60, 0.3); margin-bottom: 16px; text-align: center; line-height: 64px; font-size: 32px; font-weight: bold; color: #0f172a; font-family: 'Inter', 'Noto Sans KR', 'Pretendard Variable', Arial, sans-serif;">
+                      P
                     </div>
                     <!-- Brand Name -->
                     <h1 style="margin: 0; font-size: 28px; font-weight: 600; color: #ffffff; letter-spacing: -0.5px;">PickEat</h1>
@@ -45,14 +45,14 @@
               
               <!-- Description -->
               <p style="margin: 0 0 32px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1; text-align: center;">
-                PickEat 회원가입을 위한 인증번호입니다.<br>
+                {{description}}<br>
                 아래 인증번호를 입력해주세요.
               </p>
               <!-- Verification Code Box -->
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 auto 32px auto; background-color: rgba(15, 23, 42, 0.6); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1);">
                 <tr>
                   <td align="center" style="padding: 32px 24px;">
-                    <p style="margin: 0 0 12px 0; font-size: 11px; color: #94a3b8; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 500;">Verification Code</p>
+                    <p style="margin: 0 0 12px 0; font-size: 11px; color: #94a3b8; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 500;">{{purposeLabel}} Code</p>
                     <div style="display: inline-block; padding: 16px 32px; background: linear-gradient(135deg, rgba(251, 146, 60, 0.2) 0%, rgba(236, 72, 153, 0.2) 50%, rgba(217, 70, 239, 0.2) 100%); border-radius: 12px; border: 1px solid rgba(251, 146, 60, 0.3);">
                       <p style="margin: 0; font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #ffffff; font-family: 'Courier New', monospace;">
                         {{verificationCode}}
@@ -78,7 +78,7 @@
           <tr>
             <td style="padding: 24px 40px 40px 40px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
               <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; text-align: center;">
-                이 이메일은 PickEat 회원가입 요청으로 인해 발송되었습니다.
+                {{footer}}
               </p>
               <p style="margin: 0; font-size: 11px; color: #475569; text-align: center;">
                 요청하지 않으셨다면 이 이메일을 무시하셔도 됩니다.
