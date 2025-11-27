@@ -10,7 +10,9 @@ import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import { Repository } from 'typeorm';
 import { EmailPurpose } from '../dto/send-email-code.dto';
-import { EmailVerification } from '../entities/email-verification.entity';
+import {
+  EmailVerification
+} from '../entities/email-verification.entity';
 
 @Injectable()
 export class EmailVerificationService {
@@ -34,42 +36,74 @@ export class EmailVerificationService {
   async sendCode(
     email: string,
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
-  ): Promise<void> {
+  ): Promise<{ remainCount: number; message: string }> {
     this.ensureMailConfig();
     const normalizedPurpose = this.normalizePurpose(purpose);
+    const isResetPassword = normalizedPurpose === EmailPurpose.RESET_PASSWORD;
+    const purposeLabel = isResetPassword ? '비밀번호 재설정' : '회원가입';
+    const subject = isResetPassword
+      ? '[PickEat] 비밀번호 재설정 인증 코드'
+      : '[PickEat] 이메일 인증 코드';
+    const description = `PickEat ${purposeLabel}을 위한 인증번호입니다.`;
+    const footer = `이 이메일은 PickEat ${purposeLabel} 요청으로 인해 발송되었습니다.`;
     const now = new Date();
     const latest = await this.getLatest(email, normalizedPurpose);
+    const isSamePurposeDay =
+      latest &&
+      this.isSameDay(now, latest.lastSentAt ?? latest.createdAt ?? now);
 
+    this.ensureNotCompletedToday(latest, now, normalizedPurpose);
     this.ensureNotBlocked(latest, now);
 
-    if (
-      latest &&
-      this.isSameDay(now, latest.lastSentAt ?? latest.createdAt ?? now)
-    ) {
+    if (latest && isSamePurposeDay) {
       this.ensureResendAllowed(latest, now);
     }
 
     const code = this.generateCode();
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(now.getTime() + 3 * 60 * 1000);
+    const nextSendCount =
+      latest && isSamePurposeDay ? latest.sendCount + 1 : 1;
+    if (nextSendCount > this.dailySendLimit) {
+      throw new BadRequestException('하루 최대 발송 횟수를 초과했습니다');
+    }
+    const remainCount = Math.max(this.dailySendLimit - nextSendCount, 0);
 
-    if (
-      latest &&
-      this.isSameDay(now, latest.lastSentAt ?? latest.createdAt ?? now)
-    ) {
-      await this.updateExistingRecord(latest, codeHash, expiresAt, now);
+    if (latest && isSamePurposeDay) {
+      await this.updateExistingRecord(
+        latest,
+        codeHash,
+        expiresAt,
+        now,
+        nextSendCount,
+      );
     } else {
-      await this.createNewRecord(email, normalizedPurpose, codeHash, expiresAt, now);
+      await this.createNewRecord(
+        email,
+        normalizedPurpose,
+        codeHash,
+        expiresAt,
+        now,
+        nextSendCount,
+      );
     }
 
     await this.mailerService.sendMail({
       to: email,
-      subject: '[PickEat] 이메일 인증 코드',
+      subject,
       template: 'email-verification',
       context: {
         verificationCode: code,
+        purposeLabel,
+        description,
+        footer,
       },
     });
+
+    return {
+      remainCount,
+      message: `인증번호가 발송되었습니다. 남은 재발송 횟수는 ${remainCount}회입니다.`,
+    };
   }
 
   async verifyCode(
@@ -87,11 +121,9 @@ export class EmailVerificationService {
       throw new BadRequestException('코드가 유효하지 않습니다');
     }
 
-    if (latest.used) {
-      throw new BadRequestException('이미 사용된 코드입니다');
-    }
-
+    this.ensureUsableStatus(latest);
     if (latest.expiresAt.getTime() <= now.getTime()) {
+      await this.markAsExpired(latest);
       throw new BadRequestException('코드가 만료되었습니다');
     }
 
@@ -102,6 +134,7 @@ export class EmailVerificationService {
 
     latest.used = true;
     latest.usedAt = now;
+    latest.status = 'USED';
     await this.emailVerificationRepository.save(latest);
     return true;
   }
@@ -112,7 +145,29 @@ export class EmailVerificationService {
   ): Promise<boolean> {
     const normalizedPurpose = this.normalizePurpose(purpose);
     const latest = await this.getLatest(email, normalizedPurpose);
-    return latest?.used === true;
+    return latest?.status === 'USED';
+  }
+
+  async clearVerification(
+    email: string,
+    purpose: EmailPurpose = EmailPurpose.SIGNUP,
+  ): Promise<void> {
+    const normalizedPurpose = this.normalizePurpose(purpose);
+    await this.emailVerificationRepository.delete({ email, purpose: normalizedPurpose });
+  }
+
+  async expireVerification(
+    email: string,
+    purpose: EmailPurpose = EmailPurpose.SIGNUP,
+  ): Promise<void> {
+    const normalizedPurpose = this.normalizePurpose(purpose);
+    const latest = await this.getLatest(email, normalizedPurpose);
+    if (!latest) {
+      return;
+    }
+    latest.status = 'INVALIDATED';
+    latest.expiresAt = new Date();
+    await this.emailVerificationRepository.save(latest);
   }
 
   private normalizePurpose(purpose?: EmailPurpose): EmailPurpose {
@@ -160,7 +215,7 @@ export class EmailVerificationService {
     if (
       baseDate &&
       this.isSameDay(now, baseDate) &&
-      record.sendCount > this.dailySendLimit
+      record.sendCount >= this.dailySendLimit
     ) {
       throw new BadRequestException('하루 최대 발송 횟수를 초과했습니다');
     }
@@ -181,13 +236,15 @@ export class EmailVerificationService {
     codeHash: string,
     expiresAt: Date,
     now: Date,
+    nextSendCount: number,
   ) {
     record.codeHash = codeHash;
     record.expiresAt = expiresAt;
     record.used = false;
     record.usedAt = null;
+    record.status = 'ACTIVE';
     record.lastSentAt = now;
-    record.sendCount += 1;
+    record.sendCount = nextSendCount;
     await this.emailVerificationRepository.save(record);
   }
 
@@ -197,6 +254,7 @@ export class EmailVerificationService {
     codeHash: string,
     expiresAt: Date,
     now: Date,
+    nextSendCount: number,
   ) {
     const newRecord = this.emailVerificationRepository.create({
       email,
@@ -205,11 +263,50 @@ export class EmailVerificationService {
       expiresAt,
       used: false,
       usedAt: null,
-      sendCount: 1,
+      status: 'ACTIVE',
+      sendCount: nextSendCount,
       lastSentAt: now,
       failCount: 0,
     });
     await this.emailVerificationRepository.save(newRecord);
+  }
+
+  private ensureUsableStatus(record: EmailVerification) {
+    if (record.status === 'INVALIDATED') {
+      throw new BadRequestException('이미 사용이 완료된 코드입니다');
+    }
+    if (record.status === 'EXPIRED') {
+      throw new BadRequestException('코드가 만료되었습니다');
+    }
+    if (record.status === 'USED') {
+      throw new BadRequestException('이미 사용된 코드입니다');
+    }
+  }
+
+  private async markAsExpired(record: EmailVerification) {
+    record.status = 'EXPIRED';
+    record.expiresAt = new Date();
+    await this.emailVerificationRepository.save(record);
+  }
+
+  private ensureNotCompletedToday(
+    record: EmailVerification | null,
+    now: Date,
+    purpose: EmailPurpose,
+  ) {
+    if (
+      !record ||
+      record.status !== 'INVALIDATED' ||
+      !this.isSameDay(now, record.updatedAt ?? record.createdAt)
+    ) {
+      return;
+    }
+
+    const message =
+      purpose === EmailPurpose.RESET_PASSWORD
+        ? '이미 비밀번호 재설정을 완료했습니다. 내일 다시 시도해주세요.'
+        : '이미 이메일 인증이 완료되었습니다. 잠시 후 다시 시도해주세요.';
+    throw new BadRequestException(message);
   }
 
   private async handleFailedAttempt(record: EmailVerification, now: Date) {

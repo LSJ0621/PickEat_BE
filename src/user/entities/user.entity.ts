@@ -48,6 +48,9 @@ export class User {
   @Column({ default: false })
   emailVerified: boolean;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  lastPasswordChangedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -2,6 +2,8 @@
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -20,9 +22,10 @@ import { GoogleProfileDto } from './dto/google-profile.dto';
 import { KakaoProfileDto } from './dto/kakao-profile.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { EmailPurpose } from './dto/send-email-code.dto';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
 import { EmailVerificationService } from './services/email-verification.service';
-import { EmailPurpose } from './dto/send-email-code.dto';
 
 export interface AuthResult {
   id: number;
@@ -333,6 +336,10 @@ export class AuthService {
     // 이메일 인증이 완료된 경우 emailVerified 설정
     if (isEmailVerified) {
       await this.userService.markEmailVerified(registerDto.email);
+      await this.emailVerificationService.expireVerification(
+        registerDto.email,
+        EmailPurpose.SIGNUP,
+      );
     }
 
     // 회원가입 성공 메시지만 반환
@@ -344,7 +351,13 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<AuthResult> {
     // 사용자 조회
     const user = await this.userService.findByEmail(loginDto.email);
+    
+    // User 테이블에 없으면 SocialLogin 테이블 확인
     if (!user) {
+      const socialLogin = await this.userService.findSocialLoginByEmail(loginDto.email);
+      if (socialLogin) {
+        throw new UnauthorizedException('소셜 로그인으로 가입한 계정입니다.');
+      }
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
@@ -372,6 +385,46 @@ export class AuthService {
         ? '이미 사용 중인 이메일입니다.'
         : '사용 가능한 이메일입니다.',
     };
+  }
+
+  async sendResetPasswordCode(email: string): Promise<{
+    remainCount: number;
+    message: string;
+  }> {
+    await this.ensureRegularUserAccount(email);
+    return this.emailVerificationService.sendCode(
+      email,
+      EmailPurpose.RESET_PASSWORD,
+    );
+  }
+
+  async verifyResetPasswordCode(email: string, code: string): Promise<void> {
+    await this.ensureRegularUserAccount(email);
+    await this.emailVerificationService.verifyCode(
+      email,
+      code,
+      EmailPurpose.RESET_PASSWORD,
+    );
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
+    const isEmailVerified = await this.emailVerificationService.isEmailVerified(
+      resetPasswordDto.email,
+      EmailPurpose.RESET_PASSWORD,
+    );
+    if (!isEmailVerified) {
+      throw new BadRequestException('이메일 인증이 완료되지 않았습니다.');
+    }
+
+    const user = await this.ensureRegularUserAccount(resetPasswordDto.email);
+    this.ensurePasswordChangeAllowed(user);
+    const hashedPassword = await bcrypt.hash(resetPasswordDto.newPassword, 10);
+    await this.userService.updatePassword(user, hashedPassword);
+    await this.userService.markEmailVerified(resetPasswordDto.email);
+    await this.emailVerificationService.expireVerification(
+      resetPasswordDto.email,
+      EmailPurpose.RESET_PASSWORD,
+    );
   }
 
   async refreshAccessToken(
@@ -513,6 +566,40 @@ export class AuthService {
     } else {
       await this.socialLoginRepository.save(entity);
     }
+  }
+
+  private ensurePasswordChangeAllowed(user: User): void {
+    if (!user.lastPasswordChangedAt) {
+      return;
+    }
+
+    const now = Date.now();
+    const lastChanged = new Date(user.lastPasswordChangedAt).getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
+    if (now - lastChanged < oneDayMs) {
+      throw new HttpException(
+        '비밀번호는 하루에 한 번만 변경할 수 있습니다.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private async ensureRegularUserAccount(email: string): Promise<User> {
+    const user = await this.userService.findByEmail(email);
+    if (!user) {
+      const socialLogin = await this.userService.findSocialLoginByEmail(email);
+      if (socialLogin) {
+        throw new BadRequestException('소셜 로그인으로 가입한 계정입니다.');
+      }
+      throw new BadRequestException('등록되지 않은 이메일입니다.');
+    }
+
+    if (!user.password) {
+      throw new BadRequestException('소셜 로그인으로 가입한 계정입니다.');
+    }
+
+    return user;
   }
 
   private nullableString(value: string | null | undefined): string | null {
