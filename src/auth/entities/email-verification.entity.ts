@@ -1,11 +1,17 @@
 import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
+    Column,
+    CreateDateColumn,
+    Entity,
+    Index,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
 } from 'typeorm';
+
+export type EmailVerificationStatus =
+  | 'ACTIVE'
+  | 'USED'
+  | 'INVALIDATED'
+  | 'EXPIRED';
 
 @Entity('email_verifications')
 export class EmailVerification {
@@ -30,6 +36,9 @@ export class EmailVerification {
 
   @Column({ type: 'timestamp', nullable: true })
   usedAt?: Date | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  status: EmailVerificationStatus;
 
   @Column({ type: 'int', default: 0 })
   sendCount: number;

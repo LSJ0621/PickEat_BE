@@ -17,8 +17,11 @@ import { CheckEmailDto } from './dto/check-email.dto';
 import { LoginDto } from './dto/login.dto';
 import { RedirectDto } from './dto/redirect.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { EmailPurpose, SendEmailCodeDto } from './dto/send-email-code.dto';
+import { SendResetPasswordCodeDto } from './dto/send-reset-password-code.dto';
 import { VerifyEmailCodeDto } from './dto/verify-email-code.dto';
+import { VerifyResetPasswordCodeDto } from './dto/verify-reset-password-code.dto';
 import { JwtAuthGuard } from './guard/jwt.guard';
 import { EmailVerificationService } from './services/email-verification.service';
 import { UserService } from '../user/user.service';
@@ -84,11 +87,11 @@ export class AuthController {
 
   @Post('email/send-code')
   async sendEmailCode(@Body() sendEmailCodeDto: SendEmailCodeDto) {
-    await this.emailVerificationService.sendCode(
+    const result = await this.emailVerificationService.sendCode(
       sendEmailCodeDto.email,
       sendEmailCodeDto.purpose,
     );
-    return { success: true };
+    return { success: true, ...result };
   }
 
   @Post('email/verify-code')
@@ -109,6 +112,36 @@ export class AuthController {
     }
 
     return { success: true };
+  }
+
+  @Post('password/reset/send-code')
+  async sendResetPasswordCode(
+    @Body() sendResetPasswordCodeDto: SendResetPasswordCodeDto,
+  ) {
+    const result = await this.authService.sendResetPasswordCode(
+      sendResetPasswordCodeDto.email,
+    );
+    return { success: true, ...result };
+  }
+
+  @Post('password/reset/verify-code')
+  async verifyResetPasswordCode(
+    @Body() verifyResetPasswordCodeDto: VerifyResetPasswordCodeDto,
+  ) {
+    await this.authService.verifyResetPasswordCode(
+      verifyResetPasswordCodeDto.email,
+      verifyResetPasswordCodeDto.code,
+    );
+    return { success: true };
+  }
+
+  @Post('password/reset')
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    await this.authService.resetPassword(resetPasswordDto);
+    return {
+      success: true,
+      message: '비밀번호가 성공적으로 변경되었습니다.',
+    };
   }
 
   @UseGuards(JwtAuthGuard)
