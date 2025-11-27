@@ -72,6 +72,12 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  async updatePassword(user: User, hashedPassword: string): Promise<User> {
+    user.password = hashedPassword;
+    user.lastPasswordChangedAt = new Date();
+    return this.userRepository.save(user);
+  }
+
   async markEmailVerified(email: string): Promise<void> {
     const user = await this.findByEmail(email);
     if (!user) {
