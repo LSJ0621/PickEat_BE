@@ -16,6 +16,9 @@ import { Repository } from 'typeorm';
 import { SocialLogin } from '../user/entities/social-login.entity';
 import { User } from '../user/entities/user.entity';
 import { SocialType } from '../user/enum/social-type.enum';
+import {
+  UserPreferences
+} from '../user/interfaces/user-preferences.interface';
 import { UserService } from '../user/user.service';
 import { AccessTokenDto } from './dto/access-token.dto';
 import { GoogleProfileDto } from './dto/google-profile.dto';
@@ -36,6 +39,7 @@ export interface AuthResult {
   latitude: number | null;
   longitude: number | null;
   name: string | null;
+  preferences: UserPreferences | null;
 }
 
 export interface AuthProfile {
@@ -540,7 +544,16 @@ export class AuthService {
       latitude: this.nullableNumber(entity.latitude),
       longitude: this.nullableNumber(entity.longitude),
       name: this.nullableString(entity.name),
+      preferences: this.extractPreferences(entity),
     };
+  }
+
+  private extractPreferences(entity: AuthEntity): UserPreferences | null {
+    const preferences =
+      entity instanceof User
+        ? entity.preferences
+        : (entity as SocialLogin).preferences;
+    return preferences ?? null;
   }
 
   private async issueTokens(entity: AuthEntity) {
