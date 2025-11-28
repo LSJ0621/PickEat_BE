@@ -5,7 +5,6 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-  VersionColumn,
 } from 'typeorm';
 import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
@@ -23,9 +22,6 @@ export class User {
 
   @Column({ nullable: true })
   name: string;
-
-  @Column({ nullable: true })
-  profileImage: string;
 
   @Column({ default: 'USER' })
   role: string;
@@ -56,9 +52,6 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @VersionColumn()
-  version: number;
 
   @OneToMany(() => MenuRecommendation, (recommendation) => recommendation.user)
   recommendations: MenuRecommendation[];

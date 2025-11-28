@@ -4,8 +4,4 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   name?: string;
-
-  @IsString()
-  @IsOptional()
-  profileImage?: string;
 }
