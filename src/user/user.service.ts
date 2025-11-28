@@ -56,14 +56,12 @@ export class UserService {
     password: string;
     role?: string;
     name?: string | null;
-    profileImage?: string | null;
   }): Promise<User> {
     const user = this.userRepository.create({
       email: userData.email,
       password: userData.password,
       role: userData.role,
       name: userData.name ?? undefined,
-      profileImage: userData.profileImage ?? undefined,
     });
     return this.userRepository.save(user);
   }
@@ -211,9 +209,6 @@ export class UserService {
     // 보내준 필드만 업데이트 (undefined인 필드는 업데이트하지 않음)
     if (updateUserDto.name !== undefined) {
       user.name = updateUserDto.name;
-    }
-    if (updateUserDto.profileImage !== undefined) {
-      user.profileImage = updateUserDto.profileImage;
     }
     
     return this.userRepository.save(user);

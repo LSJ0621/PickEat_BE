@@ -120,7 +120,6 @@ export class UserController {
       return {
         id: updatedUser.id,
         name: updatedUser.name,
-        profileImage: updatedUser.profileImage,
       };
     } else {
       // SocialLogin의 경우 이름만 업데이트 가능
