@@ -40,10 +40,16 @@ export class EmailVerificationService {
     this.ensureMailConfig();
     const normalizedPurpose = this.normalizePurpose(purpose);
     const isResetPassword = normalizedPurpose === EmailPurpose.RESET_PASSWORD;
-    const purposeLabel = isResetPassword ? '비밀번호 재설정' : '회원가입';
-    const subject = isResetPassword
-      ? '[PickEat] 비밀번호 재설정 인증 코드'
-      : '[PickEat] 이메일 인증 코드';
+    const isReRegister = normalizedPurpose === EmailPurpose.RE_REGISTER;
+    let purposeLabel = '회원가입';
+    let subject = '[PickEat] 이메일 인증 코드';
+    if (isResetPassword) {
+      purposeLabel = '비밀번호 재설정';
+      subject = '[PickEat] 비밀번호 재설정 인증 코드';
+    } else if (isReRegister) {
+      purposeLabel = '재가입';
+      subject = '[PickEat] 재가입 인증 코드';
+    }
     const description = `PickEat ${purposeLabel}을 위한 인증번호입니다.`;
     const footer = `이 이메일은 PickEat ${purposeLabel} 요청으로 인해 발송되었습니다.`;
     const now = new Date();
@@ -305,6 +311,8 @@ export class EmailVerificationService {
     const message =
       purpose === EmailPurpose.RESET_PASSWORD
         ? '이미 비밀번호 재설정을 완료했습니다. 내일 다시 시도해주세요.'
+        : purpose === EmailPurpose.RE_REGISTER
+        ? '이미 재가입을 완료했습니다. 내일 다시 시도해주세요.'
         : '이미 이메일 인증이 완료되었습니다. 잠시 후 다시 시도해주세요.';
     throw new BadRequestException(message);
   }
