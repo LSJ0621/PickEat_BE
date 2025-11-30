@@ -24,6 +24,8 @@ import { AccessTokenDto } from './dto/access-token.dto';
 import { GoogleProfileDto } from './dto/google-profile.dto';
 import { KakaoProfileDto } from './dto/kakao-profile.dto';
 import { LoginDto } from './dto/login.dto';
+import { ReRegisterSocialDto } from './dto/re-register-social.dto';
+import { ReRegisterDto } from './dto/re-register.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { EmailPurpose } from './dto/send-email-code.dto';
@@ -110,12 +112,6 @@ export class AuthService {
     params.append('redirect_uri', redirectUri);
     params.append('grant_type', 'authorization_code');
 
-    console.log('=== 카카오 토큰 요청 정보 ===');
-    console.log('인가코드:', code);
-    console.log('Client ID:', clientId);
-    console.log('Redirect URI:', redirectUri);
-    console.log('요청 URL:', 'https://kauth.kakao.com/oauth/token');
-
     try {
       const response = await firstValueFrom<AxiosResponse<AccessTokenDto>>(
         this.httpService.post<AccessTokenDto>(
@@ -129,8 +125,6 @@ export class AuthService {
         ),
       );
 
-      console.log('=== 카카오 토큰 응답 성공 ===');
-      console.log('응답 accesstoken JSON', response.data);
       return response.data;
     } catch (error: any) {
       console.error('=== 카카오 API 에러 발생 ===');
@@ -167,30 +161,52 @@ export class AuthService {
       ),
     );
 
-    console.log('profile JSON', response.data);
     return response.data;
   }
 
   private async processKakaoProfile(
     kakaoProfileDto: KakaoProfileDto,
   ): Promise<AuthResult> {
+    const email = kakaoProfileDto.kakao_account.email;
+    if (!email) {
+      throw new Error(
+        'Kakao profile does not include email. Enable email scope.',
+      );
+    }
+
+    // User 테이블에 활성 사용자가 존재하는지 확인
+    const activeUser = await this.userRepository.findOne({
+      where: { email },
+    });
+
+    if (activeUser) {
+      throw new BadRequestException(
+        '이미 일반 회원가입으로 가입한 이메일입니다.',
+      );
+    }
+
     let originalUser = await this.userService.getUserBySocialId(
       kakaoProfileDto.id,
     );
 
     if (!originalUser) {
-      const email = kakaoProfileDto.kakao_account.email;
-      if (!email) {
-        throw new Error(
-          'Kakao profile does not include email. Enable email scope.',
-        );
-      }
       const profileImage = kakaoProfileDto.properties?.profile_image;
       originalUser = await this.userService.createOauth(
         kakaoProfileDto.id,
         email,
         SocialType.KAKAO,
         profileImage,
+      );
+    } else if (originalUser.deletedAt) {
+      // 탈퇴한 유저는 재가입 필요 에러 반환 (재가입은 별도 엔드포인트로 처리)
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: '탈퇴한 이력이 있습니다. 재가입하시겠습니까?',
+          error: 'RE_REGISTER_REQUIRED',
+          email: email, // 프론트엔드에서 재가입 API 호출 시 사용할 이메일
+        },
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -224,12 +240,6 @@ export class AuthService {
     params.append('redirect_uri', redirectUri);
     params.append('grant_type', 'authorization_code');
 
-    console.log('=== 구글 토큰 요청 정보 ===');
-    console.log('인가코드:', code);
-    console.log('Client ID:', clientId);
-    console.log('Redirect URI:', redirectUri);
-    console.log('요청 URL:', 'https://oauth2.googleapis.com/token');
-
     try {
       const response = await firstValueFrom<AxiosResponse<AccessTokenDto>>(
         this.httpService.post<AccessTokenDto>(
@@ -243,8 +253,6 @@ export class AuthService {
         ),
       );
 
-      console.log('=== 구글 토큰 응답 성공 ===');
-      console.log('응답 accesstoken JSON', response.data);
       return response.data;
     } catch (error: any) {
       console.error('=== 구글 API 에러 발생 ===');
@@ -281,24 +289,35 @@ export class AuthService {
       ),
     );
 
-    console.log('profile JSON', response.data);
     return response.data;
   }
 
   private async processGoogleProfile(
     googleProfileDto: GoogleProfileDto,
   ): Promise<AuthResult> {
+    const email = googleProfileDto.email;
+    if (!email) {
+      throw new Error(
+        'Google profile does not include email. Enable email scope.',
+      );
+    }
+
+    // User 테이블에 활성 사용자가 존재하는지 확인
+    const activeUser = await this.userRepository.findOne({
+      where: { email },
+    });
+
+    if (activeUser) {
+      throw new BadRequestException(
+        '이미 일반 회원가입으로 가입한 이메일입니다.',
+      );
+    }
+
     let originalUser = await this.userService.getUserBySocialId(
       googleProfileDto.sub,
     );
 
     if (!originalUser) {
-      const email = googleProfileDto.email;
-      if (!email) {
-        throw new Error(
-          'Google profile does not include email. Enable email scope.',
-        );
-      }
       const profileImage = googleProfileDto.picture;
       const name = googleProfileDto.name;
       originalUser = await this.userService.createOauth(
@@ -308,16 +327,49 @@ export class AuthService {
         profileImage,
         name,
       );
+    } else if (originalUser.deletedAt) {
+      // 탈퇴한 유저는 재가입 필요 에러 반환 (재가입은 별도 엔드포인트로 처리)
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          message: '탈퇴한 이력이 있습니다. 재가입하시겠습니까?',
+          error: 'RE_REGISTER_REQUIRED',
+          email: email, // 프론트엔드에서 재가입 API 호출 시 사용할 이메일
+        },
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return this.buildAuthResult(originalUser);
   }
 
   async register(registerDto: RegisterDto) {
-    // 이메일 중복 확인
-    const existingUser = await this.userService.findByEmail(registerDto.email);
-    if (existingUser) {
+    // 이메일 중복 확인 (User와 SocialLogin 두 테이블 모두 확인)
+    const existingUser = await this.userRepository.findOne({
+      where: { email: registerDto.email },
+      withDeleted: true,
+    });
+    const existingSocialLogin = await this.socialLoginRepository.findOne({
+      where: { email: registerDto.email },
+      withDeleted: true,
+    });
+
+    // 활성 사용자가 존재하는 경우
+    if (existingUser && !existingUser.deletedAt) {
       throw new BadRequestException('이미 등록된 이메일입니다.');
+    }
+    if (existingSocialLogin && !existingSocialLogin.deletedAt) {
+      throw new BadRequestException('이미 등록된 이메일입니다.');
+    }
+
+    // soft delete된 사용자만 존재하면 재가입 플로우로 유도
+    if (
+      (existingUser && existingUser.deletedAt) ||
+      (existingSocialLogin && existingSocialLogin.deletedAt)
+    ) {
+      throw new BadRequestException(
+        '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
+      );
     }
 
     // 이메일 인증 완료 여부 확인
@@ -353,15 +405,27 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResult> {
-    // 사용자 조회
-    const user = await this.userService.findByEmail(loginDto.email);
+    // 사용자 조회 (soft delete 포함)
+    const user = await this.userRepository.findOne({
+      where: { email: loginDto.email },
+      withDeleted: true,
+    });
     
     // User 테이블에 없으면 SocialLogin 테이블 확인
     if (!user) {
-      const socialLogin = await this.userService.findSocialLoginByEmail(loginDto.email);
+      const socialLogin = await this.socialLoginRepository.findOne({
+        where: { email: loginDto.email },
+        withDeleted: true,
+      });
       if (socialLogin) {
-        throw new UnauthorizedException('소셜 로그인으로 가입한 계정입니다.');
+        // 탈퇴한 계정이거나 소셜 로그인 계정인 경우 일반적인 에러 메시지 반환 (보안상)
+        throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
       }
+      throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+    }
+
+    // 탈퇴한 사용자인 경우 일반적인 에러 메시지 반환 (보안상)
+    if (user.deletedAt) {
       throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
     }
 
@@ -382,12 +446,50 @@ export class AuthService {
   }
 
   async checkEmail(email: string) {
-    const existingUser = await this.userService.findByEmail(email);
+    // User와 SocialLogin 두 테이블 모두 확인 (soft delete 포함)
+    const existingUser = await this.userRepository.findOne({
+      where: { email },
+      withDeleted: true,
+    });
+    const existingSocialLogin = await this.socialLoginRepository.findOne({
+      where: { email },
+      withDeleted: true,
+    });
+
+    // 활성 사용자가 존재하는 경우
+    if (existingUser && !existingUser.deletedAt) {
+      return {
+        available: false,
+        message: '이미 사용 중인 이메일입니다.',
+      };
+    }
+    if (existingSocialLogin && !existingSocialLogin.deletedAt) {
+      return {
+        available: false,
+        message: '이미 사용 중인 이메일입니다.',
+      };
+    }
+
+    // 탈퇴한 사용자인 경우
+    if (existingUser && existingUser.deletedAt) {
+      return {
+        available: false,
+        canReRegister: true,
+        message: '기존에 탈퇴 이력이 있습니다. 재가입하시겠습니까?',
+      };
+    }
+    if (existingSocialLogin && existingSocialLogin.deletedAt) {
+      return {
+        available: false,
+        canReRegister: true,
+        message: '기존에 탈퇴 이력이 있습니다. 재가입하시겠습니까?',
+      };
+    }
+
+    // 사용 가능한 경우
     return {
-      available: !existingUser,
-      message: existingUser
-        ? '이미 사용 중인 이메일입니다.'
-        : '사용 가능한 이메일입니다.',
+      available: true,
+      message: '사용 가능한 이메일입니다.',
     };
   }
 
@@ -475,7 +577,6 @@ export class AuthService {
         targetUser.role.toString(),
       );
       await this.persistRefreshToken(targetUser, newRefreshToken);
-      console.log('refresh token으로 access token 재발급 성공');
 
       return {
         token: newAccessToken,
@@ -621,5 +722,105 @@ export class AuthService {
 
   private nullableNumber(value: number | null | undefined): number | null {
     return value ?? null;
+  }
+
+  async reRegister(reRegisterDto: ReRegisterDto): Promise<{ message: string }> {
+    // soft delete된 사용자 조회
+    const deletedUser = await this.userRepository.findOne({
+      where: { email: reRegisterDto.email },
+      withDeleted: true,
+    });
+
+    if (!deletedUser || !deletedUser.deletedAt) {
+      throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
+    }
+
+    // 이메일 인증 완료 여부 확인 (목적: RE_REGISTER)
+    const isEmailVerified = await this.emailVerificationService.isEmailVerified(
+      reRegisterDto.email,
+      EmailPurpose.RE_REGISTER,
+    );
+
+    if (!isEmailVerified) {
+      throw new BadRequestException('이메일 인증이 완료되지 않았습니다.');
+    }
+
+    // 비밀번호 해싱
+    const hashedPassword = await bcrypt.hash(reRegisterDto.password, 10);
+
+    // update() 메서드를 사용하여 전체 값 UPDATE
+    await this.userRepository.update(
+      { email: reRegisterDto.email },
+      {
+        password: hashedPassword,
+        name: reRegisterDto.name,
+        reRegisterEmailVerified: true,
+        refreshToken: null,
+        deletedAt: null,
+        lastPasswordChangedAt: new Date(),
+      },
+    );
+
+    // 이메일 인증 코드 만료 처리
+    await this.emailVerificationService.expireVerification(
+      reRegisterDto.email,
+      EmailPurpose.RE_REGISTER,
+    );
+
+    // 업데이트된 사용자 조회
+    const user = await this.userRepository.findOne({
+      where: { email: reRegisterDto.email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('재가입 처리 중 오류가 발생했습니다.');
+    }
+
+    return { message: '재가입이 완료되었습니다. 로그인해주세요.' };
+  }
+
+  async reRegisterSocial(
+    reRegisterSocialDto: ReRegisterSocialDto,
+  ): Promise<{ message: string }> {
+    // soft delete된 소셜 로그인 사용자 조회
+    const deletedSocialLogin = await this.socialLoginRepository.findOne({
+      where: { email: reRegisterSocialDto.email },
+      withDeleted: true,
+    });
+
+    if (!deletedSocialLogin || !deletedSocialLogin.deletedAt) {
+      throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
+    }
+
+    // User 테이블에 활성 사용자가 존재하는지 확인
+    const activeUser = await this.userRepository.findOne({
+      where: { email: reRegisterSocialDto.email },
+    });
+
+    if (activeUser) {
+      throw new BadRequestException(
+        '이미 일반 회원가입으로 가입한 이메일입니다.',
+      );
+    }
+
+    // update() 메서드를 사용하여 deletedAt 해제 및 refreshToken 제거
+    await this.socialLoginRepository.update(
+      { email: reRegisterSocialDto.email },
+      {
+        refreshToken: null,
+        deletedAt: null,
+      },
+    );
+
+    // 업데이트된 소셜 로그인 사용자 조회
+    const socialLogin = await this.socialLoginRepository.findOne({
+      where: { email: reRegisterSocialDto.email },
+    });
+
+    if (!socialLogin) {
+      throw new BadRequestException('재가입 처리 중 오류가 발생했습니다.');
+    }
+
+    return { message: '재가입이 완료되었습니다. 로그인해주세요.' };
   }
 }

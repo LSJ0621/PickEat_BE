@@ -143,6 +143,13 @@ export class UserController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Delete('me')
+  async deleteCurrentUser(@CurrentUser() authUser: AuthUserPayload) {
+    await this.userService.deleteUser(authUser.email);
+    return { message: '회원 탈퇴가 완료되었습니다.' };
+  }
+
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
