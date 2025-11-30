@@ -1,6 +1,12 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios, { AxiosInstance } from 'axios';
+import { DataSource, EntityManager } from 'typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
@@ -29,6 +35,7 @@ export class UserService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(SocialLogin)
     private readonly socialLoginRepository: Repository<SocialLogin>,
+    private readonly dataSource: DataSource,
   ) {
     this.kakaoApiKey = process.env.KAKAO_REST_API_KEY || '';
     if (!this.kakaoApiKey) {
@@ -131,6 +138,7 @@ export class UserService {
   async getUserBySocialId(socialId: string | number): Promise<SocialLogin | null> {
     return this.socialLoginRepository.findOne({
       where: { socialId: socialId.toString() },
+      withDeleted: true,
     });
   }
 
@@ -359,5 +367,48 @@ export class UserService {
       .map((tag) => tag?.trim())
       .filter((tag): tag is string => Boolean(tag && tag.length));
     return Array.from(new Set(sanitized));
+  }
+
+  async deleteUser(email: string): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      // User 테이블에서 조회 (soft delete된 레코드 포함)
+      const user = await manager.findOne(User, {
+        where: { email },
+        withDeleted: true,
+      });
+
+      // SocialLogin 테이블에서 조회 (soft delete된 레코드 포함)
+      const socialLogin = await manager.findOne(SocialLogin, {
+        where: { email },
+        withDeleted: true,
+      });
+
+      if (!user && !socialLogin) {
+        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+      }
+
+      // 이미 탈퇴한 경우
+      if ((user && user.deletedAt) || (socialLogin && socialLogin.deletedAt)) {
+        throw new BadRequestException('이미 탈퇴한 계정입니다.');
+      }
+
+      // 관련 데이터 정리
+      if (user) {
+        // refreshToken 제거 및 reRegisterEmailVerified 리셋
+        user.refreshToken = null;
+        user.reRegisterEmailVerified = false;
+        await manager.save(user);
+        // soft delete 실행
+        await manager.softRemove(user);
+      }
+
+      if (socialLogin) {
+        // refreshToken 제거 (소셜 로그인은 reRegisterEmailVerified 없음)
+        socialLogin.refreshToken = null;
+        await manager.save(socialLogin);
+        // soft delete 실행
+        await manager.softRemove(socialLogin);
+      }
+    });
   }
 }

@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -44,8 +45,14 @@ export class User {
   @Column({ default: false })
   emailVerified: boolean;
 
+  @Column({ default: false })
+  reRegisterEmailVerified: boolean;
+
   @Column({ type: 'timestamptz', nullable: true })
   lastPasswordChangedAt: Date | null;
+
+  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;
