@@ -14,15 +14,16 @@ import {
 interface PlaceCandidate {
   id: string;
   name: string | null;
-  address: string | null;
-  location?: { latitude: number; longitude: number } | null;
   rating?: number | null;
   userRatingCount?: number | null;
   priceLevel?: string | null;
-  priceRange?: string | null;
-  businessStatus?: string | null;
-  reviews?: any[] | null;
-  reviewSummary?: any | null;
+  reviews?:
+    | Array<{
+        rating: number | null;
+        originalText: string | null;
+        relativePublishTimeDescription: string | null;
+      }>
+    | null;
 }
 
 export interface PlaceRecommendationsResponse {
@@ -65,25 +66,21 @@ export class OpenAiPlacesService implements OnModuleInit {
       );
     }
 
-    const operationalCandidates = candidates.filter(
-      (c) => c.businessStatus === 'OPERATIONAL',
-    );
-
-    if (operationalCandidates.length === 0) {
+    if (!candidates.length) {
       return { recommendations: [] };
     }
 
     const systemPrompt = GOOGLE_PLACES_SYSTEM_PROMPT;
     const userPrompt = buildGooglePlacesUserPrompt(
       query,
-      operationalCandidates,
+      candidates,
     );
     const jsonSchema = GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA;
 
     const startedAt = Date.now();
 
     this.logger.log(
-      `📤 [OpenAI 장소 추천 요청 시작] model=${this.model}, candidates=${operationalCandidates.length}`,
+      `📤 [OpenAI 장소 추천 요청 시작] model=${this.model}, candidates=${candidates.length}`,
     );
 
     try {
@@ -106,6 +103,13 @@ export class OpenAiPlacesService implements OnModuleInit {
       });
 
       const duration = Date.now() - startedAt;
+
+      // 토큰 사용량 로깅 (프롬프트/완료/전체)
+      const usage: any = (response as any).usage;
+      this.logger.log(
+        `🧮 [OpenAI 토큰 사용량] prompt=${usage?.prompt_tokens ?? 'n/a'}, completion=${usage?.completion_tokens ?? 'n/a'}, total=${usage?.total_tokens ?? 'n/a'}`,
+      );
+
       this.logger.log(
         `📥 [OpenAI 장소 추천 응답 수신] 소요 시간=${duration}ms, raw=${JSON.stringify(
           response,
@@ -120,12 +124,8 @@ export class OpenAiPlacesService implements OnModuleInit {
 
       const parsed = JSON.parse(content) as PlaceRecommendationsResponse;
 
-      if (
-        !parsed.recommendations ||
-        !Array.isArray(parsed.recommendations) ||
-        parsed.recommendations.length === 0
-      ) {
-        throw new Error('OpenAI returned empty recommendations');
+      if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
+        throw new Error('OpenAI returned invalid recommendations format');
       }
 
       return {
