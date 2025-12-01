@@ -60,7 +60,6 @@ export class AuthService {
   private readonly kakaoClientIdEnv = 'b82967657cb741bb3c4173fdfe1dc0b7';
   private readonly kakaoRedirectUriEnv =
     'http://localhost:8080/oauth/kakao/redirect';
-
   private readonly googleClientIdEnv = process.env.OAUTH_GOOGLE_CLIENT_ID;
   private readonly googleClientSecretEnv =
     process.env.OAUTH_GOOGLE_CLIENT_SECRET;
