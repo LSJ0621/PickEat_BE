@@ -6,23 +6,20 @@
  * System 프롬프트: AI의 역할과 규칙 정의
  */
 export const GOOGLE_PLACES_SYSTEM_PROMPT = [
-  '너는 Pick-Eat 앱을 위한 **식당 추천 전문 AI**야.',
-  '백엔드에서 이미 Google Places Text Search로 후보 식당 리스트를 수집했고,',
-  '너에게는 그 후보들 중에서 **사용자에게 가장 잘 맞는 식당 3곳 이내**를 고르는 일을 맡길 거야.',
+  'Pick-Eat 식당 추천 AI. 후보 중 최대 3곳 추천.',
   '',
-  '중요 규칙:',
-  '- 반드시 JSON 형식으로만 응답해야 해. JSON 밖에 다른 텍스트를 쓰지 마.',
-  '- 추천 대상은 이미 전달된 후보 목록(candidates) 뿐이고, 그 외 새로운 식당을 만들어내면 안 돼.',
-  '- 각 추천에는 placeId, name, reason 을 포함해야 해.',
-  '- reason 은 반드시 공손한 한국어 경어체(예: "~합니다", "~드립니다")로 작성해야 해.',
-  '- reason 은 100자 이상, 300자 이내로, 해당 가게의 특징·장점과 Google 리뷰에서 유추할 수 있는 분위기나 만족도를 한 문장 또는 두 문장 정도의 서술형으로 정리해.',
-  '- 최대 3곳까지만 추천하고, 후보가 적으면 1~2개만 추천해도 괜찮아.',
+  '규칙:',
+  '- JSON만 응답. 후보(candidates) 중에서만 선택.',
+  '- 검색어(메뉴)와 관련 없는 가게 제외. 가게명/리뷰/평점으로 관련성 판단.',
+  '- 관련 가게가 없으면 빈 배열([]) 반환 가능.',
+  '- 각 추천: placeId, name, reason (100~300자, 존댓말, 가게 특징+리뷰 기반).',
+  '- 최대 3개, 관련 가게 적으면 1~2개도 가능.',
 ].join('\n');
 
 /**
  * User 프롬프트 생성
  * @param query 사용자가 검색한 텍스트 (예: "덕소 마라탕")
- * @param candidates Google Places에서 가져온 후보 식당 리스트 (이미 businessStatus=OPERATIONAL 만 포함되었다고 가정)
+ * @param candidates Google Places에서 가져온 후보 식당 리스트
  */
 export function buildGooglePlacesUserPrompt(
   query: string,
@@ -37,16 +34,14 @@ export function buildGooglePlacesUserPrompt(
     '각 항목은 다음 정보를 포함할 수 있어:',
     '- id: Google Place ID (예: places/...)',
     '- name: 식당 이름',
-    '- address: 주소',
-    '- location: { latitude, longitude }',
     '- rating: 평점 (0~5)',
     '- userRatingCount: 리뷰 수',
-    '- priceLevel / priceRange: 가격대',
-    '- businessStatus: 영업 상태 (이미 OPERATIONAL 인 것만 포함됨)',
-    '- reviews: 주요 리뷰 목록',
-    '- reviewSummary: 리뷰 요약 정보 (있을 수도, 없을 수도 있음)',
+    '- priceLevel: 가격대',
+    '- reviews: 주요 리뷰 목록 (각 리뷰는 rating, originalText, relativePublishTimeDescription만 포함)',
     '',
     '이 후보들 중에서 사용자에게 가장 잘 맞는 식당을 최대 3곳까지 골라줘.',
+    '**중요: 사용자의 검색어(메뉴)와 관련이 없는 가게는 반드시 제외해야 해.** 가게 이름, 리뷰 내용을 분석해서 실제로 해당 메뉴를 판매하는 식당인지 확인하고, 관련성이 높은 가게만 추천해.',
+    '관련 없는 가게만 있으면 빈 배열([])을 반환해도 됨.',
     '가능하면 서로 너무 비슷하지 않은 조합으로 추천해.',
     '',
     '후보 리스트 (candidates):',
@@ -85,10 +80,10 @@ export const GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA = {
         required: ['placeId', 'name', 'reason'],
         additionalProperties: false,
       },
-      minItems: 2,
+      minItems: 0,
       maxItems: 5,
       description:
-        '사용자에게 추천할 식당 리스트 (최대 3개). 후보 리스트 중에서만 선택해야 함.',
+        '사용자에게 추천할 식당 리스트 (최대 3개). 후보 리스트 중에서만 선택해야 함. 관련 가게가 없으면 빈 배열도 가능.',
     },
   },
   required: ['recommendations'],

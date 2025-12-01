@@ -198,6 +198,7 @@ export class MenuService {
     const body: any = {
       textQuery,
       languageCode: 'ko',
+      maxResultCount: 10,
     };
 
     this.logger.log(`🔍 [Google Places 텍스트 검색] query="${textQuery}"`);
@@ -212,7 +213,7 @@ export class MenuService {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': GOOGLE_API_KEY,
               'X-Goog-FieldMask':
-                'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.businessStatus,places.reviews,places.reviewSummary',
+                'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.reviews',
               Referer: 'http://localhost:3000',
             },
           },
@@ -224,23 +225,16 @@ export class MenuService {
       const result = places.map((place: any) => ({
         id: place.id,
         name: place.displayName?.text ?? null,
-        address: place.formattedAddress ?? null,
-        location: place.location ?? null,
         rating: place.rating ?? null,
         userRatingCount: place.userRatingCount ?? null,
         priceLevel: place.priceLevel ?? null,
-        priceRange: place.priceLevel ?? null,
-        businessStatus: place.businessStatus ?? null,
         reviews:
           place.reviews?.map((review: any) => ({
             rating: review.rating ?? null,
-            text: review.text?.text ?? null,
-            originalText: review.originalText?.text ?? null,
+            originalText: review.originalText?.text ?? review.text?.text ?? null,
             relativePublishTimeDescription:
               review.relativePublishTimeDescription ?? null,
-            publishTime: review.publishTime ?? null,
           })) ?? null,
-        reviewSummary: place.reviewSummary ?? null,
       }));
 
       this.logger.log(
@@ -571,6 +565,13 @@ export class MenuService {
       `🔁 [가게 추천 플로우 시작] query="${textQuery}" - Google Places 검색 후 LLM 추천`,
     );
     const { places } = await this.searchRestaurantsWithGooglePlaces(textQuery);
+
+    if (!places || places.length === 0) {
+      throw new BadRequestException(
+        `"${textQuery}"에 대한 검색 결과를 찾을 수 없습니다. 다른 검색어로 시도해주세요.`,
+      );
+    }
+
     const recommendations =
       await this.openAiPlacesService.recommendFromGooglePlaces(
         textQuery,
@@ -636,6 +637,13 @@ export class MenuService {
       `🔁 [가게 추천 플로우 시작] query="${textQuery}" - Google Places 검색 후 LLM 추천 (소셜 로그인)`,
     );
     const { places } = await this.searchRestaurantsWithGooglePlaces(textQuery);
+
+    if (!places || places.length === 0) {
+      throw new BadRequestException(
+        `"${textQuery}"에 대한 검색 결과를 찾을 수 없습니다. 다른 검색어로 시도해주세요.`,
+      );
+    }
+
     const recommendations =
       await this.openAiPlacesService.recommendFromGooglePlaces(
         textQuery,
