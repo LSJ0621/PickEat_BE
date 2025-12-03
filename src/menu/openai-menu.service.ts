@@ -44,11 +44,13 @@ export class OpenAiMenuService {
     prompt: string,
     likes: string[],
     dislikes: string[],
+    analysis?: string,
   ): Promise<string[]> {
     return this.menuService.generateMenuRecommendations(
       prompt,
       likes,
       dislikes,
+      analysis,
     );
   }
 }

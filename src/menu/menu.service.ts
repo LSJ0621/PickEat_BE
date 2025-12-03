@@ -4,8 +4,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SocialLogin } from '../user/entities/social-login.entity';
 import { User } from '../user/entities/user.entity';
+import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
 import { MenuRecommendation } from './entities/menu-recommendation.entity';
+import {
+  MenuSelection,
+  MenuSelectionStatus,
+} from './entities/menu-selection.entity';
 import { PlaceRecommendation } from './entities/place-recommendation.entity';
+import {
+  buildMenuPayloadFromSlotInputs,
+  mergeMenuPayload,
+  normalizeMenuName,
+  normalizeMenuPayload,
+} from './menu-payload.util';
 import { OpenAiMenuService } from './openai-menu.service';
 import { OpenAiPlacesService } from './openai-places.service';
 
@@ -24,6 +35,8 @@ export class MenuService {
     private readonly recommendationRepository: Repository<MenuRecommendation>,
     @InjectRepository(PlaceRecommendation)
     private readonly placeRecommendationRepository: Repository<PlaceRecommendation>,
+    @InjectRepository(MenuSelection)
+    private readonly menuSelectionRepository: Repository<MenuSelection>,
     private readonly openAiMenuService: OpenAiMenuService,
     private readonly openAiPlacesService: OpenAiPlacesService,
     private readonly httpService: HttpService,
@@ -38,14 +51,16 @@ export class MenuService {
     requestLocationLat?: number,
     requestLocationLng?: number,
   ) {
-    // 좋아하는 것과 싫어하는 것을 모두 전달
+    // 좋아하는 것, 싫어하는 것, 취향 분석을 모두 전달
     const likes = user.preferences?.likes ?? [];
     const dislikes = user.preferences?.dislikes ?? [];
+    const analysis = user.preferences?.analysis;
     const recommendations =
       await this.openAiMenuService.generateMenuRecommendations(
         prompt,
         likes,
         dislikes,
+        analysis,
       );
     const record = this.recommendationRepository.create({
       user,
@@ -81,14 +96,16 @@ export class MenuService {
     requestLocationLat?: number,
     requestLocationLng?: number,
   ) {
-    // 좋아하는 것과 싫어하는 것을 모두 전달
+    // 좋아하는 것, 싫어하는 것, 취향 분석을 모두 전달
     const likes = socialLogin.preferences?.likes ?? [];
     const dislikes = socialLogin.preferences?.dislikes ?? [];
+    const analysis = socialLogin.preferences?.analysis;
     const recommendations =
       await this.openAiMenuService.generateMenuRecommendations(
         prompt,
         likes,
         dislikes,
+        analysis,
       );
     const record = this.recommendationRepository.create({
       socialLogin,
@@ -115,6 +132,342 @@ export class MenuService {
             }
           : null,
     };
+  }
+
+  async createSelectionForUser(
+    user: User,
+    menus: Array<{ slot: string; name: string }>,
+    historyId?: number,
+  ): Promise<MenuSelection> {
+    if (!menus || menus.length === 0) {
+      throw new BadRequestException('메뉴가 비어있습니다.');
+    }
+
+    // slot별로 메뉴 그룹화 및 정규화
+    const menuPayload = buildMenuPayloadFromSlotInputs(menus);
+
+    // 최소 하나의 메뉴가 있어야 함
+    const totalMenus =
+      menuPayload.breakfast.length +
+      menuPayload.lunch.length +
+      menuPayload.dinner.length +
+      menuPayload.etc.length;
+
+    if (totalMenus === 0) {
+      throw new BadRequestException('유효한 메뉴가 없습니다.');
+    }
+
+    const now = new Date();
+    const selectedDate = this.toDateString(now);
+
+    // 같은 날짜의 레코드 찾기 (status 상관 없이)
+    const existing = await this.menuSelectionRepository.findOne({
+      where: {
+        user: { id: user.id },
+        selectedDate,
+      },
+      relations: ['user'],
+    });
+
+    if (existing) {
+      // 기존 payload와 새 payload를 slot별로 merge (추가/중복 제거)
+      const existingPayload = normalizeMenuPayload(existing.menuPayload);
+      existing.menuPayload = mergeMenuPayload(existingPayload, menuPayload);
+      existing.selectedAt = now;
+      existing.selectedDate = selectedDate;
+      existing.status = MenuSelectionStatus.PENDING;
+      existing.lastTriedAt = null;
+      existing.retryCount = 0;
+      if (historyId !== undefined) {
+        existing.menuRecommendation =
+          await this.findOwnedRecommendationForUser(historyId, user.id);
+      }
+      return this.menuSelectionRepository.save(existing);
+    }
+
+    // 새 레코드 생성
+    const selection = this.menuSelectionRepository.create({
+      menuPayload,
+      user,
+      socialLogin: null,
+      selectedAt: now,
+      selectedDate,
+      status: MenuSelectionStatus.PENDING,
+      lastTriedAt: null,
+      retryCount: 0,
+    });
+
+    if (historyId !== undefined) {
+      selection.menuRecommendation = await this.findOwnedRecommendationForUser(
+        historyId,
+        user.id,
+      );
+    }
+
+    return this.menuSelectionRepository.save(selection);
+  }
+
+  async updateSelectionForUser(
+    user: User,
+    selectionId: number,
+    dto: UpdateMenuSelectionDto,
+  ) {
+    const selection = await this.menuSelectionRepository.findOne({
+      where: { id: selectionId, user: { id: user.id } },
+      relations: ['user'],
+    });
+    if (!selection) {
+      throw new BadRequestException('선택 이력을 찾을 수 없습니다.');
+    }
+
+    const now = new Date();
+    const selectedDate = this.toDateString(now);
+
+    if (dto.cancel) {
+      await this.menuSelectionRepository.update(selection.id, {
+        status: MenuSelectionStatus.CANCELLED,
+        menuPayload: { breakfast: [], lunch: [], dinner: [], etc: [] },
+        selectedAt: now,
+        selectedDate: selectedDate,
+        lastTriedAt: null,
+        retryCount: 0,
+      });
+    } else {
+      // 기존 payload 가져오기
+      const existingPayload = normalizeMenuPayload(selection.menuPayload);
+      const updatedPayload = {
+        breakfast: [...existingPayload.breakfast],
+        lunch: [...existingPayload.lunch],
+        dinner: [...existingPayload.dinner],
+        etc: [...existingPayload.etc],
+      };
+
+      const hasAnySlotUpdate =
+        dto.breakfast !== undefined ||
+        dto.lunch !== undefined ||
+        dto.dinner !== undefined ||
+        dto.etc !== undefined;
+
+      if (!hasAnySlotUpdate) {
+        throw new BadRequestException('변경할 메뉴가 없습니다.');
+      }
+
+      if (dto.breakfast !== undefined) {
+        const normalized = dto.breakfast
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.breakfast = normalized;
+      }
+
+      if (dto.lunch !== undefined) {
+        const normalized = dto.lunch
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.lunch = normalized;
+      }
+
+      if (dto.dinner !== undefined) {
+        const normalized = dto.dinner
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.dinner = normalized;
+      }
+
+      if (dto.etc !== undefined) {
+        const normalized = dto.etc
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.etc = normalized;
+      }
+
+      await this.menuSelectionRepository.update(selection.id, {
+        menuPayload: updatedPayload,
+        status: MenuSelectionStatus.PENDING,
+        selectedAt: now,
+        selectedDate: selectedDate,
+        lastTriedAt: null,
+        retryCount: 0,
+      });
+    }
+
+    // 업데이트 후 다시 조회하여 반환
+    const updated = await this.menuSelectionRepository.findOne({
+      where: { id: selection.id },
+    });
+    if (!updated) {
+      throw new BadRequestException('업데이트된 선택 이력을 찾을 수 없습니다.');
+    }
+    return updated;
+  }
+
+  async createSelectionForSocialLogin(
+    socialLogin: SocialLogin,
+    menus: Array<{ slot: string; name: string }>,
+    historyId?: number,
+  ): Promise<MenuSelection> {
+    if (!menus || menus.length === 0) {
+      throw new BadRequestException('메뉴가 비어있습니다.');
+    }
+
+    // slot별로 메뉴 그룹화 및 정규화
+    const menuPayload = buildMenuPayloadFromSlotInputs(menus);
+
+    // 최소 하나의 메뉴가 있어야 함
+    const totalMenus =
+      menuPayload.breakfast.length +
+      menuPayload.lunch.length +
+      menuPayload.dinner.length +
+      menuPayload.etc.length;
+
+    if (totalMenus === 0) {
+      throw new BadRequestException('유효한 메뉴가 없습니다.');
+    }
+
+    const now = new Date();
+    const selectedDate = this.toDateString(now);
+
+    // 같은 날짜의 레코드 찾기 (status 상관 없이)
+    const existing = await this.menuSelectionRepository.findOne({
+      where: {
+        socialLogin: { id: socialLogin.id },
+        selectedDate,
+      },
+      relations: ['socialLogin'],
+    });
+
+    if (existing) {
+      // 기존 payload와 새 payload를 slot별로 merge (추가/중복 제거)
+      const existingPayload = normalizeMenuPayload(existing.menuPayload);
+      existing.menuPayload = mergeMenuPayload(existingPayload, menuPayload);
+      existing.selectedAt = now;
+      existing.selectedDate = selectedDate;
+      existing.status = MenuSelectionStatus.PENDING;
+      existing.lastTriedAt = null;
+      existing.retryCount = 0;
+      if (historyId !== undefined) {
+        existing.menuRecommendation =
+          await this.findOwnedRecommendationForSocialLogin(
+            historyId,
+            socialLogin.id,
+          );
+      }
+      return this.menuSelectionRepository.save(existing);
+    }
+
+    // 새 레코드 생성
+    const selection = this.menuSelectionRepository.create({
+      menuPayload,
+      user: null,
+      socialLogin,
+      selectedAt: now,
+      selectedDate,
+      status: MenuSelectionStatus.PENDING,
+      lastTriedAt: null,
+      retryCount: 0,
+    });
+
+    if (historyId !== undefined) {
+      selection.menuRecommendation =
+        await this.findOwnedRecommendationForSocialLogin(
+          historyId,
+          socialLogin.id,
+        );
+    }
+
+    return this.menuSelectionRepository.save(selection);
+  }
+
+  async updateSelectionForSocialLogin(
+    socialLogin: SocialLogin,
+    selectionId: number,
+    dto: UpdateMenuSelectionDto,
+  ) {
+    const selection = await this.menuSelectionRepository.findOne({
+      where: { id: selectionId, socialLogin: { id: socialLogin.id } },
+      relations: ['socialLogin'],
+    });
+    if (!selection) {
+      throw new BadRequestException('선택 이력을 찾을 수 없습니다.');
+    }
+
+    const now = new Date();
+    const selectedDate = this.toDateString(now);
+
+    if (dto.cancel) {
+      await this.menuSelectionRepository.update(selection.id, {
+        status: MenuSelectionStatus.CANCELLED,
+        menuPayload: { breakfast: [], lunch: [], dinner: [], etc: [] },
+        selectedAt: now,
+        selectedDate: selectedDate,
+        lastTriedAt: null,
+        retryCount: 0,
+      });
+    } else {
+      // 기존 payload 가져오기
+      const existingPayload = normalizeMenuPayload(selection.menuPayload);
+      const updatedPayload = {
+        breakfast: [...existingPayload.breakfast],
+        lunch: [...existingPayload.lunch],
+        dinner: [...existingPayload.dinner],
+        etc: [...existingPayload.etc],
+      };
+
+      const hasAnySlotUpdate =
+        dto.breakfast !== undefined ||
+        dto.lunch !== undefined ||
+        dto.dinner !== undefined ||
+        dto.etc !== undefined;
+
+      if (!hasAnySlotUpdate) {
+        throw new BadRequestException('변경할 메뉴가 없습니다.');
+      }
+
+      if (dto.breakfast !== undefined) {
+        const normalized = dto.breakfast
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.breakfast = normalized;
+      }
+
+      if (dto.lunch !== undefined) {
+        const normalized = dto.lunch
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.lunch = normalized;
+      }
+
+      if (dto.dinner !== undefined) {
+        const normalized = dto.dinner
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.dinner = normalized;
+      }
+
+      if (dto.etc !== undefined) {
+        const normalized = dto.etc
+          .map((m) => normalizeMenuName(m))
+          .filter((m) => m.length > 0);
+        updatedPayload.etc = normalized;
+      }
+
+      await this.menuSelectionRepository.update(selection.id, {
+        menuPayload: updatedPayload,
+        status: MenuSelectionStatus.PENDING,
+        selectedAt: now,
+        selectedDate: selectedDate,
+        lastTriedAt: null,
+        retryCount: 0,
+      });
+    }
+
+    // 업데이트 후 다시 조회하여 반환
+    const updated = await this.menuSelectionRepository.findOne({
+      where: { id: selection.id },
+    });
+    if (!updated) {
+      throw new BadRequestException('업데이트된 선택 이력을 찾을 수 없습니다.');
+    }
+    return updated;
   }
 
   async getHistory(user: User, date?: string) {
@@ -747,5 +1100,76 @@ export class MenuService {
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);
     return { start, end };
+  }
+
+  private toDateString(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  async getSelectionsForUser(user: User, selectedDate?: string) {
+    const where: any = { user: { id: user.id } };
+    if (selectedDate) {
+      where.selectedDate = selectedDate;
+    }
+    const selections = await this.menuSelectionRepository.find({
+      where,
+      order: { selectedAt: 'DESC' },
+      relations: ['menuRecommendation'],
+    });
+    return selections.map((selection) => this.mapSelection(selection));
+  }
+
+  async getSelectionsForSocialLogin(
+    socialLogin: SocialLogin,
+    selectedDate?: string,
+  ) {
+    const where: any = { socialLogin: { id: socialLogin.id } };
+    if (selectedDate) {
+      where.selectedDate = selectedDate;
+    }
+    const selections = await this.menuSelectionRepository.find({
+      where,
+      order: { selectedAt: 'DESC' },
+      relations: ['menuRecommendation'],
+    });
+    return selections.map((selection) => this.mapSelection(selection));
+  }
+
+  private mapSelection(selection: MenuSelection) {
+    const normalizedPayload = normalizeMenuPayload(selection.menuPayload);
+    return {
+      id: selection.id,
+      menuPayload: normalizedPayload,
+      selectedDate: selection.selectedDate,
+    };
+  }
+
+
+  private async findOwnedRecommendationForUser(
+    historyId: number,
+    userId: number,
+  ): Promise<MenuRecommendation> {
+    const recommendation = await this.recommendationRepository.findOne({
+      where: { id: historyId, user: { id: userId } },
+      relations: ['user'],
+    });
+    if (!recommendation) {
+      throw new BadRequestException('본인 추천 이력에만 선택을 연결할 수 있습니다.');
+    }
+    return recommendation;
+  }
+
+  private async findOwnedRecommendationForSocialLogin(
+    historyId: number,
+    socialLoginId: number,
+  ): Promise<MenuRecommendation> {
+    const recommendation = await this.recommendationRepository.findOne({
+      where: { id: historyId, socialLogin: { id: socialLoginId } },
+      relations: ['socialLogin'],
+    });
+    if (!recommendation) {
+      throw new BadRequestException('본인 추천 이력에만 선택을 연결할 수 있습니다.');
+    }
+    return recommendation;
   }
 }

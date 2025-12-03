@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
@@ -22,6 +23,7 @@ import { UserModule } from './user/user.module';
       synchronize: true,
       dropSchema: false,
     }),
+    ScheduleModule.forRoot(),
     LoggerModule.forRoot(),
     AuthModule,
     UserModule,
