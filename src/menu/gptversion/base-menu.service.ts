@@ -43,6 +43,7 @@ export abstract class BaseMenuService implements OnModuleInit {
     prompt: string,
     likes: string[],
     dislikes: string[],
+    analysis?: string,
   ): Promise<string[]> {
     if (!this.openai) {
       throw new InternalServerErrorException(
@@ -51,7 +52,7 @@ export abstract class BaseMenuService implements OnModuleInit {
     }
 
     const systemPrompt = SYSTEM_PROMPT;
-    const userPrompt = buildUserPrompt(prompt, likes, dislikes);
+    const userPrompt = buildUserPrompt(prompt, likes, dislikes, analysis);
     const jsonSchema = MENU_RECOMMENDATIONS_JSON_SCHEMA;
 
     const startedAt = Date.now();

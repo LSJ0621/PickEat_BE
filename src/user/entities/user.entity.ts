@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
+import { MenuSelection } from '../../menu/entities/menu-selection.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
 
 @Entity()
@@ -62,4 +63,7 @@ export class User {
 
   @OneToMany(() => MenuRecommendation, (recommendation) => recommendation.user)
   recommendations: MenuRecommendation[];
+
+  @OneToMany(() => MenuSelection, (selection) => selection.user)
+  menuSelections: MenuSelection[];
 }

@@ -3,10 +3,12 @@ import {
     CreateDateColumn,
     DeleteDateColumn,
     Entity,
+    OneToMany,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
     VersionColumn,
 } from 'typeorm';
+import { MenuSelection } from '../../menu/entities/menu-selection.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
 
 @Entity('social_login')
@@ -58,5 +60,7 @@ export class SocialLogin {
 
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
-}
 
+  @OneToMany(() => MenuSelection, (selection) => selection.socialLogin)
+  menuSelections: MenuSelection[];
+}

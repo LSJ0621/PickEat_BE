@@ -1,0 +1,212 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { PreferenceUpdateAiService } from '../user/preference-update-ai.service';
+import { UserService } from '../user/user.service';
+import {
+  MenuSelection,
+  MenuSelectionStatus,
+} from './entities/menu-selection.entity';
+import { normalizeMenuName, normalizeMenuPayload } from './menu-payload.util';
+
+@Injectable()
+export class PreferencesScheduler {
+  private readonly logger = new Logger(PreferencesScheduler.name);
+  private readonly batchSize = 100;
+
+  constructor(
+    @InjectRepository(MenuSelection)
+    private readonly menuSelectionRepository: Repository<MenuSelection>,
+    private readonly userService: UserService,
+    private readonly preferenceUpdateAiService: PreferenceUpdateAiService,
+  ) {}
+
+  @Cron('12 20 * * *')
+  async processPendingSelections() {
+    this.logger.log('🕐 [스케줄러 실행] PENDING 건 처리 시작');
+    const pending = await this.menuSelectionRepository.find({
+      where: { status: MenuSelectionStatus.PENDING },
+      relations: ['user', 'socialLogin'],
+      order: { selectedAt: 'ASC' },
+      take: this.batchSize,
+    });
+
+    if (pending.length === 0) {
+      this.logger.log('ℹ️ [스케줄러] 처리할 PENDING 건이 없습니다.');
+      return;
+    }
+
+    this.logger.log(`📋 [스케줄러] ${pending.length}건의 PENDING 건을 처리합니다.`);
+
+    const now = new Date();
+    pending.forEach((selection) => {
+      selection.status = MenuSelectionStatus.IN_PROGRESS;
+      selection.lastTriedAt = now;
+    });
+    await this.menuSelectionRepository.save(pending);
+
+    const grouped = this.groupByOwner(pending);
+    for (const group of grouped) {
+      // slot별로 메뉴를 그룹화
+      const slotMenus = {
+        breakfast: [] as string[],
+        lunch: [] as string[],
+        dinner: [] as string[],
+        etc: [] as string[],
+      };
+
+      group.selections.forEach((s) => {
+        const payload = normalizeMenuPayload(s.menuPayload as any);
+        slotMenus.breakfast.push(
+          ...payload.breakfast.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+        );
+        slotMenus.lunch.push(
+          ...payload.lunch.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+        );
+        slotMenus.dinner.push(
+          ...payload.dinner.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+        );
+        slotMenus.etc.push(
+          ...payload.etc.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+        );
+      });
+
+      // 중복 제거
+      slotMenus.breakfast = Array.from(new Set(slotMenus.breakfast));
+      slotMenus.lunch = Array.from(new Set(slotMenus.lunch));
+      slotMenus.dinner = Array.from(new Set(slotMenus.dinner));
+      slotMenus.etc = Array.from(new Set(slotMenus.etc));
+
+      const totalMenus =
+        slotMenus.breakfast.length +
+        slotMenus.lunch.length +
+        slotMenus.dinner.length +
+        slotMenus.etc.length;
+
+      if (totalMenus === 0) {
+        await this.markSelections(group.selections, MenuSelectionStatus.SUCCEEDED);
+        continue;
+      }
+      try {
+        await this.applySelectionsToPreferencesAnalysis(
+          group.ownerType,
+          group.ownerId,
+          slotMenus,
+        );
+        await this.markSelections(group.selections, MenuSelectionStatus.SUCCEEDED);
+      } catch (error) {
+        this.logger.error(
+          `❌ [취향 분석 실패] owner=${group.ownerType}-${group.ownerId}: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
+        );
+        await this.markSelections(group.selections, MenuSelectionStatus.FAILED, true);
+      }
+    }
+  }
+
+  @Cron('7 20 * * *')
+  async requeueFailedSelections() {
+    this.logger.log('🕐 [스케줄러 실행] FAILED 건 재시도 시작');
+    const failed = await this.menuSelectionRepository.find({
+      where: { status: MenuSelectionStatus.FAILED },
+      take: this.batchSize,
+    });
+
+    if (failed.length === 0) {
+      this.logger.log('ℹ️ [스케줄러] 처리할 FAILED 건이 없습니다.');
+      return;
+    }
+
+    failed.forEach((selection) => {
+      selection.status = MenuSelectionStatus.PENDING;
+      selection.lastTriedAt = null;
+    });
+
+    await this.menuSelectionRepository.save(failed);
+    this.logger.log(`🔄 [재시도 예약] ${failed.length}건을 PENDING으로 되돌렸습니다.`);
+  }
+
+  private async applySelectionsToPreferencesAnalysis(
+    ownerType: 'user' | 'social',
+    ownerId: number,
+    slotMenus: {
+      breakfast: string[];
+      lunch: string[];
+      dinner: string[];
+      etc: string[];
+    },
+  ) {
+    if (ownerType === 'user') {
+      const current = await this.userService.getPreferences(ownerId);
+      const aiResult =
+        await this.preferenceUpdateAiService.generatePreferenceAnalysis(
+          current,
+          slotMenus,
+        );
+      await this.userService.updatePreferencesAnalysis(
+        ownerId,
+        aiResult.analysis,
+      );
+      return;
+    }
+
+    const current = await this.userService.getSocialLoginPreferences(ownerId);
+    const aiResult =
+      await this.preferenceUpdateAiService.generatePreferenceAnalysis(
+        current,
+        slotMenus,
+      );
+    await this.userService.updateSocialLoginPreferencesAnalysis(
+      ownerId,
+      aiResult.analysis,
+    );
+  }
+
+  private groupByOwner(
+    selections: MenuSelection[],
+  ): { ownerType: 'user' | 'social'; ownerId: number; selections: MenuSelection[] }[] {
+    const map = new Map<string, { ownerType: 'user' | 'social'; ownerId: number; selections: MenuSelection[] }>();
+    selections.forEach((selection) => {
+      if (selection.user) {
+        const key = `user-${selection.user.id}`;
+        if (!map.has(key)) {
+          map.set(key, { ownerType: 'user', ownerId: selection.user.id, selections: [] });
+        }
+        map.get(key)!.selections.push(selection);
+        return;
+      }
+      if (selection.socialLogin) {
+        const key = `social-${selection.socialLogin.id}`;
+        if (!map.has(key)) {
+          map.set(key, { ownerType: 'social', ownerId: selection.socialLogin.id, selections: [] });
+        }
+        map.get(key)!.selections.push(selection);
+      }
+    });
+    return Array.from(map.values());
+  }
+
+  private async markSelections(
+    selections: MenuSelection[],
+    status: MenuSelectionStatus,
+    incrementRetry = false,
+  ) {
+    const now = new Date();
+    const ids = selections.map((s) => s.id);
+    if (ids.length === 0) {
+      return;
+    }
+
+    const partials = selections.map((selection) => ({
+      id: selection.id,
+      status,
+      lastTriedAt: now,
+      retryCount: incrementRetry ? selection.retryCount + 1 : selection.retryCount,
+    }));
+
+    await this.menuSelectionRepository.save(partials);
+  }
+
+}
