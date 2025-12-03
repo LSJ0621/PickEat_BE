@@ -230,7 +230,13 @@ export class UserService {
 
   async getPreferences(userId: number): Promise<UserPreferences> {
     const user = await this.findOne(userId);
-    return user.preferences ?? defaultUserPreferences();
+    const preferences = user.preferences ?? defaultUserPreferences();
+    // analysis 필드가 항상 포함되도록 보장
+    return {
+      likes: preferences.likes ?? [],
+      dislikes: preferences.dislikes ?? [],
+      analysis: preferences.analysis ?? undefined,
+    };
   }
 
   async updatePreferences(
@@ -252,6 +258,23 @@ export class UserService {
     user.preferences = {
       likes: normalizedLikes,
       dislikes: normalizedDislikes,
+      analysis: currentPreferences.analysis, // analysis는 유지 (스케줄러 전용)
+    };
+    await this.userRepository.save(user);
+    return user.preferences;
+  }
+
+  async updatePreferencesAnalysis(
+    userId: number,
+    analysis: string,
+  ): Promise<UserPreferences> {
+    const user = await this.findOne(userId);
+    const currentPreferences = user.preferences ?? defaultUserPreferences();
+    
+    user.preferences = {
+      likes: currentPreferences.likes,
+      dislikes: currentPreferences.dislikes,
+      analysis: analysis.trim(),
     };
     await this.userRepository.save(user);
     return user.preferences;
@@ -264,7 +287,13 @@ export class UserService {
     if (!socialLogin) {
       throw new NotFoundException('SocialLogin not found');
     }
-    return socialLogin.preferences ?? defaultUserPreferences();
+    const preferences = socialLogin.preferences ?? defaultUserPreferences();
+    // analysis 필드가 항상 포함되도록 보장
+    return {
+      likes: preferences.likes ?? [],
+      dislikes: preferences.dislikes ?? [],
+      analysis: preferences.analysis ?? undefined,
+    };
   }
 
   async updateSocialLoginPreferences(
@@ -291,6 +320,28 @@ export class UserService {
     socialLogin.preferences = {
       likes: normalizedLikes,
       dislikes: normalizedDislikes,
+      analysis: currentPreferences.analysis, // analysis는 유지 (스케줄러 전용)
+    };
+    await this.socialLoginRepository.save(socialLogin);
+    return socialLogin.preferences;
+  }
+
+  async updateSocialLoginPreferencesAnalysis(
+    socialLoginId: number,
+    analysis: string,
+  ): Promise<UserPreferences> {
+    const socialLogin = await this.socialLoginRepository.findOne({
+      where: { id: socialLoginId },
+    });
+    if (!socialLogin) {
+      throw new NotFoundException('SocialLogin not found');
+    }
+    const currentPreferences = socialLogin.preferences ?? defaultUserPreferences();
+    
+    socialLogin.preferences = {
+      likes: currentPreferences.likes,
+      dislikes: currentPreferences.dislikes,
+      analysis: analysis.trim(),
     };
     await this.socialLoginRepository.save(socialLogin);
     return socialLogin.preferences;

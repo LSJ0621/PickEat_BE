@@ -27,17 +27,20 @@ export const SYSTEM_PROMPT = [
  * @param userPrompt 사용자가 입력한 요청
  * @param likes 사용자가 좋아하는 것 (태그 배열)
  * @param dislikes 사용자가 싫어하는 것 (태그 배열)
+ * @param analysis 사용자 취향 분석 텍스트 (200자 이내)
  * @returns 완성된 User 프롬프트
  */
 export function buildUserPrompt(
   userPrompt: string,
   likes: string[],
   dislikes: string[],
+  analysis?: string,
 ): string {
   const normalizedLikes = likes?.filter(Boolean) ?? [];
   const normalizedDislikes = dislikes?.filter(Boolean) ?? [];
   const hasLikes = normalizedLikes.length > 0;
   const hasDislikes = normalizedDislikes.length > 0;
+  const hasAnalysis = analysis && analysis.trim().length > 0;
 
   const preferenceParts: string[] = [];
   if (hasLikes) {
@@ -45,6 +48,9 @@ export function buildUserPrompt(
   }
   if (hasDislikes) {
     preferenceParts.push(`싫어하는 것: ${normalizedDislikes.join(', ')}`);
+  }
+  if (hasAnalysis) {
+    preferenceParts.push(`취향 분석: ${analysis.trim()}`);
   }
 
   return [

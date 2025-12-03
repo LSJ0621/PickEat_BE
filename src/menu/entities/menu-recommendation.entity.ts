@@ -10,6 +10,7 @@ import {
 import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
 import { PlaceRecommendation } from './place-recommendation.entity';
+import { MenuSelection } from './menu-selection.entity';
 
 @Entity()
 export class MenuRecommendation {
@@ -51,6 +52,12 @@ export class MenuRecommendation {
     (placeRecommendation) => placeRecommendation.menuRecommendation,
   )
   placeRecommendations: PlaceRecommendation[];
+
+  @OneToMany(
+    () => MenuSelection,
+    (selection) => selection.menuRecommendation,
+  )
+  selections: MenuSelection[];
 
   @CreateDateColumn()
   createdAt: Date;
