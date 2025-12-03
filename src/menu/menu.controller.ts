@@ -4,9 +4,10 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
-  UseGuards,
+  UseGuards
 } from '@nestjs/common';
 import {
   AuthUserPayload,
@@ -14,8 +15,11 @@ import {
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { UserService } from '../user/user.service';
+import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
 import { RecommendMenuDto } from './dto/recommend-menu.dto';
 import { RecommendationHistoryQueryDto } from './dto/recommendation-history-query.dto';
+import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
+import { MenuSelection } from './entities/menu-selection.entity';
 import { MenuService } from './menu.service';
 
 @Controller('menu')
@@ -51,6 +55,87 @@ export class MenuController {
         recommendMenuDto.requestLocation?.lng,
       );
     }
+  }
+
+  @Post('selections')
+  @UseGuards(JwtAuthGuard)
+  async createSelection(
+    @Body() createMenuSelectionDto: CreateMenuSelectionDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const result = await this.userService.findUserOrSocialLoginByEmail(
+      authUser.email,
+    );
+    if (result.type === 'user') {
+      const selection = await this.menuService.createSelectionForUser(
+        result.user!,
+        createMenuSelectionDto.menus,
+        createMenuSelectionDto.historyId,
+      );
+      return this.buildSelectionResponse(selection);
+    } else {
+      const selection = await this.menuService.createSelectionForSocialLogin(
+        result.socialLogin!,
+        createMenuSelectionDto.menus,
+        createMenuSelectionDto.historyId,
+      );
+      return this.buildSelectionResponse(selection);
+    }
+  }
+
+  @Get('selections/history')
+  @UseGuards(JwtAuthGuard)
+  async getSelections(
+    @Query('date') date: string | undefined,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const result = await this.userService.findUserOrSocialLoginByEmail(
+      authUser.email,
+    );
+    if (result.type === 'user') {
+      const selections = await this.menuService.getSelectionsForUser(
+        result.user!,
+        date,
+      );
+      return { selections };
+    } else {
+      const selections = await this.menuService.getSelectionsForSocialLogin(
+        result.socialLogin!,
+        date,
+      );
+      return { selections };
+    }
+  }
+
+  @Patch('selections/:id')
+  @UseGuards(JwtAuthGuard)
+  async updateSelection(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateMenuSelectionDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const selectionId = Number(id);
+    if (Number.isNaN(selectionId)) {
+      throw new BadRequestException('유효하지 않은 선택 ID입니다.');
+    }
+    const result = await this.userService.findUserOrSocialLoginByEmail(
+      authUser.email,
+    );
+    let selection: MenuSelection;
+    if (result.type === 'user') {
+      selection = await this.menuService.updateSelectionForUser(
+        result.user!,
+        selectionId,
+        updateDto,
+      );
+    } else {
+      selection = await this.menuService.updateSelectionForSocialLogin(
+        result.socialLogin!,
+        selectionId,
+        updateDto,
+      );
+    }
+    return this.buildSelectionResponse(selection);
   }
 
   @Get('recommendations/history')
@@ -161,5 +246,24 @@ export class MenuController {
   @UseGuards(JwtAuthGuard)
   async getPlaceDetail(@Param('placeId') placeId: string) {
     return this.menuService.getPlaceDetail(placeId);
+  }
+
+  private buildSelectionResponse(selection: MenuSelection) {
+    // menuPayload를 그대로 반환 (slot별 구조)
+    const payload = selection.menuPayload as any;
+    const normalizedPayload = {
+      breakfast: Array.isArray(payload?.breakfast) ? payload.breakfast : [],
+      lunch: Array.isArray(payload?.lunch) ? payload.lunch : [],
+      dinner: Array.isArray(payload?.dinner) ? payload.dinner : [],
+      etc: Array.isArray(payload?.etc) ? payload.etc : [],
+    };
+    return {
+      selection: {
+        id: selection.id,
+        menuPayload: normalizedPayload,
+        selectedDate: selection.selectedDate,
+        historyId: selection.menuRecommendation?.id ?? null,
+      },
+    };
   }
 }
