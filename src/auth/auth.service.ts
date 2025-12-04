@@ -78,11 +78,11 @@ export class AuthService {
   ) {
     this.kakaoClientIdEnv = this.config.get<string>(
       'OAUTH_KAKAO_CLIENT_ID',
-      'b82967657cb741bb3c4173fdfe1dc0b7',
+      '',
     );
     this.kakaoRedirectUriEnv = this.config.get<string>(
       'OAUTH_KAKAO_REDIRECT_URI',
-      'http://localhost:8080/oauth/kakao/redirect',
+      '',
     );
     this.googleClientIdEnv = this.config.get<string>(
       'OAUTH_GOOGLE_CLIENT_ID',
@@ -98,7 +98,7 @@ export class AuthService {
     );
     this.refreshTokenSecret = this.config.get<string>(
       'JWT_REFRESH_SECRET',
-      'refreshSecret',
+      '',
     );
   }
 
@@ -424,52 +424,55 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResult> {
+  /**
+   * LocalStrategy에서 사용할 사용자 인증 메서드
+   * 이메일과 비밀번호로 사용자를 검증하고, 유효한 경우 User 엔티티를 반환
+   */
+  async validateUser(email: string, password: string): Promise<User | null> {
     // 사용자 조회 (soft delete 포함)
     const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
+      where: { email },
       withDeleted: true,
     });
 
     // User 테이블에 없으면 SocialLogin 테이블 확인
     if (!user) {
       const socialLogin = await this.socialLoginRepository.findOne({
-        where: { email: loginDto.email },
+        where: { email },
         withDeleted: true,
       });
       if (socialLogin) {
-        // 탈퇴한 계정이거나 소셜 로그인 계정인 경우 일반적인 에러 메시지 반환 (보안상)
-        throw new UnauthorizedException(
-          '이메일 또는 비밀번호가 올바르지 않습니다.',
-        );
+        // 탈퇴한 계정이거나 소셜 로그인 계정인 경우 null 반환
+        return null;
       }
-      throw new UnauthorizedException(
-        '이메일 또는 비밀번호가 올바르지 않습니다.',
-      );
+      return null;
     }
 
-    // 탈퇴한 사용자인 경우 일반적인 에러 메시지 반환 (보안상)
+    // 탈퇴한 사용자인 경우 null 반환
     if (user.deletedAt) {
-      throw new UnauthorizedException(
-        '이메일 또는 비밀번호가 올바르지 않습니다.',
-      );
+      return null;
     }
 
     // 비밀번호 확인 (소셜 로그인 사용자는 password가 null일 수 있음)
     if (!user.password) {
-      throw new UnauthorizedException('소셜 로그인으로 가입한 계정입니다.');
+      return null;
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
-      user.password,
-    );
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      return null;
+    }
+
+    return user;
+  }
+
+  async login(loginDto: LoginDto): Promise<AuthResult> {
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+    if (!user) {
       throw new UnauthorizedException(
         '이메일 또는 비밀번호가 올바르지 않습니다.',
       );
     }
-
     return this.buildAuthResult(user);
   }
 
@@ -663,7 +666,7 @@ export class AuthService {
     };
   }
 
-  private async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
+  async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
     const { token, refreshToken } = await this.issueTokens(entity);
     return {
       id: entity.id,
