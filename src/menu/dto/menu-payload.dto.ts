@@ -25,5 +25,3 @@ export class MenuPayloadDto {
   @IsNotEmpty({ each: true })
   etc?: string[];
 }
-
-

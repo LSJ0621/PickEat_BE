@@ -57,7 +57,7 @@ export const MENU_RECOMMENDATIONS_JSON_SCHEMA = {
       type: 'array',
       items: {
         type: 'string',
-        pattern: '^[가-힣]+$', 
+        pattern: '^[가-힣]+$',
       },
       minItems: 1,
       maxItems: 5,

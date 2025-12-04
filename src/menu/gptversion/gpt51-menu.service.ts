@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '../prompts/menu-recommendation.prompts';
 import { BaseMenuService } from './base-menu.service';
 
@@ -17,13 +18,14 @@ export class Gpt51MenuService extends BaseMenuService {
    * 실제 계정에서 사용 가능한 모델명은 OpenAI 대시보드/문서를 참고해
    * 환경변수(특히 OPENAI_MENU_MODEL)에 설정하는 것을 권장.
    */
-  private readonly model =
-    process.env.OPENAI_MENU_MODEL ||
-    process.env.OPENAI_MODEL ||
-    'gpt-5.1';
+  private readonly model: string;
 
-  constructor() {
-    super('Gpt51MenuService');
+  constructor(config: ConfigService) {
+    super('Gpt51MenuService', config);
+    this.model =
+      this.config.get<string>('OPENAI_MENU_MODEL') ||
+      this.config.get<string>('OPENAI_MODEL') ||
+      'gpt-5.1';
   }
 
   protected getModel(): string {
@@ -53,5 +55,3 @@ export class Gpt51MenuService extends BaseMenuService {
     };
   }
 }
-
-

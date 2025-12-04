@@ -13,4 +13,3 @@ export class ReRegisterDto {
   @IsNotEmpty()
   name: string;
 }
-

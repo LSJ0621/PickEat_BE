@@ -1,12 +1,12 @@
 import { Type } from 'class-transformer';
 import {
-    IsArray,
-    IsEnum,
-    IsNotEmpty,
-    IsOptional,
-    IsPositive,
-    IsString,
-    ValidateNested,
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsPositive,
+  IsString,
+  ValidateNested,
 } from 'class-validator';
 
 export enum MenuSlot {

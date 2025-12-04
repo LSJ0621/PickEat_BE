@@ -6,5 +6,3 @@ export class MenuSelectionResponseDto {
   selectedDate: string;
   historyId: number | null;
 }
-
-

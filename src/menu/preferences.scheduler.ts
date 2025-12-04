@@ -37,7 +37,9 @@ export class PreferencesScheduler {
       return;
     }
 
-    this.logger.log(`📋 [스케줄러] ${pending.length}건의 PENDING 건을 처리합니다.`);
+    this.logger.log(
+      `📋 [스케줄러] ${pending.length}건의 PENDING 건을 처리합니다.`,
+    );
 
     const now = new Date();
     pending.forEach((selection) => {
@@ -59,16 +61,24 @@ export class PreferencesScheduler {
       group.selections.forEach((s) => {
         const payload = normalizeMenuPayload(s.menuPayload as any);
         slotMenus.breakfast.push(
-          ...payload.breakfast.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.breakfast
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
         slotMenus.lunch.push(
-          ...payload.lunch.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.lunch
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
         slotMenus.dinner.push(
-          ...payload.dinner.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.dinner
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
         slotMenus.etc.push(
-          ...payload.etc.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.etc
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
       });
 
@@ -85,7 +95,10 @@ export class PreferencesScheduler {
         slotMenus.etc.length;
 
       if (totalMenus === 0) {
-        await this.markSelections(group.selections, MenuSelectionStatus.SUCCEEDED);
+        await this.markSelections(
+          group.selections,
+          MenuSelectionStatus.SUCCEEDED,
+        );
         continue;
       }
       try {
@@ -94,14 +107,21 @@ export class PreferencesScheduler {
           group.ownerId,
           slotMenus,
         );
-        await this.markSelections(group.selections, MenuSelectionStatus.SUCCEEDED);
+        await this.markSelections(
+          group.selections,
+          MenuSelectionStatus.SUCCEEDED,
+        );
       } catch (error) {
         this.logger.error(
           `❌ [취향 분석 실패] owner=${group.ownerType}-${group.ownerId}: ${
             error instanceof Error ? error.message : 'unknown error'
           }`,
         );
-        await this.markSelections(group.selections, MenuSelectionStatus.FAILED, true);
+        await this.markSelections(
+          group.selections,
+          MenuSelectionStatus.FAILED,
+          true,
+        );
       }
     }
   }
@@ -121,7 +141,9 @@ export class PreferencesScheduler {
       return;
     }
 
-    this.logger.log(`📋 [스케줄러] ${failed.length}건의 FAILED 건을 재시도합니다.`);
+    this.logger.log(
+      `📋 [스케줄러] ${failed.length}건의 FAILED 건을 재시도합니다.`,
+    );
 
     const now = new Date();
     failed.forEach((selection) => {
@@ -143,16 +165,24 @@ export class PreferencesScheduler {
       group.selections.forEach((s) => {
         const payload = normalizeMenuPayload(s.menuPayload as any);
         slotMenus.breakfast.push(
-          ...payload.breakfast.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.breakfast
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
         slotMenus.lunch.push(
-          ...payload.lunch.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.lunch
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
         slotMenus.dinner.push(
-          ...payload.dinner.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.dinner
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
         slotMenus.etc.push(
-          ...payload.etc.map((n) => normalizeMenuName(n)).filter((n) => n.length > 0),
+          ...payload.etc
+            .map((n) => normalizeMenuName(n))
+            .filter((n) => n.length > 0),
         );
       });
 
@@ -169,7 +199,10 @@ export class PreferencesScheduler {
         slotMenus.etc.length;
 
       if (totalMenus === 0) {
-        await this.markSelections(group.selections, MenuSelectionStatus.SUCCEEDED);
+        await this.markSelections(
+          group.selections,
+          MenuSelectionStatus.SUCCEEDED,
+        );
         continue;
       }
       try {
@@ -178,14 +211,21 @@ export class PreferencesScheduler {
           group.ownerId,
           slotMenus,
         );
-        await this.markSelections(group.selections, MenuSelectionStatus.SUCCEEDED);
+        await this.markSelections(
+          group.selections,
+          MenuSelectionStatus.SUCCEEDED,
+        );
       } catch (error) {
         this.logger.error(
           `❌ [취향 분석 재시도 실패] owner=${group.ownerType}-${group.ownerId}: ${
             error instanceof Error ? error.message : 'unknown error'
           }`,
         );
-        await this.markSelections(group.selections, MenuSelectionStatus.FAILED, true);
+        await this.markSelections(
+          group.selections,
+          MenuSelectionStatus.FAILED,
+          true,
+        );
       }
     }
   }
@@ -226,15 +266,28 @@ export class PreferencesScheduler {
     );
   }
 
-  private groupByOwner(
-    selections: MenuSelection[],
-  ): { ownerType: 'user' | 'social'; ownerId: number; selections: MenuSelection[] }[] {
-    const map = new Map<string, { ownerType: 'user' | 'social'; ownerId: number; selections: MenuSelection[] }>();
+  private groupByOwner(selections: MenuSelection[]): {
+    ownerType: 'user' | 'social';
+    ownerId: number;
+    selections: MenuSelection[];
+  }[] {
+    const map = new Map<
+      string,
+      {
+        ownerType: 'user' | 'social';
+        ownerId: number;
+        selections: MenuSelection[];
+      }
+    >();
     selections.forEach((selection) => {
       if (selection.user) {
         const key = `user-${selection.user.id}`;
         if (!map.has(key)) {
-          map.set(key, { ownerType: 'user', ownerId: selection.user.id, selections: [] });
+          map.set(key, {
+            ownerType: 'user',
+            ownerId: selection.user.id,
+            selections: [],
+          });
         }
         map.get(key)!.selections.push(selection);
         return;
@@ -242,7 +295,11 @@ export class PreferencesScheduler {
       if (selection.socialLogin) {
         const key = `social-${selection.socialLogin.id}`;
         if (!map.has(key)) {
-          map.set(key, { ownerType: 'social', ownerId: selection.socialLogin.id, selections: [] });
+          map.set(key, {
+            ownerType: 'social',
+            ownerId: selection.socialLogin.id,
+            selections: [],
+          });
         }
         map.get(key)!.selections.push(selection);
       }
@@ -265,10 +322,11 @@ export class PreferencesScheduler {
       id: selection.id,
       status,
       lastTriedAt: now,
-      retryCount: incrementRetry ? selection.retryCount + 1 : selection.retryCount,
+      retryCount: incrementRetry
+        ? selection.retryCount + 1
+        : selection.retryCount,
     }));
 
     await this.menuSelectionRepository.save(partials);
   }
-
 }
