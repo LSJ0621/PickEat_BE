@@ -16,6 +16,7 @@ import { EmailVerification } from './entities/email-verification.entity';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
 import { EmailVerificationService } from './services/email-verification.service';
 import { JwtStrategy } from './strategy/jwt.strategy';
+import { LocalStrategy } from './strategy/local.strategy';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { JwtStrategy } from './strategy/jwt.strategy';
   providers: [
     AuthService,
     JwtStrategy,
+    LocalStrategy,
     JwtTokenProvider,
     EmailVerificationService,
   ],
