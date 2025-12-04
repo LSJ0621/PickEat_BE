@@ -76,6 +76,18 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const duration = Date.now() - startedAt;
 
+      const usage: any = (response as any).usage;
+      if (usage) {
+        const promptTokens =
+          usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
+        const completionTokens =
+          usage.completion_tokens ?? usage.output_tokens ?? 0;
+        const totalTokens = usage.total_tokens ?? promptTokens + completionTokens;
+        this.logger.log(
+          `📊 [메뉴 추천 LLM 토큰 사용량] model=${this.getModel()}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`,
+        );
+      }
+
       this.logger.log(
         `📥 [OpenAI 응답 원본] ${JSON.stringify(response, null, 2)}`,
       );
