@@ -5,12 +5,12 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import OpenAI from 'openai';
+import { UserPreferences } from './interfaces/user-preferences.interface';
 import {
   buildPreferenceUserPrompt,
   PREFERENCE_RESPONSE_SCHEMA,
   PREFERENCE_SYSTEM_PROMPT,
 } from './prompts/preference-update.prompts';
-import { UserPreferences } from './interfaces/user-preferences.interface';
 
 interface PreferenceAnalysisResponse {
   analysis: string;
@@ -20,9 +20,22 @@ interface PreferenceAnalysisResponse {
 export class PreferenceUpdateAiService implements OnModuleInit {
   private readonly logger = new Logger(PreferenceUpdateAiService.name);
   private openai: OpenAI | null = null;
-  private readonly model =
-    process.env.OPENAI_MODEL ||
-    (process.env.OPENAI_GPT_VERSION === '5' ? 'gpt-5o-mini' : 'gpt-4o-mini');
+    /**
+     * 취향 분석 전용 모델
+     * - 기본: OpenAI 최신 모델 가이드에서 권장하는 GPT-5.1 기본 모델 사용
+     *   (예: requirements.md에서 GPT-5 기본 모델로 `gpt-5`를 사용하는 것과 동일한 패턴)
+     * - 우선순위:
+     *   1) OPENAI_PREFERENCE_MODEL (취향 분석 전용으로 명시)
+     *   2) OPENAI_MODEL (글로벌 기본 모델)
+     *   3) 기본값: 'gpt-5.1'
+     *
+     * 실제 계정에서 사용 가능한 정확한 모델명은 OpenAI 대시보드/문서를 참고해
+     * 환경변수(특히 OPENAI_PREFERENCE_MODEL)에 설정하는 것을 권장.
+     */
+    private readonly model =
+      process.env.OPENAI_PREFERENCE_MODEL ||
+      process.env.OPENAI_MODEL ||
+      'gpt-5.1';
 
   onModuleInit() {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -30,7 +43,8 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       this.logger.error('OPENAI_API_KEY is not configured');
       return;
     }
-    this.openai = new OpenAI({ apiKey });
+      this.openai = new OpenAI({ apiKey });
+      this.logger.log(`✅ Preference LLM 초기화 완료. model=${this.model}`);
   }
 
   async generatePreferenceAnalysis(
@@ -61,8 +75,29 @@ export class PreferenceUpdateAiService implements OnModuleInit {
           { role: 'system', content: system },
           { role: 'user', content: user },
         ],
-        response_format: { type: 'json_object' },
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'preference_analysis',
+            schema: PREFERENCE_RESPONSE_SCHEMA,
+            strict: true,
+          },
+        },
+        // GPT-5.1 계열: temperature 미사용, completion 토큰만 지정
+        max_completion_tokens: 500,
       });
+      
+      const usage: any = (response as any).usage;
+      if (usage) {
+        const promptTokens =
+          usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
+        const completionTokens =
+          usage.completion_tokens ?? usage.output_tokens ?? 0;
+        const totalTokens = usage.total_tokens ?? promptTokens + completionTokens;
+        this.logger.log(
+          `📊 [Preference LLM 토큰 사용량] model=${this.model}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`,
+        );
+      }
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
