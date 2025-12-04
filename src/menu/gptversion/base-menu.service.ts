@@ -4,6 +4,7 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import {
   buildUserPrompt,
@@ -23,12 +24,15 @@ export abstract class BaseMenuService implements OnModuleInit {
   protected readonly logger: Logger;
   protected openai: OpenAI;
 
-  constructor(loggerName: string) {
+  constructor(
+    loggerName: string,
+    protected readonly config: ConfigService,
+  ) {
     this.logger = new Logger(loggerName);
   }
 
   onModuleInit() {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
       this.logger.error('OPENAI_API_KEY is not configured');
       return;
@@ -82,7 +86,8 @@ export abstract class BaseMenuService implements OnModuleInit {
           usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
         const completionTokens =
           usage.completion_tokens ?? usage.output_tokens ?? 0;
-        const totalTokens = usage.total_tokens ?? promptTokens + completionTokens;
+        const totalTokens =
+          usage.total_tokens ?? promptTokens + completionTokens;
         this.logger.log(
           `📊 [메뉴 추천 LLM 토큰 사용량] model=${this.getModel()}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`,
         );

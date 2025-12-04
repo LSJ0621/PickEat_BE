@@ -100,5 +100,3 @@ export function normalizeMenuPayload(payload: any): MenuSlotPayload {
 
   return { breakfast: [], lunch: [], dinner: [], etc: [] };
 }
-
-

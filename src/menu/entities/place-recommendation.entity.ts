@@ -1,9 +1,4 @@
-import {
-  Column,
-  Entity,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { MenuRecommendation } from './menu-recommendation.entity';
 
 @Entity()
@@ -29,5 +24,3 @@ export class PlaceRecommendation {
   @Column({ type: 'text', nullable: true })
   menuName: string | null;
 }
-
-

@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { lastValueFrom } from 'rxjs';
 import { SearchRestaurantsDto } from '../search/dto/search-restaurants.dto';
 import { RestaurantSummary, SearchService } from '../search/search.service';
@@ -11,24 +12,34 @@ import {
 
 const NAVER_MAP_REVERSE_GEOCODE_URL =
   'https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc';
-const NAVER_MAP_CLIENT_ID =
-  process.env.NAVER_MAP_CLIENT_ID || '<<PUT_YOUR_NAVER_MAP_CLIENT_ID_HERE>>';
-const NAVER_MAP_CLIENT_SECRET =
-  process.env.NAVER_MAP_CLIENT_SECRET ||
-  '<<PUT_YOUR_NAVER_MAP_CLIENT_SECRET_HERE>>';
-
-const GOOGLE_PLACES_API_URL = 'https://places.googleapis.com/v1/places:searchText';
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const GOOGLE_PLACES_API_URL =
+  'https://places.googleapis.com/v1/places:searchText';
 
 @Injectable()
 export class MapService {
   private readonly logger = new Logger(MapService.name);
+  private readonly naverMapClientId: string;
+  private readonly naverMapClientSecret: string;
+  private readonly googleApiKey: string;
 
   constructor(
     @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
     private readonly httpService: HttpService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    // .env.development 기준:
+    // NAVER_MAP_CLIENT_ID, NAVER_MAP_CLIENT_SECRET, GOOGLE_API_KEY
+    this.naverMapClientId = this.config.get<string>(
+      'NAVER_MAP_CLIENT_ID',
+      '',
+    );
+    this.naverMapClientSecret = this.config.get<string>(
+      'NAVER_MAP_CLIENT_SECRET',
+      '',
+    );
+    this.googleApiKey = this.config.get<string>('GOOGLE_API_KEY', '');
+  }
 
   async getRestaurantMarkers(
     dto: SearchRestaurantsDto,
@@ -45,10 +56,10 @@ export class MapService {
     includeRoadAddress: boolean = false,
   ): Promise<string | null> {
     const hasCredentials =
-      NAVER_MAP_CLIENT_ID &&
-      NAVER_MAP_CLIENT_SECRET &&
-      !NAVER_MAP_CLIENT_ID.includes('<<PUT_YOUR') &&
-      !NAVER_MAP_CLIENT_SECRET.includes('<<PUT_YOUR');
+      this.naverMapClientId &&
+      this.naverMapClientSecret &&
+      !this.naverMapClientId.includes('<<PUT_YOUR') &&
+      !this.naverMapClientSecret.includes('<<PUT_YOUR');
 
     if (!hasCredentials) {
       return null;
@@ -62,8 +73,8 @@ export class MapService {
           NAVER_MAP_REVERSE_GEOCODE_URL,
           {
             headers: {
-              'X-NCP-APIGW-API-KEY-ID': NAVER_MAP_CLIENT_ID,
-              'X-NCP-APIGW-API-KEY': NAVER_MAP_CLIENT_SECRET,
+              'X-NCP-APIGW-API-KEY-ID': this.naverMapClientId,
+              'X-NCP-APIGW-API-KEY': this.naverMapClientSecret,
             },
             params: {
               coords: `${longitude},${latitude}`,
@@ -212,8 +223,8 @@ export class MapService {
     maxHeightPx: number = 400,
     maxWidthPx: number = 400,
   ) {
-    if (!GOOGLE_API_KEY) {
-      throw new Error('GOOGLE_API_KEY가 설정되지 않았습니다.');
+    if (!this.googleApiKey) {
+      throw new Error('this.googleApiKey가 설정되지 않았습니다.');
     }
 
     this.logger.log(`🔍 [Google Places 사진 요청] name="${photoName}"`);
@@ -223,7 +234,7 @@ export class MapService {
       const response = await lastValueFrom(
         this.httpService.get(url, {
           params: {
-            key: GOOGLE_API_KEY,
+            key: this.googleApiKey,
             maxHeightPx,
             maxWidthPx,
             skipHttpRedirect: true,

@@ -1,12 +1,20 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class JwtTokenProvider {
-  private readonly refreshTokenSecret =
-    process.env.JWT_REFRESH_SECRET ?? 'refreshSecret';
+  private readonly refreshTokenSecret: string;
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
+  ) {
+    this.refreshTokenSecret = this.config.get<string>(
+      'JWT_REFRESH_SECRET',
+      'refreshSecret',
+    );
+  }
 
   createToken(email: string, role: string): string {
     const payload = { email, role };
