@@ -18,8 +18,8 @@ import {
   normalizeMenuName,
   normalizeMenuPayload,
 } from './menu-payload.util';
-import { OpenAiMenuService } from './openai-menu.service';
-import { OpenAiPlacesService } from './openai-places.service';
+import { OpenAiMenuService } from './services/openai-menu.service';
+import { OpenAiPlacesService } from './services/openai-places.service';
 
 const GOOGLE_PLACES_API_URL =
   'https://places.googleapis.com/v1/places:searchText';
