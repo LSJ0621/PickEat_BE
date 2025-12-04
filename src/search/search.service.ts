@@ -7,14 +7,13 @@ import {
   Logger,
   forwardRef,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 import { lastValueFrom } from 'rxjs';
 import { MapService } from '../map/map.service';
 import { SearchRestaurantsDto } from './dto/search-restaurants.dto';
 
 const NAVER_LOCAL_SEARCH_URL = 'https://openapi.naver.com/v1/search/local.json';
-const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
-const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
 interface NaverLocalSearchItem {
   title: string;
@@ -54,12 +53,20 @@ export interface SearchRestaurantsResponse {
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
+  private readonly naverClientId: string;
+  private readonly naverClientSecret: string;
 
   constructor(
     private readonly httpService: HttpService,
     @Inject(forwardRef(() => MapService))
     private readonly mapService: MapService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    // .env.development 기준:
+    // NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
+    this.naverClientId = this.config.get<string>('NAVER_CLIENT_ID', '');
+    this.naverClientSecret = this.config.get<string>('NAVER_CLIENT_SECRET', '');
+  }
 
   async searchRestaurants(
     dto: SearchRestaurantsDto,
@@ -82,8 +89,8 @@ export class SearchService {
 
     try {
       const headers = {
-        'X-Naver-Client-Id': NAVER_CLIENT_ID,
-        'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
+        'X-Naver-Client-Id': this.naverClientId,
+        'X-Naver-Client-Secret': this.naverClientSecret,
       };
       const params = {
         query,

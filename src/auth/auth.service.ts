@@ -7,6 +7,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosResponse } from 'axios';
@@ -16,9 +17,7 @@ import { Repository } from 'typeorm';
 import { SocialLogin } from '../user/entities/social-login.entity';
 import { User } from '../user/entities/user.entity';
 import { SocialType } from '../user/enum/social-type.enum';
-import {
-  UserPreferences
-} from '../user/interfaces/user-preferences.interface';
+import { UserPreferences } from '../user/interfaces/user-preferences.interface';
 import { UserService } from '../user/user.service';
 import { AccessTokenDto } from './dto/access-token.dto';
 import { GoogleProfileDto } from './dto/google-profile.dto';
@@ -57,16 +56,12 @@ type AuthEntity = User | SocialLogin;
 
 @Injectable()
 export class AuthService {
-  private readonly kakaoClientIdEnv = 'b82967657cb741bb3c4173fdfe1dc0b7';
-  private readonly kakaoRedirectUriEnv =
-    'http://localhost:8080/oauth/kakao/redirect';
-  private readonly googleClientIdEnv = process.env.OAUTH_GOOGLE_CLIENT_ID;
-  private readonly googleClientSecretEnv =
-    process.env.OAUTH_GOOGLE_CLIENT_SECRET;
-  private readonly googleRedirectUriEnv =
-    process.env.OAUTH_GOOGLE_REDIRECT_URI;
-  private readonly refreshTokenSecret =
-    process.env.JWT_REFRESH_SECRET ?? 'refreshSecret';
+  private readonly kakaoClientIdEnv: string;
+  private readonly kakaoRedirectUriEnv: string;
+  private readonly googleClientIdEnv: string;
+  private readonly googleClientSecretEnv: string;
+  private readonly googleRedirectUriEnv: string;
+  private readonly refreshTokenSecret: string;
   private readonly refreshTokenExpiresIn = '7d';
 
   constructor(
@@ -79,7 +74,33 @@ export class AuthService {
     private readonly socialLoginRepository: Repository<SocialLogin>,
     private readonly jwtService: JwtService,
     private readonly emailVerificationService: EmailVerificationService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    this.kakaoClientIdEnv = this.config.get<string>(
+      'OAUTH_KAKAO_CLIENT_ID',
+      'b82967657cb741bb3c4173fdfe1dc0b7',
+    );
+    this.kakaoRedirectUriEnv = this.config.get<string>(
+      'OAUTH_KAKAO_REDIRECT_URI',
+      'http://localhost:8080/oauth/kakao/redirect',
+    );
+    this.googleClientIdEnv = this.config.get<string>(
+      'OAUTH_GOOGLE_CLIENT_ID',
+      '',
+    );
+    this.googleClientSecretEnv = this.config.get<string>(
+      'OAUTH_GOOGLE_CLIENT_SECRET',
+      '',
+    );
+    this.googleRedirectUriEnv = this.config.get<string>(
+      'OAUTH_GOOGLE_REDIRECT_URI',
+      '',
+    );
+    this.refreshTokenSecret = this.config.get<string>(
+      'JWT_REFRESH_SECRET',
+      'refreshSecret',
+    );
+  }
 
   async kakaoLogin(code: string): Promise<AuthResult> {
     // 1) 인가코드로 액세스 토큰 발급
@@ -409,7 +430,7 @@ export class AuthService {
       where: { email: loginDto.email },
       withDeleted: true,
     });
-    
+
     // User 테이블에 없으면 SocialLogin 테이블 확인
     if (!user) {
       const socialLogin = await this.socialLoginRepository.findOne({
@@ -418,14 +439,20 @@ export class AuthService {
       });
       if (socialLogin) {
         // 탈퇴한 계정이거나 소셜 로그인 계정인 경우 일반적인 에러 메시지 반환 (보안상)
-        throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+        throw new UnauthorizedException(
+          '이메일 또는 비밀번호가 올바르지 않습니다.',
+        );
       }
-      throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedException(
+        '이메일 또는 비밀번호가 올바르지 않습니다.',
+      );
     }
 
     // 탈퇴한 사용자인 경우 일반적인 에러 메시지 반환 (보안상)
     if (user.deletedAt) {
-      throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedException(
+        '이메일 또는 비밀번호가 올바르지 않습니다.',
+      );
     }
 
     // 비밀번호 확인 (소셜 로그인 사용자는 password가 null일 수 있음)
@@ -438,7 +465,9 @@ export class AuthService {
       user.password,
     );
     if (!isPasswordValid) {
-      throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedException(
+        '이메일 또는 비밀번호가 올바르지 않습니다.',
+      );
     }
 
     return this.buildAuthResult(user);
@@ -557,7 +586,8 @@ export class AuthService {
       }
 
       // 저장된 refresh token과 비교
-      const storedRefreshToken = user?.refreshToken || socialLogin?.refreshToken;
+      const storedRefreshToken =
+        user?.refreshToken || socialLogin?.refreshToken;
       if (storedRefreshToken !== refreshToken) {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
@@ -650,9 +680,7 @@ export class AuthService {
 
   private extractPreferences(entity: AuthEntity): UserPreferences | null {
     const preferences =
-      entity instanceof User
-        ? entity.preferences
-        : (entity as SocialLogin).preferences;
+      entity instanceof User ? entity.preferences : entity.preferences;
     return preferences ?? null;
   }
 

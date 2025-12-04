@@ -19,6 +19,10 @@ export class MapController {
     @Query('maxHeightPx') maxHeightPx?: number,
     @Query('maxWidthPx') maxWidthPx?: number,
   ) {
-    return this.mapService.getGooglePlacePhoto(photoName, maxHeightPx, maxWidthPx);
+    return this.mapService.getGooglePlacePhoto(
+      photoName,
+      maxHeightPx,
+      maxWidthPx,
+    );
   }
 }

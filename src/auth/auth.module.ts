@@ -2,6 +2,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -22,35 +23,47 @@ import { JwtStrategy } from './strategy/jwt.strategy';
     TypeOrmModule.forFeature([User, SocialLogin, EmailVerification]),
     PassportModule,
     UserModule,
-    JwtModule.register({
-      secret: 'secret',
-      // access token 만료 시간: 15분
-      signOptions: { expiresIn: '15m' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET', 'secret'),
+        signOptions: { expiresIn: '15m' },
+      }),
     }),
-    MailerModule.forRoot({
-      transport: {
-        host: process.env.EMAIL_HOST,
-        port: Number(process.env.EMAIL_PORT),
-        secure: process.env.EMAIL_SECURE === 'true',
-        auth: {
-          user: process.env.EMAIL_ADDRESS,
-          pass: process.env.EMAIL_PASSWORD,
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        transport: {
+          host: config.get<string>('EMAIL_HOST'),
+          port: config.get<number>('EMAIL_PORT', 587),
+          secure: config.get<string>('EMAIL_SECURE') === 'true',
+          auth: {
+            user: config.get<string>('EMAIL_ADDRESS'),
+            pass: config.get<string>('EMAIL_PASSWORD'),
+          },
         },
-      },
-      defaults: {
-        from: `"PickEat" <${process.env.EMAIL_ADDRESS}>`,
-      },
-      template: {
-        dir: join(process.cwd(), 'src', 'auth', 'templates'),
-        adapter: new HandlebarsAdapter(),
-        options: {
-          strict: true,
+        defaults: {
+          from: `"PickEat" <${config.get<string>('EMAIL_ADDRESS')}>`,
         },
-      },
+        template: {
+          dir: join(process.cwd(), 'src', 'auth', 'templates'),
+          adapter: new HandlebarsAdapter(),
+          options: {
+            strict: true,
+          },
+        },
+      }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtTokenProvider, EmailVerificationService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtTokenProvider,
+    EmailVerificationService,
+  ],
   exports: [JwtStrategy],
 })
 export class AuthModule {}

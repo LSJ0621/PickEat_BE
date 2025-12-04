@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios, { AxiosInstance } from 'axios';
 import { DataSource, EntityManager } from 'typeorm';
@@ -36,8 +37,9 @@ export class UserService {
     @InjectRepository(SocialLogin)
     private readonly socialLoginRepository: Repository<SocialLogin>,
     private readonly dataSource: DataSource,
+    private readonly config: ConfigService,
   ) {
-    this.kakaoApiKey = process.env.KAKAO_REST_API_KEY || '';
+    this.kakaoApiKey = this.config.get<string>('KAKAO_REST_API_KEY', '');
     if (!this.kakaoApiKey) {
       this.logger.warn(
         'KAKAO_REST_API_KEY가 설정되지 않았습니다. .env 파일에 추가해주세요.',
@@ -132,10 +134,14 @@ export class UserService {
     if (socialLogin) {
       return { type: 'social', socialLogin };
     }
-    throw new NotFoundException(`User or SocialLogin with email ${email} not found`);
+    throw new NotFoundException(
+      `User or SocialLogin with email ${email} not found`,
+    );
   }
 
-  async getUserBySocialId(socialId: string | number): Promise<SocialLogin | null> {
+  async getUserBySocialId(
+    socialId: string | number,
+  ): Promise<SocialLogin | null> {
     return this.socialLoginRepository.findOne({
       where: { socialId: socialId.toString() },
       withDeleted: true,
@@ -213,12 +219,12 @@ export class UserService {
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.findOne(id);
-    
+
     // 보내준 필드만 업데이트 (undefined인 필드는 업데이트하지 않음)
     if (updateUserDto.name !== undefined) {
       user.name = updateUserDto.name;
     }
-    
+
     return this.userRepository.save(user);
   }
 
@@ -246,15 +252,17 @@ export class UserService {
   ): Promise<UserPreferences> {
     const user = await this.findOne(userId);
     const currentPreferences = user.preferences ?? defaultUserPreferences();
-    
+
     // 좋아하는 것과 싫어하는 것을 각각 정규화
-    const normalizedLikes = likes !== undefined 
-      ? this.normalizeTags(likes) 
-      : currentPreferences.likes;
-    const normalizedDislikes = dislikes !== undefined 
-      ? this.normalizeTags(dislikes) 
-      : currentPreferences.dislikes;
-    
+    const normalizedLikes =
+      likes !== undefined
+        ? this.normalizeTags(likes)
+        : currentPreferences.likes;
+    const normalizedDislikes =
+      dislikes !== undefined
+        ? this.normalizeTags(dislikes)
+        : currentPreferences.dislikes;
+
     user.preferences = {
       likes: normalizedLikes,
       dislikes: normalizedDislikes,
@@ -270,7 +278,7 @@ export class UserService {
   ): Promise<UserPreferences> {
     const user = await this.findOne(userId);
     const currentPreferences = user.preferences ?? defaultUserPreferences();
-    
+
     user.preferences = {
       likes: currentPreferences.likes,
       dislikes: currentPreferences.dislikes,
@@ -280,7 +288,9 @@ export class UserService {
     return user.preferences;
   }
 
-  async getSocialLoginPreferences(socialLoginId: number): Promise<UserPreferences> {
+  async getSocialLoginPreferences(
+    socialLoginId: number,
+  ): Promise<UserPreferences> {
     const socialLogin = await this.socialLoginRepository.findOne({
       where: { id: socialLoginId },
     });
@@ -307,16 +317,19 @@ export class UserService {
     if (!socialLogin) {
       throw new NotFoundException('SocialLogin not found');
     }
-    const currentPreferences = socialLogin.preferences ?? defaultUserPreferences();
-    
+    const currentPreferences =
+      socialLogin.preferences ?? defaultUserPreferences();
+
     // 좋아하는 것과 싫어하는 것을 각각 정규화
-    const normalizedLikes = likes !== undefined 
-      ? this.normalizeTags(likes) 
-      : currentPreferences.likes;
-    const normalizedDislikes = dislikes !== undefined 
-      ? this.normalizeTags(dislikes) 
-      : currentPreferences.dislikes;
-    
+    const normalizedLikes =
+      likes !== undefined
+        ? this.normalizeTags(likes)
+        : currentPreferences.likes;
+    const normalizedDislikes =
+      dislikes !== undefined
+        ? this.normalizeTags(dislikes)
+        : currentPreferences.dislikes;
+
     socialLogin.preferences = {
       likes: normalizedLikes,
       dislikes: normalizedDislikes,
@@ -336,8 +349,9 @@ export class UserService {
     if (!socialLogin) {
       throw new NotFoundException('SocialLogin not found');
     }
-    const currentPreferences = socialLogin.preferences ?? defaultUserPreferences();
-    
+    const currentPreferences =
+      socialLogin.preferences ?? defaultUserPreferences();
+
     socialLogin.preferences = {
       likes: currentPreferences.likes,
       dislikes: currentPreferences.dislikes,
@@ -347,7 +361,9 @@ export class UserService {
     return socialLogin.preferences;
   }
 
-  async searchAddress(searchDto: SearchAddressDto): Promise<AddressSearchResponse> {
+  async searchAddress(
+    searchDto: SearchAddressDto,
+  ): Promise<AddressSearchResponse> {
     try {
       const response = await this.kakaoApiClient.get<KakaoLocalAddressResponse>(
         '/v2/local/search/address.json',
