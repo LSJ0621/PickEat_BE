@@ -89,5 +89,3 @@ export const GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA = {
   required: ['recommendations'],
   additionalProperties: false,
 } as const;
-
-

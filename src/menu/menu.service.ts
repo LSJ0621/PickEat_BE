@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SocialLogin } from '../user/entities/social-login.entity';
@@ -20,16 +21,19 @@ import {
 import { OpenAiMenuService } from './openai-menu.service';
 import { OpenAiPlacesService } from './openai-places.service';
 
-const GOOGLE_PLACES_API_URL = 'https://places.googleapis.com/v1/places:searchText';
+const GOOGLE_PLACES_API_URL =
+  'https://places.googleapis.com/v1/places:searchText';
 const GOOGLE_PLACES_DETAILS_API_URL = 'https://places.googleapis.com/v1/places';
 const GOOGLE_PLACES_PHOTO_MEDIA_URL = 'https://places.googleapis.com/v1';
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
-
 const GOOGLE_CSE_API_URL = 'https://www.googleapis.com/customsearch/v1';
-const GOOGLE_CSE_CX = process.env.GOOGLE_CSE_CX;
 
 @Injectable()
 export class MenuService {
+  private readonly logger = new Logger(MenuService.name);
+  // 환경변수에서 읽어오는 키들 (ConfigService 사용)
+  private readonly googleApiKey: string;
+  private readonly googleCseCx: string;
+
   constructor(
     @InjectRepository(MenuRecommendation)
     private readonly recommendationRepository: Repository<MenuRecommendation>,
@@ -40,9 +44,14 @@ export class MenuService {
     private readonly openAiMenuService: OpenAiMenuService,
     private readonly openAiPlacesService: OpenAiPlacesService,
     private readonly httpService: HttpService,
-  ) {}
-
-  private readonly logger = new Logger(MenuService.name);
+    private readonly config: ConfigService,
+  ) {
+    // .env.development 기준:
+    // GOOGLE_API_KEY=...
+    // GOOGLE_CSE_CX=...
+    this.googleApiKey = this.config.get<string>('GOOGLE_API_KEY', '');
+    this.googleCseCx = this.config.get<string>('GOOGLE_CSE_CX', '');
+  }
 
   async recommendForUser(
     user: User,
@@ -179,8 +188,10 @@ export class MenuService {
       existing.lastTriedAt = null;
       existing.retryCount = 0;
       if (historyId !== undefined) {
-        existing.menuRecommendation =
-          await this.findOwnedRecommendationForUser(historyId, user.id);
+        existing.menuRecommendation = await this.findOwnedRecommendationForUser(
+          historyId,
+          user.id,
+        );
       }
       return this.menuSelectionRepository.save(existing);
     }
@@ -473,7 +484,10 @@ export class MenuService {
   async getHistory(user: User, date?: string) {
     const qb = this.recommendationRepository
       .createQueryBuilder('recommendation')
-      .leftJoinAndSelect('recommendation.placeRecommendations', 'placeRecommendation')
+      .leftJoinAndSelect(
+        'recommendation.placeRecommendations',
+        'placeRecommendation',
+      )
       .where('recommendation.userId = :userId', { userId: user.id })
       .orderBy('recommendation.recommendedAt', 'DESC');
 
@@ -508,7 +522,10 @@ export class MenuService {
   async getHistoryForSocialLogin(socialLogin: SocialLogin, date?: string) {
     const qb = this.recommendationRepository
       .createQueryBuilder('recommendation')
-      .leftJoinAndSelect('recommendation.placeRecommendations', 'placeRecommendation')
+      .leftJoinAndSelect(
+        'recommendation.placeRecommendations',
+        'placeRecommendation',
+      )
       .where('recommendation.socialLoginId = :socialLoginId', {
         socialLoginId: socialLogin.id,
       })
@@ -543,9 +560,9 @@ export class MenuService {
   }
 
   async searchRestaurantsWithGooglePlaces(textQuery: string) {
-    if (!GOOGLE_API_KEY) {
-      this.logger.warn('GOOGLE_API_KEY가 설정되지 않았습니다.');
-      throw new Error('GOOGLE_API_KEY가 설정되지 않았습니다.');
+    if (!this.googleApiKey) {
+      this.logger.warn('this.googleApiKey가 설정되지 않았습니다.');
+      throw new Error('this.googleApiKey가 설정되지 않았습니다.');
     }
 
     const body: any = {
@@ -558,19 +575,15 @@ export class MenuService {
 
     try {
       const response = await this.httpService
-        .post(
-          GOOGLE_PLACES_API_URL,
-          body,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': GOOGLE_API_KEY,
-              'X-Goog-FieldMask':
-                'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.reviews',
-              Referer: 'http://localhost:3000',
-            },
+        .post(GOOGLE_PLACES_API_URL, body, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': this.googleApiKey,
+            'X-Goog-FieldMask':
+              'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.reviews',
+            Referer: 'http://localhost:3000',
           },
-        )
+        })
         .toPromise();
 
       const places = response?.data?.places || [];
@@ -584,7 +597,8 @@ export class MenuService {
         reviews:
           place.reviews?.map((review: any) => ({
             rating: review.rating ?? null,
-            originalText: review.originalText?.text ?? review.text?.text ?? null,
+            originalText:
+              review.originalText?.text ?? review.text?.text ?? null,
             relativePublishTimeDescription:
               review.relativePublishTimeDescription ?? null,
           })) ?? null,
@@ -622,9 +636,9 @@ export class MenuService {
       return [];
     }
 
-    if (!GOOGLE_API_KEY) {
+    if (!this.googleApiKey) {
       this.logger.warn(
-        'GOOGLE_API_KEY가 설정되지 않아 사진 URL을 생성할 수 없습니다.',
+        'this.googleApiKey가 설정되지 않아 사진 URL을 생성할 수 없습니다.',
       );
       return [];
     }
@@ -640,7 +654,7 @@ export class MenuService {
         const response = await this.httpService
           .get(url, {
             params: {
-              key: GOOGLE_API_KEY,
+              key: this.googleApiKey,
               maxHeightPx,
               maxWidthPx,
               skipHttpRedirect: true,
@@ -654,7 +668,8 @@ export class MenuService {
         const photoUri = response?.data?.photoUri ?? null;
         return photoUri;
       } catch (error: any) {
-        const message = error instanceof Error ? error.message : 'unknown error';
+        const message =
+          error instanceof Error ? error.message : 'unknown error';
         const statusCode = error?.response?.status;
         const errorData = error?.response?.data;
         this.logger.error(
@@ -694,7 +709,7 @@ export class MenuService {
     };
 
     const placeRecs = recommendation.placeRecommendations ?? [];
-    if (!GOOGLE_API_KEY || placeRecs.length === 0) {
+    if (!this.googleApiKey || placeRecs.length === 0) {
       return {
         history: {
           ...base,
@@ -712,7 +727,7 @@ export class MenuService {
               languageCode: 'ko',
             },
             headers: {
-              'X-Goog-Api-Key': GOOGLE_API_KEY,
+              'X-Goog-Api-Key': this.googleApiKey,
               'X-Goog-FieldMask':
                 'id,displayName,formattedAddress,location,rating,userRatingCount,priceLevel,photos,reviews,currentOpeningHours.openNow',
               Referer: 'http://localhost:3000',
@@ -721,7 +736,8 @@ export class MenuService {
           .toPromise();
         return response?.data ?? null;
       } catch (error: any) {
-        const message = error instanceof Error ? error.message : 'unknown error';
+        const message =
+          error instanceof Error ? error.message : 'unknown error';
         const statusCode = error?.response?.status;
         const errorData = error?.response?.data;
         this.logger.error(
@@ -757,10 +773,7 @@ export class MenuService {
           reviews:
             detail.reviews?.map((review: any) => ({
               rating: review.rating ?? null,
-              text:
-                review.originalText?.text ??
-                review.text?.text ??
-                null,
+              text: review.originalText?.text ?? review.text?.text ?? null,
               authorName: review.authorAttribution?.displayName ?? null,
               publishTime: review.publishTime ?? null,
             })) ?? null,
@@ -813,9 +826,9 @@ export class MenuService {
   }
 
   async getPlaceDetail(placeId: string) {
-    if (!GOOGLE_API_KEY) {
-      this.logger.warn('GOOGLE_API_KEY가 설정되지 않았습니다.');
-      throw new Error('GOOGLE_API_KEY가 설정되지 않았습니다.');
+    if (!this.googleApiKey) {
+      this.logger.warn('this.googleApiKey가 설정되지 않았습니다.');
+      throw new Error('this.googleApiKey가 설정되지 않았습니다.');
     }
 
     this.logger.log(`🔍 [Google Places 상세 조회] placeId="${placeId}"`);
@@ -827,7 +840,7 @@ export class MenuService {
             languageCode: 'ko',
           },
           headers: {
-            'X-Goog-Api-Key': GOOGLE_API_KEY,
+            'X-Goog-Api-Key': this.googleApiKey,
             'X-Goog-FieldMask':
               'id,displayName,formattedAddress,location,rating,userRatingCount,priceLevel,businessStatus,photos,reviews,currentOpeningHours.openNow',
             Referer: 'http://localhost:3000',
@@ -853,10 +866,7 @@ export class MenuService {
           reviews:
             place.reviews?.map((review: any) => ({
               rating: review.rating ?? null,
-              text:
-                review.originalText?.text ??
-                review.text?.text ??
-                null,
+              text: review.originalText?.text ?? review.text?.text ?? null,
               authorName: review.authorAttribution?.displayName ?? null,
               publishTime: review.publishTime ?? null,
             })) ?? null,
@@ -901,13 +911,13 @@ export class MenuService {
     });
 
     if (!menuRecord) {
-      throw new BadRequestException('연결할 메뉴 추천 이력을 찾을 수 없습니다.');
+      throw new BadRequestException(
+        '연결할 메뉴 추천 이력을 찾을 수 없습니다.',
+      );
     }
 
     if (
-      menuRecord.placeRecommendations?.some(
-        (pr) => pr.menuName === menuName,
-      )
+      menuRecord.placeRecommendations?.some((pr) => pr.menuName === menuName)
     ) {
       throw new BadRequestException(
         '이 메뉴는 이미 AI 가게 추천을 받았습니다. 기존 결과를 확인하세요.',
@@ -973,13 +983,13 @@ export class MenuService {
     });
 
     if (!menuRecord) {
-      throw new BadRequestException('연결할 메뉴 추천 이력을 찾을 수 없습니다.');
+      throw new BadRequestException(
+        '연결할 메뉴 추천 이력을 찾을 수 없습니다.',
+      );
     }
 
     if (
-      menuRecord.placeRecommendations?.some(
-        (pr) => pr.menuName === menuName,
-      )
+      menuRecord.placeRecommendations?.some((pr) => pr.menuName === menuName)
     ) {
       throw new BadRequestException(
         '이 메뉴는 이미 AI 가게 추천을 받았습니다. 기존 결과를 확인하세요.',
@@ -1025,12 +1035,12 @@ export class MenuService {
    * 가게 이름 기반 블로그/웹 문서 검색 결과를 조회
    */
   async searchRestaurantBlogs(query: string) {
-    if (!GOOGLE_API_KEY || !GOOGLE_CSE_CX) {
+    if (!this.googleApiKey || !this.googleCseCx) {
       this.logger.warn(
-        'GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.',
+        'this.googleApiKey 또는 this.googleCseCx가 설정되지 않았습니다.',
       );
       throw new Error(
-        'GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.',
+        'this.googleApiKey 또는 this.googleCseCx가 설정되지 않았습니다.',
       );
     }
 
@@ -1040,8 +1050,8 @@ export class MenuService {
       const response = await this.httpService
         .get(GOOGLE_CSE_API_URL, {
           params: {
-            key: GOOGLE_API_KEY,
-            cx: GOOGLE_CSE_CX,
+            key: this.googleApiKey,
+            cx: this.googleCseCx,
             q: query,
             num: 5,
             hl: 'ko',
@@ -1061,9 +1071,7 @@ export class MenuService {
           pagemap.metatags?.[0]?.['og:image'] ??
           null;
         const source =
-          pagemap.metatags?.[0]?.['og:site_name'] ??
-          item.displayLink ??
-          null;
+          pagemap.metatags?.[0]?.['og:site_name'] ?? item.displayLink ?? null;
 
         return {
           title: item.title ?? null,
@@ -1144,7 +1152,6 @@ export class MenuService {
     };
   }
 
-
   private async findOwnedRecommendationForUser(
     historyId: number,
     userId: number,
@@ -1154,7 +1161,9 @@ export class MenuService {
       relations: ['user'],
     });
     if (!recommendation) {
-      throw new BadRequestException('본인 추천 이력에만 선택을 연결할 수 있습니다.');
+      throw new BadRequestException(
+        '본인 추천 이력에만 선택을 연결할 수 있습니다.',
+      );
     }
     return recommendation;
   }
@@ -1168,7 +1177,9 @@ export class MenuService {
       relations: ['socialLogin'],
     });
     if (!recommendation) {
-      throw new BadRequestException('본인 추천 이력에만 선택을 연결할 수 있습니다.');
+      throw new BadRequestException(
+        '본인 추천 이력에만 선택을 연결할 수 있습니다.',
+      );
     }
     return recommendation;
   }

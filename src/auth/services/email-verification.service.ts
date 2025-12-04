@@ -5,14 +5,13 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import { Repository } from 'typeorm';
 import { EmailPurpose } from '../dto/send-email-code.dto';
-import {
-  EmailVerification
-} from '../entities/email-verification.entity';
+import { EmailVerification } from '../entities/email-verification.entity';
 
 @Injectable()
 export class EmailVerificationService {
@@ -23,6 +22,7 @@ export class EmailVerificationService {
     @InjectRepository(EmailVerification)
     private readonly emailVerificationRepository: Repository<EmailVerification>,
     private readonly mailerService: MailerService,
+    private readonly config: ConfigService,
   ) {
     this.ensureMailConfig();
   }
@@ -68,8 +68,7 @@ export class EmailVerificationService {
     const code = this.generateCode();
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(now.getTime() + 3 * 60 * 1000);
-    const nextSendCount =
-      latest && isSamePurposeDay ? latest.sendCount + 1 : 1;
+    const nextSendCount = latest && isSamePurposeDay ? latest.sendCount + 1 : 1;
     if (nextSendCount > this.dailySendLimit) {
       throw new BadRequestException('하루 최대 발송 횟수를 초과했습니다');
     }
@@ -159,7 +158,10 @@ export class EmailVerificationService {
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
   ): Promise<void> {
     const normalizedPurpose = this.normalizePurpose(purpose);
-    await this.emailVerificationRepository.delete({ email, purpose: normalizedPurpose });
+    await this.emailVerificationRepository.delete({
+      email,
+      purpose: normalizedPurpose,
+    });
   }
 
   async expireVerification(
@@ -181,9 +183,18 @@ export class EmailVerificationService {
   }
 
   private ensureMailConfig() {
-    const { EMAIL_HOST, EMAIL_PORT, EMAIL_SECURE, EMAIL_ADDRESS, EMAIL_PASSWORD } =
-      process.env;
-    if (!EMAIL_HOST || !EMAIL_PORT || !EMAIL_SECURE || !EMAIL_ADDRESS || !EMAIL_PASSWORD) {
+    const emailHost = this.config.get<string>('EMAIL_HOST');
+    const emailPort = this.config.get<number>('EMAIL_PORT');
+    const emailSecure = this.config.get<string>('EMAIL_SECURE');
+    const emailAddress = this.config.get<string>('EMAIL_ADDRESS');
+    const emailPassword = this.config.get<string>('EMAIL_PASSWORD');
+    if (
+      !emailHost ||
+      !emailPort ||
+      !emailSecure ||
+      !emailAddress ||
+      !emailPassword
+    ) {
       this.logger.error('이메일 환경변수가 설정되지 않았습니다.');
       throw new InternalServerErrorException(
         '메일 설정이 완료되지 않았습니다. 관리자에게 문의하세요.',
@@ -209,10 +220,7 @@ export class EmailVerificationService {
 
   private ensureResendAllowed(record: EmailVerification, now: Date) {
     const baseDate = record.lastSentAt ?? record.createdAt;
-    if (
-      baseDate &&
-      now.getTime() - baseDate.getTime() < 30 * 1000
-    ) {
+    if (baseDate && now.getTime() - baseDate.getTime() < 30 * 1000) {
       throw new BadRequestException(
         '인증코드를 너무 자주 요청하고 있습니다. 잠시 후 다시 시도해주세요.',
       );
@@ -312,8 +320,8 @@ export class EmailVerificationService {
       purpose === EmailPurpose.RESET_PASSWORD
         ? '이미 비밀번호 재설정을 완료했습니다. 내일 다시 시도해주세요.'
         : purpose === EmailPurpose.RE_REGISTER
-        ? '이미 재가입을 완료했습니다. 내일 다시 시도해주세요.'
-        : '이미 이메일 인증이 완료되었습니다. 잠시 후 다시 시도해주세요.';
+          ? '이미 재가입을 완료했습니다. 내일 다시 시도해주세요.'
+          : '이미 이메일 인증이 완료되었습니다. 잠시 후 다시 시도해주세요.';
     throw new BadRequestException(message);
   }
 

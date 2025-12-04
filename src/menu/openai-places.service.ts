@@ -4,6 +4,7 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import {
   GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
@@ -17,13 +18,11 @@ interface PlaceCandidate {
   rating?: number | null;
   userRatingCount?: number | null;
   priceLevel?: string | null;
-  reviews?:
-    | Array<{
-        rating: number | null;
-        originalText: string | null;
-        relativePublishTimeDescription: string | null;
-      }>
-    | null;
+  reviews?: Array<{
+    rating: number | null;
+    originalText: string | null;
+    relativePublishTimeDescription: string | null;
+  }> | null;
 }
 
 export interface PlaceRecommendationsResponse {
@@ -40,12 +39,12 @@ export class OpenAiPlacesService implements OnModuleInit {
   private openai: OpenAI | null = null;
   private readonly model: string;
 
-  constructor() {
-    this.model = process.env.OPENAI_MODEL || 'gpt-4o';
+  constructor(private readonly config: ConfigService) {
+    this.model = this.config.get<string>('OPENAI_MODEL', 'gpt-5.1');
   }
 
   onModuleInit() {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
       this.logger.error('OPENAI_API_KEY is not configured');
       return;
@@ -71,10 +70,7 @@ export class OpenAiPlacesService implements OnModuleInit {
     }
 
     const systemPrompt = GOOGLE_PLACES_SYSTEM_PROMPT;
-    const userPrompt = buildGooglePlacesUserPrompt(
-      query,
-      candidates,
-    );
+    const userPrompt = buildGooglePlacesUserPrompt(query, candidates);
     const jsonSchema = GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA;
 
     const startedAt = Date.now();
@@ -98,8 +94,8 @@ export class OpenAiPlacesService implements OnModuleInit {
             strict: true,
           },
         },
-        temperature: 0.5,
-        max_tokens: 800,
+        // GPT-5.1 계열: temperature 대신 max_completion_tokens 사용
+        max_completion_tokens: 800,
       });
 
       const duration = Date.now() - startedAt;
@@ -144,5 +140,3 @@ export class OpenAiPlacesService implements OnModuleInit {
     }
   }
 }
-
-

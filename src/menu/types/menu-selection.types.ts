@@ -9,5 +9,3 @@ export interface SlotMenuInput {
   slot: string;
   name: string;
 }
-
-

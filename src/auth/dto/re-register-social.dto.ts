@@ -5,4 +5,3 @@ export class ReRegisterSocialDto {
   @IsNotEmpty()
   email: string;
 }
-

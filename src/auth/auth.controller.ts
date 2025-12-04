@@ -17,7 +17,10 @@ import { Repository } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { AuthProfile, AuthResult, AuthService } from './auth.service';
-import { AuthUserPayload, CurrentUser } from './decorators/current-user.decorator';
+import {
+  AuthUserPayload,
+  CurrentUser,
+} from './decorators/current-user.decorator';
 import { AppKakaoLoginDto } from './dto/app-kakao-login.dto';
 import { CheckEmailDto } from './dto/check-email.dto';
 import { LoginDto } from './dto/login.dto';
@@ -52,7 +55,9 @@ export class AuthController {
       const result = await this.authService.kakaoLogin(redirectDto.code);
       return this.handleAuthSuccess(res, result);
     } catch (error: any) {
-      const errorResponse = error.getResponse ? error.getResponse() : error.response || error;
+      const errorResponse = error.getResponse
+        ? error.getResponse()
+        : error.response || error;
       if (errorResponse?.error === 'RE_REGISTER_REQUIRED') {
         res.status(HttpStatus.BAD_REQUEST);
         return {
@@ -77,7 +82,9 @@ export class AuthController {
       );
       return this.handleAuthSuccess(res, result);
     } catch (error: any) {
-      const errorResponse = error.getResponse ? error.getResponse() : error.response || error;
+      const errorResponse = error.getResponse
+        ? error.getResponse()
+        : error.response || error;
       if (errorResponse?.error === 'RE_REGISTER_REQUIRED') {
         res.status(HttpStatus.BAD_REQUEST);
         return {
@@ -100,7 +107,9 @@ export class AuthController {
       const result = await this.authService.googleLogin(redirectDto.code);
       return this.handleAuthSuccess(res, result);
     } catch (error: any) {
-      const errorResponse = error.getResponse ? error.getResponse() : error.response || error;
+      const errorResponse = error.getResponse
+        ? error.getResponse()
+        : error.response || error;
       if (errorResponse?.error === 'RE_REGISTER_REQUIRED') {
         res.status(HttpStatus.BAD_REQUEST);
         return {
@@ -146,15 +155,17 @@ export class AuthController {
       if (error instanceof BadRequestException) {
         const errorResponse = error.getResponse();
         let message: string;
-        
+
         if (typeof errorResponse === 'string') {
           message = errorResponse;
         } else if (errorResponse && typeof errorResponse === 'object') {
-          message = (errorResponse as any).message || '인증번호 발송 중 오류가 발생했습니다.';
+          message =
+            (errorResponse as any).message ||
+            '인증번호 발송 중 오류가 발생했습니다.';
         } else {
           message = error.message || '인증번호 발송 중 오류가 발생했습니다.';
         }
-        
+
         throw new BadRequestException({
           statusCode: HttpStatus.BAD_REQUEST,
           message: message,
@@ -173,7 +184,7 @@ export class AuthController {
   @Post('email/verify-code')
   async verifyEmailCode(@Body() verifyEmailCodeDto: VerifyEmailCodeDto) {
     const purpose = verifyEmailCodeDto.purpose ?? EmailPurpose.SIGNUP;
-    
+
     try {
       // 재가입 목적인 경우 soft delete된 사용자 확인
       if (purpose === EmailPurpose.RE_REGISTER) {
@@ -185,7 +196,7 @@ export class AuthController {
           throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
         }
       }
-      
+
       const verified = await this.emailVerificationService.verifyCode(
         verifyEmailCodeDto.email,
         verifyEmailCodeDto.code,
@@ -194,7 +205,9 @@ export class AuthController {
 
       // 회원가입 목적이고 사용자가 이미 존재하는 경우에만 emailVerified 업데이트
       if (verified && purpose === EmailPurpose.SIGNUP) {
-        const user = await this.userService.findByEmail(verifyEmailCodeDto.email);
+        const user = await this.userService.findByEmail(
+          verifyEmailCodeDto.email,
+        );
         if (user) {
           await this.userService.markEmailVerified(verifyEmailCodeDto.email);
         }
@@ -211,15 +224,17 @@ export class AuthController {
       if (error instanceof BadRequestException) {
         const errorResponse = error.getResponse();
         let message: string;
-        
+
         if (typeof errorResponse === 'string') {
           message = errorResponse;
         } else if (errorResponse && typeof errorResponse === 'object') {
-          message = (errorResponse as any).message || '이메일 인증 중 오류가 발생했습니다.';
+          message =
+            (errorResponse as any).message ||
+            '이메일 인증 중 오류가 발생했습니다.';
         } else {
           message = error.message || '이메일 인증 중 오류가 발생했습니다.';
         }
-        
+
         // 명시적으로 메시지가 포함된 BadRequestException throw
         throw new BadRequestException({
           statusCode: HttpStatus.BAD_REQUEST,
@@ -268,9 +283,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getProfile(
-    @CurrentUser() user: AuthUserPayload,
-  ): Promise<AuthProfile> {
+  async getProfile(@CurrentUser() user: AuthUserPayload): Promise<AuthProfile> {
     return this.authService.getUserProfile(user.email);
   }
 
@@ -289,10 +302,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  async logout(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(req.cookies?.refreshToken);
     this.clearRefreshTokenCookie(res);
     return { message: '로그아웃되었습니다.' };

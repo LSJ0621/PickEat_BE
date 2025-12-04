@@ -53,10 +53,7 @@ export class MenuRecommendation {
   )
   placeRecommendations: PlaceRecommendation[];
 
-  @OneToMany(
-    () => MenuSelection,
-    (selection) => selection.menuRecommendation,
-  )
+  @OneToMany(() => MenuSelection, (selection) => selection.menuRecommendation)
   selections: MenuSelection[];
 
   @CreateDateColumn()
