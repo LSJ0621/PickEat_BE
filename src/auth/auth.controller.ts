@@ -34,6 +34,7 @@ import { SendResetPasswordCodeDto } from './dto/send-reset-password-code.dto';
 import { VerifyEmailCodeDto } from './dto/verify-email-code.dto';
 import { VerifyResetPasswordCodeDto } from './dto/verify-reset-password-code.dto';
 import { JwtAuthGuard } from './guard/jwt.guard';
+import { LocalAuthGuard } from './guard/local.guard';
 import { EmailVerificationService } from './services/email-verification.service';
 
 @Controller('auth')
@@ -129,11 +130,12 @@ export class AuthController {
   }
 
   @Post('login')
+  @UseGuards(LocalAuthGuard)
   async login(
-    @Body() loginDto: LoginDto,
+    @CurrentUser() user: User,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authService.login(loginDto);
+    const result = await this.authService.buildAuthResult(user);
     return this.handleAuthSuccess(res, result);
   }
 
