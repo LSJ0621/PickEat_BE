@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Gpt51MenuService } from './gptversion/gpt51-menu.service';
+import { Gpt51MenuService } from '../gpt/gpt51-menu.service';
 
 /**
  * OpenAI 메뉴 추천 서비스

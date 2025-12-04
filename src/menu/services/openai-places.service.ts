@@ -1,16 +1,16 @@
 import {
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-  OnModuleInit,
+    Injectable,
+    InternalServerErrorException,
+    Logger,
+    OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import {
-  GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
-  GOOGLE_PLACES_SYSTEM_PROMPT,
-  buildGooglePlacesUserPrompt,
-} from './prompts/google-places-recommendation.prompts';
+    GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
+    GOOGLE_PLACES_SYSTEM_PROMPT,
+    buildGooglePlacesUserPrompt,
+} from '../prompts/google-places-recommendation.prompts';
 
 interface PlaceCandidate {
   id: string;
