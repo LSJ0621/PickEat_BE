@@ -1,4 +1,4 @@
-import { MenuSlotPayload, SlotMenuInput } from './types/menu-selection.types';
+import { MenuSlotPayload, SlotMenuInput } from './interface/menu-selection.interface';
 
 export function normalizeMenuName(name: string | undefined | null): string {
   return (name ?? '').trim();

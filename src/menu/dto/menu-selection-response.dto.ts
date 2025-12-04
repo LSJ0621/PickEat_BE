@@ -1,4 +1,4 @@
-import { MenuSlotPayload } from '../types/menu-selection.types';
+import { MenuSlotPayload } from '../interface/menu-selection.interface';
 
 export class MenuSelectionResponseDto {
   id: number;

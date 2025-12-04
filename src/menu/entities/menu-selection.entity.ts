@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
-import { MenuSlotPayload } from '../types/menu-selection.types';
+import { MenuSlotPayload } from '../interface/menu-selection.interface';
 import { MenuRecommendation } from './menu-recommendation.entity';
 
 export enum MenuSelectionStatus {

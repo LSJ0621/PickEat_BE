@@ -1,9 +1,9 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
+    BadRequestException,
+    Injectable,
+    InternalServerErrorException,
+    Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
