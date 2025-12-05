@@ -7,7 +7,6 @@ import {
 export interface AuthUserPayload {
   email: string;
   role: string;
-  sub?: number;
 }
 
 export const CurrentUser = createParamDecorator(

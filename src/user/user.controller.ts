@@ -1,21 +1,18 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
-  Param,
   Patch,
   Post,
   Query,
-  UseGuards,
+  UseGuards
 } from '@nestjs/common';
 import {
   AuthUserPayload,
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
-import { CreateUserDto } from './dto/create-user.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
@@ -119,7 +116,6 @@ export class UserController {
         updateUserDto,
       );
       return {
-        id: updatedUser.id,
         name: updatedUser.name,
       };
     } else {
@@ -130,14 +126,12 @@ export class UserController {
           updateUserDto.name,
         );
         return {
-          id: updatedSocialLogin.id,
           name: updatedSocialLogin.name,
           profileImage: updatedSocialLogin.profileImage,
         };
       }
       // profileImage는 SocialLogin에서 업데이트하지 않음 (소셜에서 제공)
       return {
-        id: result.socialLogin!.id,
         name: result.socialLogin!.name,
         profileImage: result.socialLogin!.profileImage,
       };
@@ -149,30 +143,5 @@ export class UserController {
   async deleteCurrentUser(@CurrentUser() authUser: AuthUserPayload) {
     await this.userService.deleteUser(authUser.email);
     return { message: '회원 탈퇴가 완료되었습니다.' };
-  }
-
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.userService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
   }
 }
