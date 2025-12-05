@@ -18,6 +18,7 @@ import { UserService } from '../user/user.service';
 import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
 import { RecommendMenuDto } from './dto/recommend-menu.dto';
 import { RecommendationHistoryQueryDto } from './dto/recommendation-history-query.dto';
+import { SearchRestaurantBlogsDto } from './dto/search-restaurant-blogs.dto';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
 import { MenuSelection } from './entities/menu-selection.entity';
 import { MenuService } from './menu.service';
@@ -166,11 +167,11 @@ export class MenuController {
 
   // Google Custom Search(Programmable Search)를 이용한
   // 가게 이름 기반 블로그/웹 문서 검색 (썸네일, URL, 제목, 스니펫, 출처)
-  // 예: GET /menu/restaurant/blogs?query=연남동 삼겹살
+  // 예: GET /menu/restaurant/blogs?query=부산시 해운대구 마라탕집&restaurantName=마라탕집
   @Get('restaurant/blogs')
   @UseGuards(JwtAuthGuard)
-  async searchRestaurantBlogs(@Query('query') query: string) {
-    return this.menuService.searchRestaurantBlogs(query);
+  async searchRestaurantBlogs(@Query() dto: SearchRestaurantBlogsDto) {
+    return this.menuService.searchRestaurantBlogs(dto.query, dto.restaurantName);
   }
 
   // Google Places 텍스트 검색 + LLM 추천까지 한 번에 수행
