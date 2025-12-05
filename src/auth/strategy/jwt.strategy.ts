@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { type Request } from 'express';
@@ -33,11 +33,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: bearerTokenExtractor,
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('JWT_SECRET', 'secret'),
+      secretOrKey: config.getOrThrow<string>('JWT_SECRET'),
     });
   }
 
   validate(payload: AuthUserPayload): AuthUserPayload {
+    // email과 role만 검증 (JWT 서명 검증은 이미 완료됨)
+    if (!payload.email || !payload.role) {
+      throw new UnauthorizedException('Invalid token: missing email or role');
+    }
+
     return payload;
   }
 }
