@@ -1,11 +1,11 @@
 // src/auth/auth.service.ts
 import { HttpService } from '@nestjs/axios';
 import {
-  BadRequestException,
-  HttpException,
-  HttpStatus,
-  Injectable,
-  UnauthorizedException,
+    BadRequestException,
+    HttpException,
+    HttpStatus,
+    Injectable,
+    UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -32,7 +32,6 @@ import { JwtTokenProvider } from './provider/jwt-token.provider';
 import { EmailVerificationService } from './services/email-verification.service';
 
 export interface AuthResult {
-  id: number;
   token: string;
   refreshToken: string;
   email: string;
@@ -44,7 +43,6 @@ export interface AuthResult {
 }
 
 export interface AuthProfile {
-  id: number;
   email: string;
   name: string | null;
   address: string | null;
@@ -588,10 +586,17 @@ export class AuthService {
         throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
       }
 
-      // 저장된 refresh token과 비교
+      // 저장된 refresh token과 비교 (해싱된 값과 비교)
       const storedRefreshToken =
         user?.refreshToken || socialLogin?.refreshToken;
-      if (storedRefreshToken !== refreshToken) {
+      if (!storedRefreshToken) {
+        throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+      }
+      const isTokenValid = await bcrypt.compare(
+        refreshToken,
+        storedRefreshToken,
+      );
+      if (!isTokenValid) {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
 
@@ -639,8 +644,15 @@ export class AuthService {
       const entity =
         (await this.userService.findByEmail(payload.email)) ??
         (await this.userService.findSocialLoginByEmail(payload.email));
-      if (entity && entity.refreshToken === refreshToken) {
-        await this.persistRefreshToken(entity, null);
+      if (entity && entity.refreshToken) {
+        // 해싱된 refresh token과 비교
+        const isTokenValid = await bcrypt.compare(
+          refreshToken,
+          entity.refreshToken,
+        );
+        if (isTokenValid) {
+          await this.persistRefreshToken(entity, null);
+        }
       }
     } catch (error) {
       if (error instanceof Error) {
@@ -657,7 +669,6 @@ export class AuthService {
       throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
     }
     return {
-      id: entity.id,
       email: entity.email,
       name: this.nullableString(entity.name),
       address: this.nullableString(entity.address),
@@ -669,7 +680,6 @@ export class AuthService {
   async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
     const { token, refreshToken } = await this.issueTokens(entity);
     return {
-      id: entity.id,
       email: entity.email,
       token,
       refreshToken,
@@ -704,7 +714,10 @@ export class AuthService {
     entity: AuthEntity,
     refreshToken: string | null,
   ): Promise<void> {
-    entity.refreshToken = refreshToken;
+    // refresh token을 해싱해서 저장 (보안)
+    entity.refreshToken = refreshToken
+      ? await bcrypt.hash(refreshToken, 10)
+      : null;
     if (entity instanceof User) {
       await this.userRepository.save(entity);
     } else {
