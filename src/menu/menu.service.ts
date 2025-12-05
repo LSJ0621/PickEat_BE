@@ -1034,7 +1034,7 @@ export class MenuService {
    * Google Programmable Search Engine(JSON API)를 사용하여
    * 가게 이름 기반 블로그/웹 문서 검색 결과를 조회
    */
-  async searchRestaurantBlogs(query: string) {
+  async searchRestaurantBlogs(query: string, restaurantName: string) {
     if (!this.googleApiKey || !this.googleCseCx) {
       this.logger.warn(
         'this.googleApiKey 또는 this.googleCseCx가 설정되지 않았습니다.',
@@ -1044,7 +1044,9 @@ export class MenuService {
       );
     }
 
-    this.logger.log(`🔍 [Custom Search 블로그 검색] query="${query}"`);
+    this.logger.log(
+      `🔍 [Custom Search 블로그 검색] query="${query}", restaurantName="${restaurantName}"`,
+    );
 
     try {
       const response = await this.httpService
@@ -1052,7 +1054,8 @@ export class MenuService {
           params: {
             key: this.googleApiKey,
             cx: this.googleCseCx,
-            q: query,
+            q: query, // 원본 쿼리 유지
+            exactTerms: restaurantName, // 가게이름은 반드시 포함
             num: 5,
             hl: 'ko',
           },
