@@ -1,11 +1,27 @@
-import { IsNotEmpty, IsObject, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-import { AddressSearchResult } from '../interfaces/address-search-result.interface';
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class UpdateUserAddressDto {
-  @IsObject()
-  @ValidateNested()
-  @Type(() => AddressSearchResult)
-  @IsNotEmpty()
-  selectedAddress: AddressSearchResult;
+  @IsString()
+  @IsOptional()
+  roadAddress?: string; // 도로명 주소
+
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @IsString()
+  @IsOptional()
+  alias?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isSearchAddress?: boolean;
 }
