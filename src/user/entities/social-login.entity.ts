@@ -1,15 +1,16 @@
 import {
-    Column,
-    CreateDateColumn,
-    DeleteDateColumn,
-    Entity,
-    OneToMany,
-    PrimaryGeneratedColumn,
-    UpdateDateColumn,
-    VersionColumn,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+  VersionColumn,
 } from 'typeorm';
 import { MenuSelection } from '../../menu/entities/menu-selection.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
+import { UserAddress } from './user-address.entity';
 
 @Entity('social_login')
 export class SocialLogin {
@@ -63,4 +64,9 @@ export class SocialLogin {
 
   @OneToMany(() => MenuSelection, (selection) => selection.socialLogin)
   menuSelections: MenuSelection[];
+
+  @OneToMany(() => UserAddress, (address) => address.socialLogin, {
+    cascade: true,
+  })
+  addresses: UserAddress[];
 }
