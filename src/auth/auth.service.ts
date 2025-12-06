@@ -1,11 +1,11 @@
 // src/auth/auth.service.ts
 import { HttpService } from '@nestjs/axios';
 import {
-    BadRequestException,
-    HttpException,
-    HttpStatus,
-    Injectable,
-    UnauthorizedException,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -15,6 +15,7 @@ import * as bcrypt from 'bcrypt';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import { SocialLogin } from '../user/entities/social-login.entity';
+import { UserAddress } from '../user/entities/user-address.entity';
 import { User } from '../user/entities/user.entity';
 import { SocialType } from '../user/enum/social-type.enum';
 import { UserPreferences } from '../user/interfaces/user-preferences.interface';
@@ -668,24 +669,66 @@ export class AuthService {
     if (!entity) {
       throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
     }
+
+    // 기본주소 조회 (UserAddress 리스트에서)
+    let defaultAddress: UserAddress | null = null;
+    if (user) {
+      defaultAddress = await this.userService.getDefaultUserAddress(user.id);
+    } else if (socialLogin) {
+      defaultAddress = await this.userService.getDefaultSocialLoginAddress(
+        socialLogin.id,
+      );
+    }
+
     return {
       email: entity.email,
       name: this.nullableString(entity.name),
-      address: this.nullableString(entity.address),
-      latitude: this.nullableNumber(entity.latitude),
-      longitude: this.nullableNumber(entity.longitude),
+      address: defaultAddress
+        ? defaultAddress.roadAddress
+        : this.nullableString(entity.address), // 기본주소가 있으면 사용, 없으면 기존 주소 사용
+      latitude: defaultAddress
+        ? typeof defaultAddress.latitude === 'string'
+          ? parseFloat(defaultAddress.latitude)
+          : defaultAddress.latitude
+        : this.nullableNumber(entity.latitude),
+      longitude: defaultAddress
+        ? typeof defaultAddress.longitude === 'string'
+          ? parseFloat(defaultAddress.longitude)
+          : defaultAddress.longitude
+        : this.nullableNumber(entity.longitude),
     };
   }
 
   async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
     const { token, refreshToken } = await this.issueTokens(entity);
+
+    // 기본주소 조회 (UserAddress 리스트에서)
+    let defaultAddress: UserAddress | null = null;
+    if (entity instanceof User) {
+      defaultAddress = await this.userService.getDefaultUserAddress(entity.id);
+    } else {
+      defaultAddress = await this.userService.getDefaultSocialLoginAddress(
+        entity.id,
+      );
+    }
+
     return {
       email: entity.email,
       token,
       refreshToken,
-      address: this.nullableString(entity.address),
-      latitude: this.nullableNumber(entity.latitude),
-      longitude: this.nullableNumber(entity.longitude),
+      address: defaultAddress
+        ? defaultAddress.roadAddress
+        : this.nullableString(entity.address), // 기본주소가 있으면 사용, 없으면 기존 주소 사용
+      latitude: defaultAddress
+        ? typeof defaultAddress.latitude === 'string'
+          ? parseFloat(defaultAddress.latitude)
+          : defaultAddress.latitude
+        : this.nullableNumber(entity.latitude),
+      longitude: defaultAddress
+        ? typeof defaultAddress.longitude === 'string'
+          ? parseFloat(defaultAddress.longitude)
+          : defaultAddress.longitude
+        : this.nullableNumber(entity.longitude),
       name: this.nullableString(entity.name),
       preferences: this.extractPreferences(entity),
     };

@@ -1,15 +1,16 @@
 import {
-    Column,
-    CreateDateColumn,
-    DeleteDateColumn,
-    Entity,
-    OneToMany,
-    PrimaryGeneratedColumn,
-    UpdateDateColumn,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
 import { MenuSelection } from '../../menu/entities/menu-selection.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
+import { UserAddress } from './user-address.entity';
 
 @Entity()
 export class User {
@@ -66,4 +67,9 @@ export class User {
 
   @OneToMany(() => MenuSelection, (selection) => selection.user)
   menuSelections: MenuSelection[];
+
+  @OneToMany(() => UserAddress, (address) => address.user, {
+    cascade: true,
+  })
+  addresses: UserAddress[];
 }
