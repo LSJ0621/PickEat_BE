@@ -18,6 +18,7 @@ import {
   normalizeMenuName,
   normalizeMenuPayload,
 } from './menu-payload.util';
+import { normalizePlaceIdForStorage } from './place-id.util';
 import { OpenAiMenuService } from './services/openai-menu.service';
 import { OpenAiPlacesService } from './services/openai-places.service';
 
@@ -945,7 +946,7 @@ export class MenuService {
       recommendations.recommendations?.map((rec) =>
         this.placeRecommendationRepository.create({
           menuRecommendation: menuRecord,
-          placeId: rec.placeId,
+          placeId: normalizePlaceIdForStorage(rec.placeId),
           reason: rec.reason,
           menuName,
         }),
@@ -1017,7 +1018,7 @@ export class MenuService {
       recommendations.recommendations?.map((rec) =>
         this.placeRecommendationRepository.create({
           menuRecommendation: menuRecord,
-          placeId: rec.placeId,
+          placeId: normalizePlaceIdForStorage(rec.placeId),
           reason: rec.reason,
           menuName,
         }),
