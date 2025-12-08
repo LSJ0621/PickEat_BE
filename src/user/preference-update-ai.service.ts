@@ -6,16 +6,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { OPENAI_SETTINGS } from '../common/constants/business.constants';
+import { OpenAIResponseException } from '../common/exceptions/openai-response.exception';
+import { PreferenceAnalysisResponse } from './interfaces/preference-analysis.interface';
 import { UserPreferences } from './interfaces/user-preferences.interface';
 import {
   buildPreferenceUserPrompt,
   PREFERENCE_RESPONSE_SCHEMA,
   PREFERENCE_SYSTEM_PROMPT,
 } from './prompts/preference-update.prompts';
-
-interface PreferenceAnalysisResponse {
-  analysis: string;
-}
 
 @Injectable()
 export class PreferenceUpdateAiService implements OnModuleInit {
@@ -84,7 +83,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
           },
         },
         // GPT-5.1 계열: temperature 미사용, completion 토큰만 지정
-        max_completion_tokens: 500,
+        max_completion_tokens: OPENAI_SETTINGS.PREFERENCE_MAX_TOKENS,
       });
 
       const usage: any = (response as any).usage;
@@ -102,7 +101,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        throw new Error('Empty response from OpenAI');
+        throw new OpenAIResponseException('응답이 비어있습니다', response);
       }
 
       this.logger.debug(`[LLM 응답] ${content}`);
@@ -112,9 +111,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
         parsed = JSON.parse(content) as PreferenceAnalysisResponse;
       } catch (parseError) {
         this.logger.error(`[JSON 파싱 실패] ${content}`);
-        throw new Error(
-          `Failed to parse JSON: ${parseError instanceof Error ? parseError.message : 'unknown error'}`,
-        );
+        throw new OpenAIResponseException('JSON 파싱에 실패했습니다', content);
       }
 
       this.validateSchema(parsed);
@@ -133,19 +130,17 @@ export class PreferenceUpdateAiService implements OnModuleInit {
   private validateSchema(data: PreferenceAnalysisResponse) {
     if (!data) {
       this.logger.error(`[스키마 검증 실패] data is null or undefined`);
-      throw new Error('Invalid response schema: data is null or undefined');
+      throw new OpenAIResponseException('응답 형식이 올바르지 않습니다', data);
     }
     if (typeof data.analysis !== 'string') {
       this.logger.error(
         `[스키마 검증 실패] analysis type is ${typeof data.analysis}, value: ${JSON.stringify(data.analysis)}`,
       );
-      throw new Error(
-        `Invalid response schema: analysis is not a string (type: ${typeof data.analysis})`,
-      );
+      throw new OpenAIResponseException('응답 형식이 올바르지 않습니다', data);
     }
     if (!data.analysis.trim()) {
       this.logger.error(`[스키마 검증 실패] analysis is empty string`);
-      throw new Error('Invalid response schema: analysis is empty');
+      throw new OpenAIResponseException('분석 결과가 비어있습니다', data);
     }
   }
 }

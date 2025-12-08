@@ -1,4 +1,3 @@
-import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
   Inject,
@@ -7,66 +6,24 @@ import {
   Logger,
   forwardRef,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AxiosError } from 'axios';
-import { lastValueFrom } from 'rxjs';
+import { NaverSearchClient } from '../external/naver/clients/naver-search.client';
 import { MapService } from '../map/map.service';
 import { SearchRestaurantsDto } from './dto/search-restaurants.dto';
-
-const NAVER_LOCAL_SEARCH_URL = 'https://openapi.naver.com/v1/search/local.json';
-
-interface NaverLocalSearchItem {
-  title: string;
-  category?: string;
-  description?: string;
-  telephone?: string;
-  address?: string;
-  roadAddress?: string;
-  link?: string;
-  mapx?: string;
-  mapy?: string;
-  distance?: string;
-}
-
-interface NaverLocalSearchResponse {
-  total: number;
-  display: number;
-  start: number;
-  items: NaverLocalSearchItem[];
-}
-
-export interface RestaurantSummary {
-  name: string;
-  address: string;
-  roadAddress?: string;
-  phone?: string;
-  mapx?: number;
-  mapy?: number;
-  distance?: number;
-  link?: string;
-}
-
-export interface SearchRestaurantsResponse {
-  restaurants: RestaurantSummary[];
-}
+import {
+  NaverLocalSearchItem,
+  RestaurantSummary,
+  SearchRestaurantsResponse,
+} from './interfaces/search.interface';
 
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
-  private readonly naverClientId: string;
-  private readonly naverClientSecret: string;
 
   constructor(
-    private readonly httpService: HttpService,
     @Inject(forwardRef(() => MapService))
     private readonly mapService: MapService,
-    private readonly config: ConfigService,
-  ) {
-    // .env.development 기준:
-    // NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
-    this.naverClientId = this.config.get<string>('NAVER_CLIENT_ID', '');
-    this.naverClientSecret = this.config.get<string>('NAVER_CLIENT_SECRET', '');
-  }
+    private readonly naverSearchClient: NaverSearchClient,
+  ) {}
 
   async searchRestaurants(
     dto: SearchRestaurantsDto,
@@ -88,24 +45,9 @@ export class SearchService {
     );
 
     try {
-      const headers = {
-        'X-Naver-Client-Id': this.naverClientId,
-        'X-Naver-Client-Secret': this.naverClientSecret,
-      };
-      const params = {
-        query,
-        display: 5,
-      };
-      const response = await lastValueFrom(
-        this.httpService.get<NaverLocalSearchResponse>(NAVER_LOCAL_SEARCH_URL, {
-          headers,
-          params,
-        }),
-      );
+      const items = await this.naverSearchClient.searchLocal(query);
 
-      const restaurants = (response.data.items ?? []).map((item) =>
-        this.mapNaverItem(item),
-      );
+      const restaurants = items.map((item) => this.mapNaverItem(item));
 
       this.logger.log(
         `✅ [네이버 검색 응답] query="${query}", count=${restaurants.length}`,
@@ -113,18 +55,11 @@ export class SearchService {
 
       return { restaurants };
     } catch (error) {
-      const axiosError = error as AxiosError;
-      const status = axiosError.response?.status;
-      const data = axiosError.response?.data;
+      const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(
-        `❌ [네이버 검색 에러] query="${query}", status=${status ?? 'unknown'}`,
-        axiosError.stack,
+        `❌ [네이버 검색 에러] query="${query}", error=${message}`,
+        error instanceof Error ? error.stack : undefined,
       );
-      if (data) {
-        this.logger.error(
-          `❌ [네이버 검색 에러 상세] ${JSON.stringify(data).slice(0, 500)}`,
-        );
-      }
       throw new InternalServerErrorException(
         'Failed to fetch local restaurants from Naver',
       );
@@ -153,10 +88,8 @@ export class SearchService {
       return '';
     }
 
-    // HTML 태그 제거
     let decoded = value.replace(/<[^>]*>/g, '');
 
-    // HTML 엔티티 디코딩
     decoded = decoded
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
@@ -165,16 +98,13 @@ export class SearchService {
       .replace(/&#39;/g, "'")
       .replace(/&apos;/g, "'")
       .replace(/&nbsp;/g, ' ')
-      // 숫자 엔티티 디코딩 (&#123; 형식)
       .replace(/&#(\d+);/g, (match, dec) =>
         String.fromCharCode(parseInt(dec, 10)),
       )
-      // 16진수 엔티티 디코딩 (&#x1F; 형식)
       .replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) =>
         String.fromCharCode(parseInt(hex, 16)),
       );
 
-    // 디코딩 후 다시 한 번 태그 제거 (XSS 방지 안전장치)
     decoded = decoded.replace(/<[^>]*>/g, '');
 
     return decoded.trim();
@@ -196,7 +126,6 @@ export class SearchService {
     if (!Number.isFinite(parsed)) {
       return undefined;
     }
-    // Naver distance is returned in meters, convert to kilometers.
     return Number((parsed / 1000).toFixed(2));
   }
 }
