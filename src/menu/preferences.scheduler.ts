@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuthenticatedEntity } from '../common/interfaces/authenticated-user.interface';
 import { PreferenceUpdateAiService } from '../user/preference-update-ai.service';
 import { UserService } from '../user/user.service';
 import {
@@ -102,18 +103,14 @@ export class PreferencesScheduler {
         continue;
       }
       try {
-        await this.applySelectionsToPreferencesAnalysis(
-          group.ownerType,
-          group.ownerId,
-          slotMenus,
-        );
+        await this.applySelectionsToPreferencesAnalysis(group.entity, slotMenus);
         await this.markSelections(
           group.selections,
           MenuSelectionStatus.SUCCEEDED,
         );
       } catch (error) {
         this.logger.error(
-          `❌ [취향 분석 실패] owner=${group.ownerType}-${group.ownerId}: ${
+          `❌ [취향 분석 실패] entityId=${group.entity.id}: ${
             error instanceof Error ? error.message : 'unknown error'
           }`,
         );
@@ -206,18 +203,14 @@ export class PreferencesScheduler {
         continue;
       }
       try {
-        await this.applySelectionsToPreferencesAnalysis(
-          group.ownerType,
-          group.ownerId,
-          slotMenus,
-        );
+        await this.applySelectionsToPreferencesAnalysis(group.entity, slotMenus);
         await this.markSelections(
           group.selections,
           MenuSelectionStatus.SUCCEEDED,
         );
       } catch (error) {
         this.logger.error(
-          `❌ [취향 분석 재시도 실패] owner=${group.ownerType}-${group.ownerId}: ${
+          `❌ [취향 분석 재시도 실패] entityId=${group.entity.id}: ${
             error instanceof Error ? error.message : 'unknown error'
           }`,
         );
@@ -231,8 +224,7 @@ export class PreferencesScheduler {
   }
 
   private async applySelectionsToPreferencesAnalysis(
-    ownerType: 'user' | 'social',
-    ownerId: number,
+    entity: AuthenticatedEntity,
     slotMenus: {
       breakfast: string[];
       lunch: string[];
@@ -240,42 +232,27 @@ export class PreferencesScheduler {
       etc: string[];
     },
   ) {
-    if (ownerType === 'user') {
-      const current = await this.userService.getPreferences(ownerId);
-      const aiResult =
-        await this.preferenceUpdateAiService.generatePreferenceAnalysis(
-          current,
-          slotMenus,
-        );
-      await this.userService.updatePreferencesAnalysis(
-        ownerId,
-        aiResult.analysis,
-      );
-      return;
-    }
-
-    const current = await this.userService.getSocialLoginPreferences(ownerId);
+    const current = await this.userService.getEntityPreferences(entity);
     const aiResult =
       await this.preferenceUpdateAiService.generatePreferenceAnalysis(
         current,
         slotMenus,
       );
-    await this.userService.updateSocialLoginPreferencesAnalysis(
-      ownerId,
+
+    await this.userService.updateEntityPreferencesAnalysis(
+      entity,
       aiResult.analysis,
     );
   }
 
   private groupByOwner(selections: MenuSelection[]): {
-    ownerType: 'user' | 'social';
-    ownerId: number;
+    entity: AuthenticatedEntity;
     selections: MenuSelection[];
   }[] {
     const map = new Map<
       string,
       {
-        ownerType: 'user' | 'social';
-        ownerId: number;
+        entity: AuthenticatedEntity;
         selections: MenuSelection[];
       }
     >();
@@ -284,8 +261,7 @@ export class PreferencesScheduler {
         const key = `user-${selection.user.id}`;
         if (!map.has(key)) {
           map.set(key, {
-            ownerType: 'user',
-            ownerId: selection.user.id,
+            entity: selection.user,
             selections: [],
           });
         }
@@ -296,8 +272,7 @@ export class PreferencesScheduler {
         const key = `social-${selection.socialLogin.id}`;
         if (!map.has(key)) {
           map.set(key, {
-            ownerType: 'social',
-            ownerId: selection.socialLogin.id,
+            entity: selection.socialLogin,
             selections: [],
           });
         }

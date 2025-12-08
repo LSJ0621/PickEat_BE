@@ -6,15 +6,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
+import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 import {
   buildUserPrompt,
   MENU_RECOMMENDATIONS_JSON_SCHEMA,
   SYSTEM_PROMPT,
 } from '../prompts/menu-recommendation.prompts';
-
-interface MenuRecommendationsResponse {
-  recommendations: string[];
-}
 
 /**
  * 공통 메뉴 추천 서비스 베이스 클래스
@@ -99,7 +97,7 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const choice = response.choices[0];
       if (!choice) {
-        throw new Error('OpenAI returned no choices');
+        throw new OpenAIResponseException('추천 결과가 없습니다', response);
       }
 
       const content = choice.message?.content;
@@ -110,16 +108,14 @@ export abstract class BaseMenuService implements OnModuleInit {
       );
 
       if (!content) {
-        throw new Error(
-          `OpenAI returned no content. finish_reason: ${finishReason}`,
-        );
+        throw new OpenAIResponseException('응답 내용이 비어있습니다', { finishReason });
       }
 
       const parsed = JSON.parse(content) as MenuRecommendationsResponse;
       const recommendations = parsed.recommendations || [];
 
       if (!recommendations.length) {
-        throw new Error('OpenAI returned no recommendations');
+        throw new OpenAIResponseException('추천 결과가 없습니다', parsed);
       }
 
       const normalized = this.normalizeMenuNames(recommendations);

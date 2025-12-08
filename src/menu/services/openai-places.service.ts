@@ -1,37 +1,21 @@
 import {
-    Injectable,
-    InternalServerErrorException,
-    Logger,
-    OnModuleInit,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
 import {
-    GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
-    GOOGLE_PLACES_SYSTEM_PROMPT,
-    buildGooglePlacesUserPrompt,
+  PlaceCandidate,
+  PlaceRecommendationsResponse,
+} from '../interface/openai-places.interface';
+import {
+  GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
+  GOOGLE_PLACES_SYSTEM_PROMPT,
+  buildGooglePlacesUserPrompt,
 } from '../prompts/google-places-recommendation.prompts';
-
-interface PlaceCandidate {
-  id: string;
-  name: string | null;
-  rating?: number | null;
-  userRatingCount?: number | null;
-  priceLevel?: string | null;
-  reviews?: Array<{
-    rating: number | null;
-    originalText: string | null;
-    relativePublishTimeDescription: string | null;
-  }> | null;
-}
-
-export interface PlaceRecommendationsResponse {
-  recommendations: Array<{
-    placeId: string;
-    name: string;
-    reason: string;
-  }>;
-}
 
 @Injectable()
 export class OpenAiPlacesService implements OnModuleInit {
@@ -115,13 +99,13 @@ export class OpenAiPlacesService implements OnModuleInit {
       const choice = response.choices[0];
       const content = choice?.message?.content;
       if (!content) {
-        throw new Error('OpenAI returned no content for place recommendations');
+        throw new OpenAIResponseException('응답 내용이 비어있습니다', response);
       }
 
       const parsed = JSON.parse(content) as PlaceRecommendationsResponse;
 
       if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
-        throw new Error('OpenAI returned invalid recommendations format');
+        throw new OpenAIResponseException('응답 형식이 올바르지 않습니다', parsed);
       }
 
       return {
