@@ -1,0 +1,23 @@
+---
+description: 외부 API 클라이언트 작성 규칙
+globs:
+  - "src/external/**/*.ts"
+alwaysApply: false
+---
+
+# 외부 API 클라이언트 규칙
+
+## 파일 구성
+- `{provider}.constants.ts` - URL, 버전, 기본값 상수
+- `{provider}.types.ts` - 응답 타입 정의
+- `clients/{name}.client.ts` - API 호출 클래스
+
+## 작성 규칙
+- API URL과 버전은 constants 파일에서 관리
+- 응답 타입은 types 파일에 명확히 정의 (any 금지)
+- 필수 환경변수는 `config.getOrThrow()` 사용
+- 에러 발생 시 Logger로 로깅 후 커스텀 예외 throw
+
+## 금지 사항
+- 서비스에서 HTTP 헤더/파라미터 직접 작성
+- any 타입으로 응답 처리

@@ -1,0 +1,17 @@
+---
+alwaysApply: true
+---
+# 아키텍처 원칙
+
+## 레이어 분리
+- Controller: 요청/응답 처리만
+- Service: 비즈니스 로직 (최대 500줄)
+- Repository: DB 작업
+- Client: 외부 API 호출
+
+## 핵심 규칙
+- 서비스가 500줄 초과 시 책임별로 분리
+- 외부 API 호출은 전용 Client 클래스에 위임
+- 비슷한 로직의 중복 메서드 금지 (공통 인터페이스 활용)
+- 매직 넘버/스트링 금지 (constants 파일에서 관리)
+- console.log 금지 (Logger 사용)
