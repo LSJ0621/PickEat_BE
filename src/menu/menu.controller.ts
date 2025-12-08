@@ -36,26 +36,14 @@ export class MenuController {
     @Body() recommendMenuDto: RecommendMenuDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    return this.menuService.recommend(
+      entity,
+      recommendMenuDto.prompt,
+      recommendMenuDto.requestAddress,
+      recommendMenuDto.requestLocation?.lat,
+      recommendMenuDto.requestLocation?.lng,
     );
-    if (result.type === 'user') {
-      return this.menuService.recommendForUser(
-        result.user!,
-        recommendMenuDto.prompt,
-        recommendMenuDto.requestAddress,
-        recommendMenuDto.requestLocation?.lat,
-        recommendMenuDto.requestLocation?.lng,
-      );
-    } else {
-      return this.menuService.recommendForSocialLogin(
-        result.socialLogin!,
-        recommendMenuDto.prompt,
-        recommendMenuDto.requestAddress,
-        recommendMenuDto.requestLocation?.lat,
-        recommendMenuDto.requestLocation?.lng,
-      );
-    }
   }
 
   @Post('selections')
@@ -64,24 +52,13 @@ export class MenuController {
     @Body() createMenuSelectionDto: CreateMenuSelectionDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const selection = await this.menuService.createSelection(
+      entity,
+      createMenuSelectionDto.menus,
+      createMenuSelectionDto.historyId,
     );
-    if (result.type === 'user') {
-      const selection = await this.menuService.createSelectionForUser(
-        result.user!,
-        createMenuSelectionDto.menus,
-        createMenuSelectionDto.historyId,
-      );
-      return this.buildSelectionResponse(selection);
-    } else {
-      const selection = await this.menuService.createSelectionForSocialLogin(
-        result.socialLogin!,
-        createMenuSelectionDto.menus,
-        createMenuSelectionDto.historyId,
-      );
-      return this.buildSelectionResponse(selection);
-    }
+    return this.buildSelectionResponse(selection);
   }
 
   @Get('selections/history')
@@ -90,22 +67,9 @@ export class MenuController {
     @Query('date') date: string | undefined,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
-    );
-    if (result.type === 'user') {
-      const selections = await this.menuService.getSelectionsForUser(
-        result.user!,
-        date,
-      );
-      return { selections };
-    } else {
-      const selections = await this.menuService.getSelectionsForSocialLogin(
-        result.socialLogin!,
-        date,
-      );
-      return { selections };
-    }
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const selections = await this.menuService.getSelections(entity, date);
+    return { selections };
   }
 
   @Patch('selections/:id')
@@ -119,23 +83,8 @@ export class MenuController {
     if (Number.isNaN(selectionId)) {
       throw new BadRequestException('유효하지 않은 선택 ID입니다.');
     }
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
-    );
-    let selection: MenuSelection;
-    if (result.type === 'user') {
-      selection = await this.menuService.updateSelectionForUser(
-        result.user!,
-        selectionId,
-        updateDto,
-      );
-    } else {
-      selection = await this.menuService.updateSelectionForSocialLogin(
-        result.socialLogin!,
-        selectionId,
-        updateDto,
-      );
-    }
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const selection = await this.menuService.updateSelection(entity, selectionId, updateDto);
     return this.buildSelectionResponse(selection);
   }
 
@@ -145,17 +94,8 @@ export class MenuController {
     @Query() query: RecommendationHistoryQueryDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
-    );
-    if (result.type === 'user') {
-      return this.menuService.getHistory(result.user!, query.date);
-    } else {
-      return this.menuService.getHistoryForSocialLogin(
-        result.socialLogin!,
-        query.date,
-      );
-    }
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    return this.menuService.getHistory(entity, query.date);
   }
 
   // Google Places 텍스트 검색 결과만 조회하는 테스트용 엔드포인트 (토큰 불필요)
@@ -187,28 +127,17 @@ export class MenuController {
     if (!menuName) {
       throw new BadRequestException('menuName 쿼리 파라미터가 필요합니다.');
     }
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
-    );
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
     const numericHistoryId =
       historyId !== undefined && historyId !== null
         ? Number(historyId)
         : undefined;
-    if (result.type === 'user') {
-      return this.menuService.recommendRestaurantsWithGooglePlacesAndLlmForUser(
-        result.user!,
-        query,
-        menuName,
-        numericHistoryId,
-      );
-    } else {
-      return this.menuService.recommendRestaurantsWithGooglePlacesAndLlmForSocialLogin(
-        result.socialLogin!,
-        query,
-        menuName,
-        numericHistoryId,
-      );
-    }
+    return this.menuService.recommendRestaurantsWithGooglePlacesAndLlm(
+      entity,
+      query,
+      menuName,
+      numericHistoryId,
+    );
   }
 
   // 특정 추천 이력 1건 + 그 이력에서 생성된 AI 가게 추천 상세 조회
@@ -221,24 +150,10 @@ export class MenuController {
   ) {
     const numericId = Number(id);
     if (Number.isNaN(numericId)) {
-      // 간단한 예외: 잘못된 id
-      throw new Error('유효하지 않은 추천 이력 ID입니다.');
+      throw new BadRequestException('유효하지 않은 추천 이력 ID입니다.');
     }
-
-    const result = await this.userService.findUserOrSocialLoginByEmail(
-      authUser.email,
-    );
-    if (result.type === 'user') {
-      return this.menuService.getRecommendationDetailForUser(
-        result.user!,
-        numericId,
-      );
-    } else {
-      return this.menuService.getRecommendationDetailForSocialLogin(
-        result.socialLogin!,
-        numericId,
-      );
-    }
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    return this.menuService.getRecommendationDetail(entity, numericId);
   }
 
   // 단일 placeId에 대한 Google Places 상세 조회

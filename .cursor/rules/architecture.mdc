@@ -4,14 +4,14 @@ alwaysApply: true
 # 아키텍처 원칙
 
 ## 레이어 분리
-- Controller: 요청/응답 처리만
-- Service: 비즈니스 로직 (최대 500줄)
-- Repository: DB 작업
-- Client: 외부 API 호출
+Controller(요청/응답) → Service(비즈니스, 최대 500줄) → Repository(DB) / Client(외부 API)
 
 ## 핵심 규칙
-- 서비스가 500줄 초과 시 책임별로 분리
-- 외부 API 호출은 전용 Client 클래스에 위임
-- 비슷한 로직의 중복 메서드 금지 (공통 인터페이스 활용)
-- 매직 넘버/스트링 금지 (constants 파일에서 관리)
-- console.log 금지 (Logger 사용)
+- 서비스 500줄 초과 시 책임별 분리, 외부 API는 전용 Client로 위임
+- 중복 금지: 비슷한 로직, 같은/관련 서비스/컨트롤러 간
+- 매직 넘버/스트링 금지(constants 사용), console.log 금지(Logger 사용)
+- 예외는 전역 Filter로만, 통합 메서드 추가 시 기존 것 즉시 삭제
+- 미사용 엔드포인트/메서드/DTO 즉시 삭제
+
+## 코드 이동 시
+원본은 반드시 삭제 또는 새 위치 호출로 변경 (이동만 하고 정리 안 하면 미완료)
