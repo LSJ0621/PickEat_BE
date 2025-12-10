@@ -24,6 +24,7 @@ import { MenuSelection } from './entities/menu-selection.entity';
 import { MenuService } from './menu.service';
 
 @Controller('menu')
+@UseGuards(JwtAuthGuard)
 export class MenuController {
   constructor(
     private readonly menuService: MenuService,
@@ -31,7 +32,6 @@ export class MenuController {
   ) {}
 
   @Post('recommend')
-  @UseGuards(JwtAuthGuard)
   async recommend(
     @Body() recommendMenuDto: RecommendMenuDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -40,14 +40,10 @@ export class MenuController {
     return this.menuService.recommend(
       entity,
       recommendMenuDto.prompt,
-      recommendMenuDto.requestAddress,
-      recommendMenuDto.requestLocation?.lat,
-      recommendMenuDto.requestLocation?.lng,
     );
   }
 
   @Post('selections')
-  @UseGuards(JwtAuthGuard)
   async createSelection(
     @Body() createMenuSelectionDto: CreateMenuSelectionDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -62,7 +58,6 @@ export class MenuController {
   }
 
   @Get('selections/history')
-  @UseGuards(JwtAuthGuard)
   async getSelections(
     @Query('date') date: string | undefined,
     @CurrentUser() authUser: AuthUserPayload,
@@ -73,7 +68,6 @@ export class MenuController {
   }
 
   @Patch('selections/:id')
-  @UseGuards(JwtAuthGuard)
   async updateSelection(
     @Param('id') id: string,
     @Body() updateDto: UpdateMenuSelectionDto,
@@ -89,27 +83,23 @@ export class MenuController {
   }
 
   @Get('recommendations/history')
-  @UseGuards(JwtAuthGuard)
   async getHistory(
     @Query() query: RecommendationHistoryQueryDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
     const entity = await this.userService.getAuthenticatedEntity(authUser.email);
-    return this.menuService.getHistory(entity, query.date);
-  }
-
-  // Google Places 텍스트 검색 결과만 조회하는 테스트용 엔드포인트 (토큰 불필요)
-  // 예: GET /menu/google-places/search?query=덕소 마라탕
-  @Get('google-places/search')
-  async searchRestaurantsWithGooglePlaces(@Query('query') query: string) {
-    return this.menuService.searchRestaurantsWithGooglePlaces(query);
+    return this.menuService.getHistory(
+      entity,
+      query.page,
+      query.limit,
+      query.date,
+    );
   }
 
   // Google Custom Search(Programmable Search)를 이용한
   // 가게 이름 기반 블로그/웹 문서 검색 (썸네일, URL, 제목, 스니펫, 출처)
   // 예: GET /menu/restaurant/blogs?query=부산시 해운대구 마라탕집&restaurantName=마라탕집
   @Get('restaurant/blogs')
-  @UseGuards(JwtAuthGuard)
   async searchRestaurantBlogs(@Query() dto: SearchRestaurantBlogsDto) {
     return this.menuService.searchRestaurantBlogs(dto.query, dto.restaurantName);
   }
@@ -117,7 +107,6 @@ export class MenuController {
   // Google Places 텍스트 검색 + LLM 추천까지 한 번에 수행
   // (사용자가 "가게 추천받기" 버튼을 눌렀을 때 호출되는 엔드포인트)
   @Get('recommend/places')
-  @UseGuards(JwtAuthGuard)
   async recommendRestaurantsWithGooglePlacesAndLlm(
     @Query('query') query: string,
     @Query('menuName') menuName: string,
@@ -143,7 +132,6 @@ export class MenuController {
   // 특정 추천 이력 1건 + 그 이력에서 생성된 AI 가게 추천 상세 조회
   // 예: GET /menu/recommendations/123
   @Get('recommendations/:id')
-  @UseGuards(JwtAuthGuard)
   async getRecommendationDetail(
     @Param('id') id: string,
     @CurrentUser() authUser: AuthUserPayload,
@@ -159,7 +147,6 @@ export class MenuController {
   // 단일 placeId에 대한 Google Places 상세 조회
   // 예: GET /menu/places/:placeId/detail
   @Get('places/:placeId/detail')
-  @UseGuards(JwtAuthGuard)
   async getPlaceDetail(@Param('placeId') placeId: string) {
     return this.menuService.getPlaceDetail(placeId);
   }

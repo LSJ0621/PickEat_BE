@@ -5,6 +5,8 @@ import {
   AuthenticatedEntity,
   isUser,
 } from '../../common/interfaces/authenticated-user.interface';
+import { PageInfo } from '../../common/interfaces/pagination.interface';
+import { UserAddressService } from '../../user/services/user-address.service';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import { OpenAiMenuService } from './openai-menu.service';
 
@@ -21,6 +23,7 @@ export class MenuRecommendationService {
     @InjectRepository(MenuRecommendation)
     private readonly recommendationRepository: Repository<MenuRecommendation>,
     private readonly openAiMenuService: OpenAiMenuService,
+    private readonly userAddressService: UserAddressService,
   ) {}
 
   /**
@@ -29,9 +32,6 @@ export class MenuRecommendationService {
   async recommend(
     entity: AuthenticatedEntity,
     prompt: string,
-    requestAddress?: string,
-    requestLocationLat?: number,
-    requestLocationLng?: number,
   ) {
     const likes = entity.preferences?.likes ?? [];
     const dislikes = entity.preferences?.dislikes ?? [];
@@ -45,16 +45,18 @@ export class MenuRecommendationService {
         analysis,
       );
 
+    // 기본 주소 조회 (필수)
+    const defaultAddress = await this.userAddressService.getDefaultAddress(entity);
+    if (!defaultAddress || !defaultAddress.roadAddress) {
+      throw new BadRequestException('기본 주소를 설정해주세요.');
+    }
+
     const record = this.recommendationRepository.create({
       ...(isUser(entity) ? { user: entity } : { socialLogin: entity }),
       prompt,
       recommendations,
       recommendedAt: new Date(),
-      requestAddress: requestAddress ?? null,
-      requestLocationLat:
-        typeof requestLocationLat === 'number' ? requestLocationLat : null,
-      requestLocationLng:
-        typeof requestLocationLng === 'number' ? requestLocationLng : null,
+      requestAddress: defaultAddress.roadAddress, // 서버에서 조회한 기본 주소 저장 (필수)
     });
 
     await this.recommendationRepository.save(record);
@@ -63,13 +65,14 @@ export class MenuRecommendationService {
   }
 
   /**
-   * 추천 이력 조회 (User/SocialLogin 통합)
+   * 추천 이력 조회 (User/SocialLogin 통합, Pagination 지원)
    */
-  async getHistory(entity: AuthenticatedEntity, date?: string) {
-    const whereClause = isUser(entity)
-      ? { userId: entity.id }
-      : { socialLoginId: entity.id };
-
+  async getHistory(
+    entity: AuthenticatedEntity,
+    page: number = 1,
+    limit: number = 10,
+    date?: string,
+  ): Promise<{ items: ReturnType<typeof this.mapHistoryItem>[]; pageInfo: PageInfo }> {
     const fieldName = isUser(entity) ? 'userId' : 'socialLoginId';
 
     const qb = this.recommendationRepository
@@ -87,10 +90,23 @@ export class MenuRecommendationService {
       qb.andWhere('recommendation.recommendedAt < :end', { end });
     }
 
-    const history = await qb.getMany();
+    const skip = (page - 1) * limit;
+    qb.skip(skip).take(limit);
+
+    const [items, totalCount] = await qb.getManyAndCount();
+
+    const hasNext = skip + items.length < totalCount;
+
+    const pageInfo: PageInfo = {
+      page,
+      limit,
+      totalCount,
+      hasNext,
+    };
 
     return {
-      history: history.map((item) => this.mapHistoryItem(item)),
+      items: items.map((item) => this.mapHistoryItem(item)),
+      pageInfo,
     };
   }
 
@@ -154,13 +170,6 @@ export class MenuRecommendationService {
       recommendations: record.recommendations,
       recommendedAt: record.recommendedAt,
       requestAddress: record.requestAddress,
-      requestLocation:
-        record.requestLocationLat != null && record.requestLocationLng != null
-          ? {
-              lat: record.requestLocationLat,
-              lng: record.requestLocationLng,
-            }
-          : null,
     };
   }
 
@@ -171,13 +180,6 @@ export class MenuRecommendationService {
       prompt: item.prompt,
       recommendedAt: item.recommendedAt,
       requestAddress: item.requestAddress,
-      requestLocation:
-        item.requestLocationLat != null && item.requestLocationLng != null
-          ? {
-              lat: item.requestLocationLat,
-              lng: item.requestLocationLng,
-            }
-          : null,
       hasPlaceRecommendations:
         Array.isArray(item.placeRecommendations) &&
         item.placeRecommendations.length > 0,

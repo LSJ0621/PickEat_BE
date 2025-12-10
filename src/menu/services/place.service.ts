@@ -123,14 +123,6 @@ export class PlaceService {
       prompt: recommendation.prompt,
       recommendedAt: recommendation.recommendedAt,
       requestAddress: recommendation.requestAddress,
-      requestLocation:
-        recommendation.requestLocationLat != null &&
-        recommendation.requestLocationLng != null
-          ? {
-              lat: recommendation.requestLocationLat,
-              lng: recommendation.requestLocationLng,
-            }
-          : null,
     };
 
     const placeRecs = recommendation.placeRecommendations ?? [];
