@@ -9,8 +9,8 @@ import {
 } from 'typeorm';
 import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
-import { PlaceRecommendation } from './place-recommendation.entity';
 import { MenuSelection } from './menu-selection.entity';
+import { PlaceRecommendation } from './place-recommendation.entity';
 
 @Entity()
 export class MenuRecommendation {
@@ -35,14 +35,8 @@ export class MenuRecommendation {
   @Column('text')
   prompt: string;
 
-  @Column({ type: 'text', nullable: true })
-  requestAddress: string | null;
-
-  @Column({ type: 'double precision', nullable: true })
-  requestLocationLat: number | null;
-
-  @Column({ type: 'double precision', nullable: true })
-  requestLocationLng: number | null;
+  @Column({ type: 'text', nullable: false })
+  requestAddress: string; // 서버에서 사용자 기본 주소를 조회하여 저장 (필수)
 
   @Column({ type: 'timestamptz' })
   recommendedAt: Date;

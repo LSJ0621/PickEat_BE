@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { GooglePlacesClient } from '../external/google/clients/google-places.client';
 import { NaverMapClient } from '../external/naver/clients/naver-map.client';
 import { NaverReverseGeocodeResult } from '../external/naver/naver.types';
 import { SearchRestaurantsDto } from '../search/dto/search-restaurants.dto';
@@ -15,7 +14,6 @@ export class MapService {
     @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
     private readonly naverMapClient: NaverMapClient,
-    private readonly googlePlacesClient: GooglePlacesClient,
   ) {}
 
   async getRestaurantMarkers(
@@ -159,21 +157,5 @@ export class MapService {
       distance: restaurant.distance,
       link: restaurant.link,
     };
-  }
-
-  async getGooglePlacePhoto(
-    photoName: string,
-    maxHeightPx: number = 400,
-    maxWidthPx: number = 400,
-  ) {
-    this.logger.log(`🔍 [Google Places 사진 요청] name="${photoName}"`);
-
-    const photoUri = await this.googlePlacesClient.getPhotoUri(photoName, {
-      maxHeight: maxHeightPx,
-      maxWidth: maxWidthPx,
-    });
-
-    this.logger.log(`✅ [Google Places 사진 응답] uri=${photoUri}`);
-    return { photoUri };
   }
 }
