@@ -23,21 +23,20 @@ export class MenuService {
   async recommend(
     entity: AuthenticatedEntity,
     prompt: string,
-    requestAddress?: string,
-    requestLocationLat?: number,
-    requestLocationLng?: number,
   ) {
     return this.menuRecommendationService.recommend(
       entity,
       prompt,
-      requestAddress,
-      requestLocationLat,
-      requestLocationLng,
     );
   }
 
-  async getHistory(entity: AuthenticatedEntity, date?: string) {
-    return this.menuRecommendationService.getHistory(entity, date);
+  async getHistory(
+    entity: AuthenticatedEntity,
+    page: number = 1,
+    limit: number = 10,
+    date?: string,
+  ) {
+    return this.menuRecommendationService.getHistory(entity, page, limit, date);
   }
 
   async createSelection(

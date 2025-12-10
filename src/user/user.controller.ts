@@ -25,10 +25,10 @@ import { UserAddress } from './entities/user-address.entity';
 import { UserService } from './user.service';
 
 @Controller('user')
+@UseGuards(JwtAuthGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Get('preferences')
   async getPreferences(@CurrentUser() authUser: AuthUserPayload) {
     const entity = await this.userService.getAuthenticatedEntity(authUser.email);
@@ -36,7 +36,6 @@ export class UserController {
     return { preferences };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('preferences')
   async upsertPreferences(
     @Body() preferencesDto: UpdatePreferencesDto,
@@ -51,13 +50,11 @@ export class UserController {
     return { preferences };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('address/search')
   async searchAddress(@Query() searchDto: SearchAddressDto) {
     return this.userService.searchAddress(searchDto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch('address')
   async updateSingleAddress(
     @Body() updateDto: UpdateSingleAddressDto,
@@ -71,7 +68,6 @@ export class UserController {
     return { address: updatedEntity.address };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete('me')
   async deleteCurrentUser(@CurrentUser() authUser: AuthUserPayload) {
     await this.userService.deleteUser(authUser.email);
@@ -80,7 +76,6 @@ export class UserController {
 
   // ========== 주소 리스트 관련 엔드포인트 ==========
 
-  @UseGuards(JwtAuthGuard)
   @Get('address/default')
   async getDefaultAddress(@CurrentUser() authUser: AuthUserPayload) {
     const entity = await this.userService.getAuthenticatedEntity(authUser.email);
@@ -88,7 +83,6 @@ export class UserController {
     return address ? this.toAddressResponseDto(address) : null;
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('addresses')
   async getUserAddresses(@CurrentUser() authUser: AuthUserPayload) {
     const entity = await this.userService.getAuthenticatedEntity(authUser.email);
@@ -96,7 +90,6 @@ export class UserController {
     return addresses.map((addr) => this.toAddressResponseDto(addr));
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('addresses')
   async createUserAddress(
     @Body() dto: CreateUserAddressDto,
@@ -107,7 +100,6 @@ export class UserController {
     return this.toAddressResponseDto(address);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch('addresses/:id')
   async updateUserAddress(
     @Param('id') id: string,
@@ -120,7 +112,6 @@ export class UserController {
     return this.toAddressResponseDto(address);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete('addresses')
   async deleteUserAddresses(
     @Body() dto: DeleteUserAddressesDto,
@@ -131,7 +122,6 @@ export class UserController {
     return { message: '주소가 삭제되었습니다.' };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch('addresses/:id/default')
   async setDefaultAddress(
     @Param('id') id: string,
@@ -143,7 +133,6 @@ export class UserController {
     return this.toAddressResponseDto(address);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch('addresses/:id/search')
   async setSearchAddress(
     @Param('id') id: string,
