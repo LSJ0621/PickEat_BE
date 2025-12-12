@@ -4,11 +4,13 @@ import * as cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { HttpMetricsInterceptor } from './common/interceptors/http-metrics.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useLogger(app.get(Logger));
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalFilters(app.get(HttpExceptionFilter));
+  app.useGlobalInterceptors(app.get(HttpMetricsInterceptor));
   app.use(cookieParser());
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:8080',

@@ -21,6 +21,10 @@ export const loggerConfig: Params = {
         statusCode: res.statusCode,
       }),
     },
+    // 특정 경로 로그 억제 (테스트 중에는 비활성화)
+    // autoLogging: {
+    //   ignore: (req) => req.url === '/metrics',
+    // },
     // 개발환경: 가독성 좋은 포맷
     transport:
       process.env.NODE_ENV !== 'production'
@@ -36,4 +40,3 @@ export const loggerConfig: Params = {
         : undefined,
   },
 };
-
