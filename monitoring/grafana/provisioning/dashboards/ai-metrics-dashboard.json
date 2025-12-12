@@ -1,0 +1,486 @@
+{
+  "uid": "ai-metrics",
+  "title": "AI 서비스 메트릭",
+  "tags": ["ai", "http", "db", "external", "batch"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 3,
+  "refresh": "10s",
+  "style": "dark",
+  "panels": [
+    {
+      "id": 4,
+      "title": "메뉴추천",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_requests_total{endpoint=\"menu\",status=\"ok\"}[$__range]))",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": null }
+        },
+        {
+          "expr": "sum(increase(ai_tokens_total{endpoint=\"menu\"}[$__range]))",
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["last"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 10000, "color": "orange" },
+              { "value": 50000, "color": "red" }
+            ]
+          },
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "nullValueMode": "null as zero"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "A" },
+            "properties": [
+              { "id": "displayName", "value": "요청수" },
+              { "id": "unit", "value": "none" },
+              { "id": "decimals", "value": 0 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 100, "color": "orange" }, { "value": 500, "color": "red" }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "B" },
+            "properties": [
+              { "id": "displayName", "value": "토큰수" },
+              { "id": "unit", "value": "short" },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 10000, "color": "orange" }, { "value": 50000, "color": "red" }] } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 13,
+      "title": "가게추천",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_requests_total{endpoint=\"places\",status=\"ok\"}[$__range]))",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": null }
+        },
+        {
+          "expr": "sum(increase(ai_tokens_total{endpoint=\"places\"}[$__range]))",
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["last"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 10000, "color": "orange" },
+              { "value": 50000, "color": "red" }
+            ]
+          },
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "nullValueMode": "null as zero"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "A" },
+            "properties": [
+              { "id": "displayName", "value": "요청수" },
+              { "id": "unit", "value": "none" },
+              { "id": "decimals", "value": 0 },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 100, "color": "orange" }, { "value": 500, "color": "red" }] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "B" },
+            "properties": [
+              { "id": "displayName", "value": "토큰수" },
+              { "id": "unit", "value": "short" },
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 10000, "color": "orange" }, { "value": 50000, "color": "red" }] } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 14,
+      "title": "취향분석",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_tokens_total{endpoint=\"preference\"}[$__range]))",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["last"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "displayName": "토큰수",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 10000, "color": "orange" },
+              { "value": 50000, "color": "red" }
+            ]
+          },
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "nullValueMode": "null as zero"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "총 사용 토큰수",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(increase(ai_tokens_total{endpoint=~\"menu|places|preference\"}[$__range]))",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["last"], "fields": "" },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 50000, "color": "orange" },
+              { "value": 200000, "color": "red" }
+            ]
+          },
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "nullValueMode": "null as zero"
+        }
+      }
+    },
+    {
+      "id": 1,
+      "title": "DB 상태",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "avg(db_up)", "refId": "A", "datasource": { "type": "prometheus", "uid": null } }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "nullValueMode": "null as zero",
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 0.5, "color": "orange" },
+              { "value": 0.99, "color": "green" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["last"] } }
+    },
+    {
+      "id": 2,
+      "title": "HTTP 5xx 비율",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1)",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "nullValueMode": "null as zero",
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 0.01, "color": "orange" },
+              { "value": 0.05, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["last"] } }
+    },
+    {
+      "id": 3,
+      "title": "외부 API 오류/타임아웃 비율",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(external_api_requests_total{status_group=~\"5xx|4xx|429|timeout\"}[5m])) / clamp_min(sum(rate(external_api_requests_total[5m])), 1)",
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "nullValueMode": "null as zero",
+          "mappings": [
+            {
+              "options": { "match": "null", "result": { "text": "0" } },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 0.01, "color": "orange" },
+              { "value": 0.05, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["last"] } }
+    },
+    {
+      "id": 5,
+      "title": "HTTP 요청 수 (route/status)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (route, status)",
+          "refId": "A",
+          "legendFormat": "{{route}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 6,
+      "title": "HTTP 지연 p95 (route)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 7,
+      "title": "외부 API 오류/타임아웃",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(external_api_requests_total{status_group=~\"5xx|4xx|429|timeout\"}[5m])) by (service, status_group)",
+          "refId": "A",
+          "legendFormat": "{{service}} {{status_group}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 8,
+      "title": "외부 API 지연 p95",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(external_api_request_duration_seconds_bucket[5m])) by (le, service))",
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 9,
+      "title": "배치 성공/실패",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(batch_jobs_total[5m])) by (job, status)",
+          "refId": "A",
+          "legendFormat": "{{job}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "runs/s", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 10,
+      "title": "배치 지연 p95",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(batch_job_duration_seconds_bucket[5m])) by (le, job))",
+          "refId": "A",
+          "legendFormat": "{{job}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 11,
+      "title": "AI 요청 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "expr": "label_replace(label_replace(sum(rate(ai_requests_total[5m])) by (endpoint, status), \"endpoint\", \"메뉴추천\", \"endpoint\", \"menu\"), \"endpoint\", \"가게추천\", \"endpoint\", \"places\")",
+          "refId": "A",
+          "legendFormat": "{{endpoint}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 12,
+      "title": "AI 지연 p95",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "expr": "label_replace(label_replace(histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, endpoint)), \"endpoint\", \"메뉴추천\", \"endpoint\", \"menu\"), \"endpoint\", \"가게추천\", \"endpoint\", \"places\")",
+          "refId": "A",
+          "legendFormat": "{{endpoint}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    }
+  ],
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "editable": true
+}
