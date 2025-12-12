@@ -8,6 +8,9 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { OPENAI_SETTINGS } from '../common/constants/business.constants';
 import { OpenAIResponseException } from '../common/exceptions/openai-response.exception';
+import { elapsedSeconds, mapStatusGroupFromError, parseTokens } from '../common/utils/metrics.util';
+import { OPENAI_CONFIG } from '../external/openai/openai.constants';
+import { PrometheusService } from '../prometheus/prometheus.service';
 import { PreferenceAnalysisResponse } from './interfaces/preference-analysis.interface';
 import { UserPreferences } from './interfaces/user-preferences.interface';
 import {
@@ -25,15 +28,18 @@ export class PreferenceUpdateAiService implements OnModuleInit {
    * 우선순위:
    * 1) OPENAI_PREFERENCE_MODEL (취향 분석 전용)
    * 2) OPENAI_MODEL (글로벌 기본 모델)
-   * 3) 기본값: 'gpt-5.1'
+   * 3) 기본값: OPENAI_CONFIG.DEFAULT_MODEL
    */
   private readonly model: string;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prometheusService: PrometheusService,
+  ) {
     this.model =
       this.config.get<string>('OPENAI_PREFERENCE_MODEL') ||
       this.config.get<string>('OPENAI_MODEL') ||
-      'gpt-5.1';
+      OPENAI_CONFIG.DEFAULT_MODEL;
   }
 
   onModuleInit() {
@@ -67,6 +73,9 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       slotMenus,
     });
 
+    const startedAt = Date.now();
+    const extService = 'openai';
+
     try {
       const response = await this.openai.chat.completions.create({
         model: this.model,
@@ -85,18 +94,25 @@ export class PreferenceUpdateAiService implements OnModuleInit {
         // GPT-5.1 계열: temperature 미사용, completion 토큰만 지정
         max_completion_tokens: OPENAI_SETTINGS.PREFERENCE_MAX_TOKENS,
       });
-
       const usage: any = (response as any).usage;
+      const endpoint = 'preference';
+
       if (usage) {
         const promptTokens =
           usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
         const completionTokens =
           usage.completion_tokens ?? usage.output_tokens ?? 0;
-        const totalTokens =
+        const totalTokensRaw =
           usage.total_tokens ?? promptTokens + completionTokens;
+        const totalTokens = parseTokens(totalTokensRaw);
         this.logger.log(
-          `📊 [Preference LLM 토큰 사용량] model=${this.model}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`,
+          `📊 [Preference LLM 토큰 사용량] model=${this.model}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
         );
+
+        // Prometheus 메트릭 기록 (토큰 사용량만 기록, 요청 수는 제외)
+        if (this.prometheusService && Number.isFinite(totalTokens)) {
+          this.prometheusService.recordAiTokensOnly(endpoint, totalTokens);
+        }
       }
 
       const content = response.choices[0]?.message?.content;
@@ -115,12 +131,27 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       }
 
       this.validateSchema(parsed);
+      // Prometheus 메트릭 기록 (요청 지연 + 외부 API)
+      if (this.prometheusService) {
+        const durationSeconds = elapsedSeconds(startedAt);
+        this.prometheusService.recordAiDuration(endpoint, durationSeconds);
+        this.prometheusService.recordExternalApi(extService, '2xx', durationSeconds);
+      }
       return {
         analysis: parsed.analysis.trim(),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(`❌ [Preference LLM 실패] ${message}`);
+
+      // Prometheus 실패 메트릭 기록 (요청 수는 기록하지 않음, 지연 시간만 기록)
+      if (this.prometheusService) {
+        const durationSeconds = elapsedSeconds(startedAt);
+        this.prometheusService.recordAiDuration('preference', durationSeconds);
+        const statusGroup = mapStatusGroupFromError(error);
+        this.prometheusService.recordExternalApi(extService, statusGroup, durationSeconds);
+      }
+
       throw new InternalServerErrorException(
         'Failed to update preferences via LLM',
       );
@@ -143,4 +174,5 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       throw new OpenAIResponseException('분석 결과가 비어있습니다', data);
     }
   }
+
 }

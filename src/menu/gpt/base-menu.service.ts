@@ -7,6 +7,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
+import {
+  elapsedSeconds,
+  mapStatusGroupFromError,
+  parseTokens,
+} from '../../common/utils/metrics.util';
+import { PrometheusService } from '../../prometheus/prometheus.service';
 import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 import {
   buildUserPrompt,
@@ -25,6 +31,7 @@ export abstract class BaseMenuService implements OnModuleInit {
   constructor(
     loggerName: string,
     protected readonly config: ConfigService,
+    protected readonly prometheusService: PrometheusService,
   ) {
     this.logger = new Logger(loggerName);
   }
@@ -58,14 +65,7 @@ export abstract class BaseMenuService implements OnModuleInit {
     const jsonSchema = MENU_RECOMMENDATIONS_JSON_SCHEMA;
 
     const startedAt = Date.now();
-
-    this.logger.log(`📤 [OpenAI 요청 시작] model=${this.getModel()}`);
-    this.logger.log(`📋 [System Prompt]\n${systemPrompt}`);
-    this.logger.log(`📋 [User Prompt]\n${userPrompt}`);
-    this.logger.log(`📋 [JSON Schema]\n${JSON.stringify(jsonSchema, null, 2)}`);
-    this.logger.log(
-      `📤 [OpenAI 요청] 사용자 요청: "${prompt.substring(0, 50)}..."`,
-    );
+    const extService = 'openai';
 
     try {
       const requestParams = this.buildRequestParams(
@@ -76,24 +76,26 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const response = await this.openai.chat.completions.create(requestParams);
 
-      const duration = Date.now() - startedAt;
-
       const usage: any = (response as any).usage;
+      const endpoint = 'menu';
+
       if (usage) {
         const promptTokens =
           usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
         const completionTokens =
           usage.completion_tokens ?? usage.output_tokens ?? 0;
-        const totalTokens =
+        const totalTokensRaw =
           usage.total_tokens ?? promptTokens + completionTokens;
+        const totalTokens = parseTokens(totalTokensRaw);
         this.logger.log(
-          `📊 [메뉴 추천 LLM 토큰 사용량] model=${this.getModel()}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`,
+          `📊 [메뉴 추천 LLM 토큰 사용량] model=${this.getModel()}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
         );
-      }
 
-      this.logger.log(
-        `📥 [OpenAI 응답 원본] ${JSON.stringify(response, null, 2)}`,
-      );
+        // Prometheus 메트릭 기록 (요청 수 + 토큰 사용량)
+        if (this.prometheusService && Number.isFinite(totalTokens)) {
+          this.prometheusService.recordAiSuccess(endpoint, totalTokens);
+        }
+      }
 
       const choice = response.choices[0];
       if (!choice) {
@@ -102,10 +104,6 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const content = choice.message?.content;
       const finishReason = choice.finish_reason;
-
-      this.logger.log(
-        `📥 [OpenAI 응답 상세] finish_reason=${finishReason}, has_content=${!!content}`,
-      );
 
       if (!content) {
         throw new OpenAIResponseException('응답 내용이 비어있습니다', { finishReason });
@@ -120,21 +118,25 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const normalized = this.normalizeMenuNames(recommendations);
 
-      this.logger.log(
-        `✅ [OpenAI 응답] 소요 시간: ${duration}ms, 추천 개수: ${normalized.length}`,
-      );
+      this.logger.log(`✅ [메뉴 추천] 추천 개수: ${normalized.length}`);
+
+      // Prometheus 메트릭 기록 (요청 지연 + 외부 API)
+      if (this.prometheusService) {
+        const durationSeconds = elapsedSeconds(startedAt);
+        this.prometheusService.recordAiDuration(endpoint, durationSeconds);
+        this.prometheusService.recordExternalApi(extService, '2xx', durationSeconds);
+      }
 
       return normalized;
     } catch (error) {
-      const duration = Date.now() - startedAt;
-      const errorMessage =
-        error instanceof Error ? error.message : 'unknown error';
-      const errorStack = error instanceof Error ? error.stack : undefined;
-
-      this.logger.error(
-        `❌ [OpenAI 에러] 소요 시간: ${duration}ms, 에러: ${errorMessage}`,
-        errorStack,
-      );
+      // Prometheus 실패 메트릭 기록 (요청 수만 기록)
+      if (this.prometheusService) {
+        this.prometheusService.recordAiError('menu');
+        const durationSeconds = elapsedSeconds(startedAt);
+        this.prometheusService.recordAiDuration('menu', durationSeconds);
+        const statusGroup = mapStatusGroupFromError(error);
+        this.prometheusService.recordExternalApi(extService, statusGroup, durationSeconds);
+      }
 
       throw new InternalServerErrorException(
         'Failed to fetch menu recommendations',
@@ -172,4 +174,5 @@ export abstract class BaseMenuService implements OnModuleInit {
       .filter((name): name is string => name !== null && name.length > 0)
       .filter((name, index, array) => array.indexOf(name) === index);
   }
+
 }
