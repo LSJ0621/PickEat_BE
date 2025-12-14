@@ -32,9 +32,6 @@ export class PrometheusService {
   // 외부 API 메트릭
   private externalApiRequestsCounter: Counter<string>;
   private externalApiDuration: Histogram<string>;
-  // 배치/스케줄러 메트릭
-  private batchJobsCounter: Counter<string>;
-  private batchJobDuration: Histogram<string>;
 
   constructor(private readonly configService: ConfigService) {
     this.serviceName = 'pick-eat-be';
@@ -131,23 +128,6 @@ export class PrometheusService {
       help: 'External API request latency in seconds',
       labelNames: ['service', 'status_group'],
       buckets: [0.1, 0.3, 0.5, 1, 2, 5, 10, 20],
-      registers: [this.registry],
-    });
-
-    // 배치/스케줄러 실행 수 (Counter)
-    this.batchJobsCounter = new Counter({
-      name: 'batch_jobs_total',
-      help: 'Total number of batch/scheduler job runs',
-      labelNames: ['job', 'status'],
-      registers: [this.registry],
-    });
-
-    // 배치/스케줄러 지연 (Histogram)
-    this.batchJobDuration = new Histogram({
-      name: 'batch_job_duration_seconds',
-      help: 'Batch/scheduler job duration in seconds',
-      labelNames: ['job'],
-      buckets: [0.1, 0.5, 1, 2, 5, 10, 20, 40],
       registers: [this.registry],
     });
   }
@@ -318,22 +298,4 @@ export class PrometheusService {
     }
   }
 
-  /**
-   * 배치/스케줄러 실행 기록
-   * @param job 작업명
-   * @param status success|fail
-   * @param seconds 소요 시간(초)
-   */
-  recordBatchJob(
-    job: string,
-    status: 'success' | 'fail',
-    seconds: number,
-  ): void {
-    try {
-      this.batchJobsCounter.inc({ job, status });
-      this.batchJobDuration.observe({ job }, seconds);
-    } catch (error) {
-      // noop
-    }
-  }
 }
