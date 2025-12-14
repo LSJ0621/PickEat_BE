@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { AuthenticatedEntity } from '../common/interfaces/authenticated-user.interface';
+import {
+  AuthenticatedEntity,
+  isSocialLogin,
+  isUser,
+} from '../common/interfaces/authenticated-user.interface';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
@@ -264,5 +268,20 @@ export class UserService {
 
   async getEntityDefaultAddress(entity: User | SocialLogin): Promise<UserAddress | null> {
     return this.userAddressService.getDefaultAddress(entity);
+  }
+
+  // ========== User Name Update (통합 메서드) ==========
+
+  async updateEntityName(
+    entity: User | SocialLogin,
+    name: string,
+  ): Promise<User | SocialLogin> {
+    entity.name = name;
+    if (isUser(entity)) {
+      return this.userRepository.save(entity);
+    } else if (isSocialLogin(entity)) {
+      return this.socialLoginRepository.save(entity);
+    }
+    throw new NotFoundException('Entity type not recognized');
   }
 }

@@ -5,10 +5,9 @@ import { Repository } from 'typeorm';
 import { AuthenticatedEntity } from '../common/interfaces/authenticated-user.interface';
 import { PreferenceUpdateAiService } from '../user/preference-update-ai.service';
 import { UserService } from '../user/user.service';
-import { PrometheusService } from '../prometheus/prometheus.service';
 import {
-  MenuSelection,
-  MenuSelectionStatus,
+    MenuSelection,
+    MenuSelectionStatus,
 } from './entities/menu-selection.entity';
 import { normalizeMenuName, normalizeMenuPayload } from './menu-payload.util';
 
@@ -22,14 +21,10 @@ export class PreferencesScheduler {
     private readonly menuSelectionRepository: Repository<MenuSelection>,
     private readonly userService: UserService,
     private readonly preferenceUpdateAiService: PreferenceUpdateAiService,
-    private readonly prometheusService: PrometheusService,
   ) {}
 
-  @Cron('25 19 * * *')
+  @Cron('20 16 * * *')
   async processPendingSelections() {
-    const startedAt = Date.now();
-    const job = 'preference_pending';
-    let isSuccess = true;
     this.logger.log('🕐 [스케줄러 실행] PENDING 건 처리 시작');
     try {
       const pending = await this.menuSelectionRepository.find({
@@ -115,7 +110,6 @@ export class PreferencesScheduler {
             MenuSelectionStatus.SUCCEEDED,
           );
         } catch (error) {
-          isSuccess = false;
           this.logger.error(
             `❌ [취향 분석 실패] entityId=${group.entity.id}: ${
               error instanceof Error ? error.message : 'unknown error'
@@ -129,20 +123,14 @@ export class PreferencesScheduler {
         }
       }
     } catch (error) {
-      isSuccess = false;
       this.logger.error(
         `❌ [PENDING 처리 실패] ${error instanceof Error ? error.message : 'unknown error'}`,
       );
-    } finally {
-      this.recordBatch(job, isSuccess, startedAt);
     }
   }
 
   @Cron('18 13 * * *')
   async processFailedSelections() {
-    const startedAt = Date.now();
-    const job = 'preference_retry';
-    let isSuccess = true;
     this.logger.log('🕐 [스케줄러 실행] FAILED 건 재시도 시작');
     try {
       const failed = await this.menuSelectionRepository.find({
@@ -228,7 +216,6 @@ export class PreferencesScheduler {
             MenuSelectionStatus.SUCCEEDED,
           );
         } catch (error) {
-          isSuccess = false;
           this.logger.error(
             `❌ [취향 분석 재시도 실패] entityId=${group.entity.id}: ${
               error instanceof Error ? error.message : 'unknown error'
@@ -242,12 +229,9 @@ export class PreferencesScheduler {
         }
       }
     } catch (error) {
-      isSuccess = false;
       this.logger.error(
         `❌ [FAILED 재시도 실패] ${error instanceof Error ? error.message : 'unknown error'}`,
       );
-    } finally {
-      this.recordBatch(job, isSuccess, startedAt);
     }
   }
 
@@ -331,15 +315,5 @@ export class PreferencesScheduler {
     }));
 
     await this.menuSelectionRepository.save(partials);
-  }
-
-  private recordBatch(
-    job: string,
-    isSuccess: boolean,
-    startedAt: number,
-  ) {
-    const durationSeconds = (Date.now() - startedAt) / 1000;
-    const status: 'success' | 'fail' = isSuccess ? 'success' : 'fail';
-    this.prometheusService.recordBatchJob(job, status, durationSeconds);
   }
 }

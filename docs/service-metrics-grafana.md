@@ -19,7 +19,6 @@
 - **응답 시간**: 핵심 엔드포인트 p95(메뉴 추천, 가게 추천, 로그인/토큰 갱신)
 - **DB 신호**: db_up(0/1) 헬스 체크 또는 커넥션 풀 pending>0 알람으로 Down 감지, 슬로우 쿼리 건수, 쿼리 오류 수, 커넥션 풀 상태(Active/Pending 또는 획득 대기시간)
 - **외부 API 의존성**: OpenAI/Google Places/Google CSE 상태코드 분포(특히 429, 5xx), 지연 p95
-- **배치/스케줄러**: 취향 분석 작업 성공/실패/지연 건수
 
 ### AI 지연 측정 범위
 - `ai_request_duration_seconds`는 “프롬프트 구성 → OpenAI 호출 → 후처리까지 포함한 전체 구간”을 측정 (메뉴/가게/취향 동일 범위).
@@ -35,14 +34,11 @@
    - 작업: OpenAI/Google Places/Google CSE 호출에 상태코드·지연(ms) Counter/Histogram 추가. 라벨은 `service`(openai|places|cse) + `status_group`(2xx|4xx|5xx|429|timeout)만 사용. 버킷은 0.1, 0.3, 0.5, 1, 2, 5, 10, 20(필요 시 30) 초로 최소화.
    - 구현 주의: 상태그룹 매핑(2xx/4xx/5xx/429/timeout)과 duration 측정(시작~종료) 로직을 헬퍼/공통 유틸로 분리해 OpenAI/Places/CSE 모두 동일 코드 재사용.
    - 테스트: 정상 호출, 의도적 타임아웃/5xx/4xx 유발 후 `external_api_requests_total{service,status_group}` 및 duration Histogram에 라벨/버킷 적재 확인.
-4) **배치 계측**
-   - 작업: 취향 분석 스케줄 작업 성공/실패/지연 Counter/Gauge 추가. 라벨은 상태(success|fail)와 작업명 정도로 제한.
-   - 테스트: 배치 성공/실패 시나리오 실행 후 카운터/Gauge 증가 및 상태 라벨 정상 확인.
-5) **잔여 코드 정리**
+4) **잔여 코드 정리**
    - 작업: 미사용 메트릭/라벨/헬퍼 삭제(`ai_cost_total`, `ai_failures_total`, `ai_tokens_total` type 라벨, provider/model 라벨 등)하여 카디널리티·오버헤드 감소. `ai_request_duration_seconds`는 유지(엔드포인트 라벨만).
    - 테스트: `/metrics`에서 제거 대상 메트릭/라벨이 더 이상 노출되지 않는지 확인.
 6) **Grafana 대시보드(JSON) 작성**
-   - 작업: `monitoring/grafana/provisioning/dashboards/ai-metrics-dashboard.json` 등에 최종 지표 패널 추가(RPS/오류율/p95/DB/db_up/외부 API/배치/AI 토큰/AI 지연). 패널 수 최소화, 쿼리 단순화(sum by 라벨)로 렌더링 부하 억제.
+   - 작업: `monitoring/grafana/provisioning/dashboards/ai-metrics-dashboard.json` 등에 최종 지표 패널 추가(RPS/오류율/p95/DB/db_up/외부 API/AI 토큰/AI 지연). 패널 수 최소화, 쿼리 단순화(sum by 라벨)로 렌더링 부하 억제.
    - 테스트: Grafana에서 프로비저닝된 대시보드 로드 및 각 패널 쿼리 정상 동작, 라벨 규칙 및 버킷 상한 반영 확인.
 7) **계측 공통 유틸/헬퍼 분리**
    - 작업: 중복되는 상태그룹 매핑, duration 측정(시작/종료), 라벨 정규화(route 템플릿/unknown) 등을 공통 헬퍼/유틸 파일로 분리하여 HTTP 인터셉터, 외부 API 클라이언트, AI 서비스에서 재사용.
@@ -61,3 +57,66 @@
 - (추가 예정) `db_up`, DB pending/acquire wait, DB 쿼리 오류 Counter.
 - (추가 예정) 외부 API 지표: `external_api_requests_total{service,status_group}` 및 duration Histogram(버킷 상한 10~20(또는 30)초, status_group에 timeout 포함).
 - 알람 시 최소 요청량 조건 확인: 오류율/지연 알람이 최근 5분 N건 이상일 때만 평가되는지 점검.
+
+## Grafana 대시보드 개선 계획
+
+### 목표
+- HTTP 요청 수를 실제 요청 수로 표시 (초당 요청 수가 아닌 총 요청 수)
+- 엔드포인트가 많아 구분이 어려운 문제를 기능별로 그룹화하여 가독성 향상
+- Row 패널을 사용한 collapsible 섹션으로 대시보드 정리
+
+### 변경 사항
+
+#### 1. HTTP 요청 수 표시 방식 변경
+- **기존**: `rate(http_requests_total[5m])` - 초당 요청 수(reqps)
+- **변경**: `increase(http_requests_total[$__range])` - 선택한 시간 범위의 실제 요청 수
+- **단위**: `reqps` → `short` (숫자로 표시)
+
+#### 2. 기능별 그룹화
+엔드포인트를 다음 5개 기능으로 분류:
+- **인증 (Auth)**: `/auth/*` - 로그인, 회원가입, 이메일 인증, 비밀번호 재설정 등
+- **사용자 (User)**: `/user/*` - 취향 설정, 주소 관리, 회원 탈퇴 등
+- **메뉴 (Menu)**: `/menu/*` - 메뉴 추천, 선택, 이력 조회, 가게 추천 등
+- **검색 (Search)**: `/search/*` - 레스토랑 검색
+- **지도 (Map)**: `/map/*` - 지도 관련
+
+#### 3. 섹션 구조 (Row 패널 사용)
+
+**Row 1: "HTTP 요청" (collapsible, 기본 펼침)**
+- 인증 요청 수: `sum(increase(http_requests_total{route=~"/auth.*"}[$__range])) by (route, status)`
+- 사용자 요청 수: `sum(increase(http_requests_total{route=~"/user.*"}[$__range])) by (route, status)`
+- 메뉴 요청 수: `sum(increase(http_requests_total{route=~"/menu.*"}[$__range])) by (route, status)`
+- 검색 요청 수: `sum(increase(http_requests_total{route=~"/search.*"}[$__range])) by (route, status)`
+- 지도 요청 수: `sum(increase(http_requests_total{route=~"/map.*"}[$__range])) by (route, status)`
+
+**Row 2: "HTTP 요청 지연율" (collapsible, 기본 펼침)**
+- 인증 지연 p95: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~"/auth.*"}[5m])) by (le, route))`
+- 사용자 지연 p95: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~"/user.*"}[5m])) by (le, route))`
+- 메뉴 지연 p95: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~"/menu.*"}[5m])) by (le, route))`
+- 검색 지연 p95: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~"/search.*"}[5m])) by (le, route))`
+- 지도 지연 p95: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~"/map.*"}[5m])) by (le, route))`
+
+**지연 시간 단위**: 초(s) 단위 유지
+
+#### 4. 대시보드 레이아웃
+```
+y: 0-3  : AI 메트릭 (기존)
+y: 4-7  : DB/에러 메트릭 (기존)
+y: 8    : [HTTP 요청] Row (제목, collapsible)
+y: 9-16 : HTTP 요청 패널들 (5개, 2열 배치)
+y: 17   : [HTTP 요청 지연율] Row (제목, collapsible)
+y: 18-25: HTTP 지연율 패널들 (5개, 2열 배치)
+y: 26+  : 외부 API, AI 메트릭 (기존)
+```
+
+#### 5. 제거 대상 패널
+- 기존 id: 5 "HTTP 요청 수 (route/status)" 패널 제거
+- 기존 id: 6 "HTTP 지연 p95 (route)" 패널 제거
+
+### 구현 단계
+1. 기존 HTTP 관련 패널(id: 5, 6) 제거
+2. Row 패널 2개 추가 (collapsible 설정)
+3. 각 Row 안에 기능별 패널 5개씩 추가
+4. 쿼리 수정: `rate()` → `increase()`, `[5m]` → `[$__range]`
+5. 단위 변경: `reqps` → `short`
+6. 테스트: Grafana에서 섹션 접기/펼치기 동작 확인, 각 패널 쿼리 정상 동작 확인

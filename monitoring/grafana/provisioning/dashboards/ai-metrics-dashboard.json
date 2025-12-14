@@ -1,7 +1,7 @@
 {
   "uid": "ai-metrics",
   "title": "AI 서비스 메트릭",
-  "tags": ["ai", "http", "db", "external", "batch"],
+  "tags": ["ai", "http", "db", "external"],
   "timezone": "browser",
   "schemaVersion": 38,
   "version": 3,
@@ -15,12 +15,12 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "targets": [
         {
-          "expr": "sum(increase(ai_requests_total{endpoint=\"menu\",status=\"ok\"}[$__range]))",
+          "expr": "floor(sum(increase(ai_requests_total{endpoint=\"menu\",status=\"ok\"}[max($__range, 1m)])) or vector(0))",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": null }
         },
         {
-          "expr": "sum(increase(ai_tokens_total{endpoint=\"menu\"}[$__range]))",
+          "expr": "floor(sum(increase(ai_tokens_total{endpoint=\"menu\"}[max($__range, 1m)])) or vector(0))",
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": null }
         }
@@ -80,12 +80,12 @@
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
       "targets": [
         {
-          "expr": "sum(increase(ai_requests_total{endpoint=\"places\",status=\"ok\"}[$__range]))",
+          "expr": "floor(sum(increase(ai_requests_total{endpoint=\"places\",status=\"ok\"}[max($__range, 1m)])) or vector(0))",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": null }
         },
         {
-          "expr": "sum(increase(ai_tokens_total{endpoint=\"places\"}[$__range]))",
+          "expr": "floor(sum(increase(ai_tokens_total{endpoint=\"places\"}[max($__range, 1m)])) or vector(0))",
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": null }
         }
@@ -145,7 +145,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
       "targets": [
         {
-          "expr": "sum(increase(ai_tokens_total{endpoint=\"preference\"}[$__range]))",
+          "expr": "floor(sum(increase(ai_tokens_total{endpoint=\"preference\"}[max($__range, 1m)])) or vector(0))",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": null }
         }
@@ -187,7 +187,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "targets": [
         {
-          "expr": "sum(increase(ai_tokens_total{endpoint=~\"menu|places|preference\"}[$__range]))",
+          "expr": "floor(sum(increase(ai_tokens_total{endpoint=~\"menu|places|preference\"}[max($__range, 1m)])) or vector(0))",
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": null }
         }
@@ -319,21 +319,31 @@
       "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["last"] } }
     },
     {
-      "id": 5,
-      "title": "HTTP 요청 수 (route/status)",
+      "id": 100,
+      "type": "row",
+      "title": "HTTP 요청",
+      "collapsible": true,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 }
+    },
+    {
+      "id": 101,
+      "title": "인증 요청 수",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 9 },
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[5m])) by (route, status)",
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/auth.*\"}[max($__range, 1m)])) by (route) or vector(0))",
           "refId": "A",
-          "legendFormat": "{{route}} {{status}}",
+          "legendFormat": "{{route}}",
           "datasource": { "type": "prometheus", "uid": null }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
           "color": { "mode": "palette-classic" },
           "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
         }
@@ -341,13 +351,141 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 6,
-      "title": "HTTP 지연 p95 (route)",
+      "id": 102,
+      "title": "사용자 요청 수",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 9 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/user.*\"}[max($__range, 1m)])) by (route) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 103,
+      "title": "메뉴 요청 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 9 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/menu.*\"}[max($__range, 1m)])) by (route) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 104,
+      "title": "검색 요청 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 17 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/search.*\"}[max($__range, 1m)])) by (route) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 105,
+      "title": "지도 요청 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 17 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/map.*\"}[max($__range, 1m)])) by (route) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 106,
+      "title": "AI 요청 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(ai_requests_total[max($__range, 1m)])) by (endpoint) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{endpoint}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "HTTP 요청 지연율",
+      "collapsible": true,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 }
+    },
+    {
+      "id": 201,
+      "title": "인증 지연 p95",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 26 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~\"/auth.*\"}[5m])) by (le, route))",
           "refId": "A",
           "legendFormat": "{{route}}",
           "datasource": { "type": "prometheus", "uid": null }
@@ -356,6 +494,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
+          "nullValueMode": "null as zero",
           "color": { "mode": "palette-classic" },
           "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
         }
@@ -363,43 +502,22 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 7,
-      "title": "외부 API 오류/타임아웃",
+      "id": 202,
+      "title": "사용자 지연 p95",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 26 },
       "targets": [
         {
-          "expr": "sum(rate(external_api_requests_total{status_group=~\"5xx|4xx|429|timeout\"}[5m])) by (service, status_group)",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~\"/user.*\"}[5m])) by (le, route))",
           "refId": "A",
-          "legendFormat": "{{service}} {{status_group}}",
-          "datasource": { "type": "prometheus", "uid": null }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
-        }
-      },
-      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
-    },
-    {
-      "id": 8,
-      "title": "외부 API 지연 p95",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_request_duration_seconds_bucket[5m])) by (le, service))",
-          "refId": "A",
-          "legendFormat": "{{service}}",
+          "legendFormat": "{{route}}",
           "datasource": { "type": "prometheus", "uid": null }
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
+          "nullValueMode": "null as zero",
           "color": { "mode": "palette-classic" },
           "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
         }
@@ -407,74 +525,246 @@
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 9,
-      "title": "배치 성공/실패",
+      "id": 203,
+      "title": "메뉴 지연 p95",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 26 },
       "targets": [
         {
-          "expr": "sum(rate(batch_jobs_total[5m])) by (job, status)",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~\"/menu.*\"}[5m])) by (le, route))",
           "refId": "A",
-          "legendFormat": "{{job}} {{status}}",
+          "legendFormat": "{{route}}",
           "datasource": { "type": "prometheus", "uid": null }
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "runs/s", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
       },
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 10,
-      "title": "배치 지연 p95",
+      "id": 204,
+      "title": "검색 지연 p95",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 34 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(batch_job_duration_seconds_bucket[5m])) by (le, job))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~\"/search.*\"}[5m])) by (le, route))",
           "refId": "A",
-          "legendFormat": "{{job}}",
+          "legendFormat": "{{route}}",
           "datasource": { "type": "prometheus", "uid": null }
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
       },
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 11,
-      "title": "AI 요청 수",
+      "id": 205,
+      "title": "지도 지연 p95",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 34 },
       "targets": [
         {
-          "expr": "label_replace(label_replace(sum(rate(ai_requests_total[5m])) by (endpoint, status), \"endpoint\", \"메뉴추천\", \"endpoint\", \"menu\"), \"endpoint\", \"가게추천\", \"endpoint\", \"places\")",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route=~\"/map.*\"}[5m])) by (le, route))",
           "refId": "A",
-          "legendFormat": "{{endpoint}} {{status}}",
+          "legendFormat": "{{route}}",
           "datasource": { "type": "prometheus", "uid": null }
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
       },
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     },
     {
-      "id": 12,
+      "id": 206,
       "title": "AI 지연 p95",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 34 },
       "targets": [
         {
-          "expr": "label_replace(label_replace(histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, endpoint)), \"endpoint\", \"메뉴추천\", \"endpoint\", \"menu\"), \"endpoint\", \"가게추천\", \"endpoint\", \"places\")",
+          "expr": "histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, endpoint))",
           "refId": "A",
           "legendFormat": "{{endpoint}}",
           "datasource": { "type": "prometheus", "uid": null }
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never" } }
+        "defaults": {
+          "unit": "s",
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "HTTP 에러율",
+      "collapsible": true,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 }
+    },
+    {
+      "id": 301,
+      "title": "인증 에러 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 43 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/auth.*\",status=~\"4..|5..\"}[max($__range, 1m)])) by (route, status) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 302,
+      "title": "사용자 에러 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 43 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/user.*\",status=~\"4..|5..\"}[max($__range, 1m)])) by (route, status) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 303,
+      "title": "메뉴 에러 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 43 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/menu.*\",status=~\"4..|5..\"}[max($__range, 1m)])) by (route, status) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 304,
+      "title": "검색 에러 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 51 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/search.*\",status=~\"4..|5..\"}[max($__range, 1m)])) by (route, status) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 305,
+      "title": "지도 에러 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 51 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(http_requests_total{route=~\"/map.*\",status=~\"4..|5..\"}[max($__range, 1m)])) by (route, status) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{route}} {{status}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 306,
+      "title": "AI 에러 수",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 51 },
+      "targets": [
+        {
+          "expr": "floor(sum(increase(ai_requests_total{status=\"error\"}[max($__range, 1m)])) by (endpoint) or vector(0))",
+          "refId": "A",
+          "legendFormat": "{{endpoint}}",
+          "datasource": { "type": "prometheus", "uid": null }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "nullValueMode": "null as zero",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 0, "lineWidth": 2, "showPoints": "never", "nullValue": "null as zero" }
+        }
       },
       "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
     }

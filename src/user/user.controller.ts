@@ -19,6 +19,7 @@ import { DeleteUserAddressesDto } from './dto/delete-user-addresses.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { UpdateSingleAddressDto } from './dto/update-single-address.dto';
+import { UpdateUserNameDto } from './dto/update-user-name.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
 import { UserAddressResponseDto } from './dto/user-address-response.dto';
 import { UserAddress } from './entities/user-address.entity';
@@ -66,6 +67,16 @@ export class UserController {
       updateDto.selectedAddress,
     );
     return { address: updatedEntity.address };
+  }
+
+  @Patch()
+  async updateUser(
+    @Body() updateDto: UpdateUserNameDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const updated = await this.userService.updateEntityName(entity, updateDto.name);
+    return { name: updated.name };
   }
 
   @Delete('me')
