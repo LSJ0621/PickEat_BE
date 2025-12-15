@@ -31,11 +31,18 @@
 $ pnpm install
 ```
 
-## Database
+## Environment Setup
 
-- Start Postgres locally with `docker-compose up -d postgres`.
-- Copy `.env.example` to `.env` and adjust values if needed.
-- The NestJS app reads `DB_*` variables to connect to the container.
+1. Copy `.env.example` to `.env.development`:
+   ```bash
+   cp .env.example .env.development
+   ```
+
+2. Edit `.env.development` and fill in all required values (API keys, secrets, etc.)
+
+3. Start Postgres locally with `docker-compose up -d postgres`.
+
+4. The NestJS app reads environment variables from `.env.development` file.
 
 ## Compile and run the project
 
