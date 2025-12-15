@@ -30,7 +30,10 @@ export class OpenAiPlacesService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly prometheusService: PrometheusService,
   ) {
-    this.model = this.config.get<string>('OPENAI_MODEL', OPENAI_CONFIG.DEFAULT_MODEL);
+    this.model =
+      this.config.get<string>('OPENAI_PLACES_MODEL') ||
+      this.config.get<string>('OPENAI_MODEL') ||
+      OPENAI_CONFIG.DEFAULT_MODEL;
   }
 
   onModuleInit() {
