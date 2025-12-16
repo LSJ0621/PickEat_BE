@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ExternalModule } from 'src/external/external.module';
+import { AdminInitializerService } from './services/admin-initializer.service';
 import { SocialLogin } from './entities/social-login.entity';
 import { UserAddress } from './entities/user-address.entity';
 import { User } from './entities/user.entity';
@@ -23,6 +24,7 @@ import { UserService } from './user.service';
     UserPreferenceService,
     AddressSearchService,
     PreferenceUpdateAiService,
+    AdminInitializerService,
   ],
   exports: [
     UserService,

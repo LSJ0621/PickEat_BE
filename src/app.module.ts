@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { BugReportModule } from './bug-report/bug-report.module';
 import { databaseConfig } from './common/config/database.config';
 import { validate } from './common/config/env.validation';
 import { loggerConfig } from './common/config/logger.config';
@@ -31,6 +32,7 @@ import { UserModule } from './user/user.module';
     LoggerModule.forRoot(loggerConfig),
     PrometheusModule,
     ExternalModule,
+    BugReportModule,
     AuthModule,
     UserModule,
     MenuModule,
