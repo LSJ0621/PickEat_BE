@@ -4,6 +4,7 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
@@ -18,7 +19,7 @@ import {
   buildUserPrompt,
   MENU_RECOMMENDATIONS_JSON_SCHEMA,
   SYSTEM_PROMPT,
-} from '../prompts/menu-recommendation.prompts';
+} from '@/external/openai/prompts';
 
 /**
  * 공통 메뉴 추천 서비스 베이스 클래스
@@ -53,9 +54,11 @@ export abstract class BaseMenuService implements OnModuleInit {
     likes: string[],
     dislikes: string[],
     analysis?: string,
-  ): Promise<string[]> {
+  ): Promise<MenuRecommendationsResponse> {
     if (!this.openai) {
-      throw new InternalServerErrorException(
+      throw new ExternalApiException(
+        'OpenAI',
+        undefined,
         'OpenAI API key is not configured',
       );
     }
@@ -111,9 +114,14 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const parsed = JSON.parse(content) as MenuRecommendationsResponse;
       const recommendations = parsed.recommendations || [];
+      const reason = parsed.reason?.trim() ?? '';
 
       if (!recommendations.length) {
         throw new OpenAIResponseException('추천 결과가 없습니다', parsed);
+      }
+
+      if (!reason) {
+        throw new OpenAIResponseException('추천 이유가 없습니다', parsed);
       }
 
       const normalized = this.normalizeMenuNames(recommendations);
@@ -127,7 +135,7 @@ export abstract class BaseMenuService implements OnModuleInit {
         this.prometheusService.recordExternalApi(extService, '2xx', durationSeconds);
       }
 
-      return normalized;
+      return { recommendations: normalized, reason };
     } catch (error) {
       // Prometheus 실패 메트릭 기록 (요청 수만 기록)
       if (this.prometheusService) {
@@ -138,8 +146,10 @@ export abstract class BaseMenuService implements OnModuleInit {
         this.prometheusService.recordExternalApi(extService, statusGroup, durationSeconds);
       }
 
-      throw new InternalServerErrorException(
-        'Failed to fetch menu recommendations',
+      throw new ExternalApiException(
+        'OpenAI',
+        error instanceof Error ? error : undefined,
+        '메뉴 추천 생성에 실패했습니다.',
       );
     }
   }
