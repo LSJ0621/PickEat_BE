@@ -2,18 +2,18 @@ import {
   BadRequestException,
   Inject,
   Injectable,
-  InternalServerErrorException,
   Logger,
   forwardRef,
 } from '@nestjs/common';
-import { NaverSearchClient } from '../external/naver/clients/naver-search.client';
-import { MapService } from '../map/map.service';
-import { SearchRestaurantsDto } from './dto/search-restaurants.dto';
+import { runPipeline } from '@/common/pipeline/pipeline';
+import { NaverSearchClient } from '@/external/naver/clients/naver-search.client';
+import { MapService } from '@/map/map.service';
+import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
 import {
   NaverLocalSearchItem,
   RestaurantSummary,
   SearchRestaurantsResponse,
-} from './interfaces/search.interface';
+} from '@/search/interfaces/search.interface';
 
 @Injectable()
 export class SearchService {
@@ -33,37 +33,62 @@ export class SearchService {
       throw new BadRequestException('menuName must not be empty');
     }
 
-    const address = await this.mapService.reverseGeocode(
-      dto.latitude,
-      dto.longitude,
-      dto.includeRoadAddress ?? false,
+    const context: {
+      address?: string;
+      query?: string;
+      restaurants: RestaurantSummary[];
+    } = { restaurants: [] };
+
+    await runPipeline(
+      [
+        {
+          name: 'reverseGeocode',
+          run: async (ctx) => {
+            ctx.address = await this.mapService.reverseGeocode(
+              dto.latitude,
+              dto.longitude,
+              dto.includeRoadAddress ?? false,
+            );
+          },
+        },
+        {
+          name: 'naverLocalSearch',
+          run: async (ctx) => {
+            ctx.query = `${menuName} ${ctx.address}`;
+
+            this.logger.log(
+              `🔍 [네이버 검색 요청] query="${ctx.query}", lat=${dto.latitude}, lng=${dto.longitude}`,
+            );
+
+            const items = await this.naverSearchClient.searchLocal(
+              ctx.query,
+            );
+
+            if (!items.length) {
+              throw new BadRequestException('검색 결과가 없습니다.');
+            }
+
+            ctx.restaurants = items.map((item) => this.mapNaverItem(item));
+
+            this.logger.log(
+              `✅ [네이버 검색 응답] query="${ctx.query}", count=${ctx.restaurants.length}`,
+            );
+          },
+        },
+      ],
+      context,
+      {
+        onStepError: (name, error) => {
+          const message = error instanceof Error ? error.message : 'unknown error';
+          this.logger.error(
+            `❌ [네이버 검색 단계 에러] step=${name}, message=${message}`,
+            error instanceof Error ? error.stack : undefined,
+          );
+        },
+      },
     );
-    const query = address ? `${menuName} ${address}` : menuName;
 
-    this.logger.log(
-      `🔍 [네이버 검색 요청] query="${query}", lat=${dto.latitude}, lng=${dto.longitude}`,
-    );
-
-    try {
-      const items = await this.naverSearchClient.searchLocal(query);
-
-      const restaurants = items.map((item) => this.mapNaverItem(item));
-
-      this.logger.log(
-        `✅ [네이버 검색 응답] query="${query}", count=${restaurants.length}`,
-      );
-
-      return { restaurants };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'unknown error';
-      this.logger.error(
-        `❌ [네이버 검색 에러] query="${query}", error=${message}`,
-        error instanceof Error ? error.stack : undefined,
-      );
-      throw new InternalServerErrorException(
-        'Failed to fetch local restaurants from Naver',
-      );
-    }
+    return { restaurants: context.restaurants };
   }
 
   private mapNaverItem(item: NaverLocalSearchItem): RestaurantSummary {

@@ -37,7 +37,7 @@ export class MenuRecommendationService {
     const dislikes = entity.preferences?.dislikes ?? [];
     const analysis = entity.preferences?.analysis;
 
-    const recommendations =
+    const { recommendations, reason } =
       await this.openAiMenuService.generateMenuRecommendations(
         prompt,
         likes,
@@ -55,6 +55,7 @@ export class MenuRecommendationService {
       ...(isUser(entity) ? { user: entity } : { socialLogin: entity }),
       prompt,
       recommendations,
+      reason,
       recommendedAt: new Date(),
       requestAddress: defaultAddress.roadAddress, // 서버에서 조회한 기본 주소 저장 (필수)
     });
@@ -168,6 +169,7 @@ export class MenuRecommendationService {
     return {
       id: record.id,
       recommendations: record.recommendations,
+      reason: record.reason,
       recommendedAt: record.recommendedAt,
       requestAddress: record.requestAddress,
     };
@@ -177,6 +179,7 @@ export class MenuRecommendationService {
     return {
       id: item.id,
       recommendations: item.recommendations,
+      reason: item.reason,
       prompt: item.prompt,
       recommendedAt: item.recommendedAt,
       requestAddress: item.requestAddress,
