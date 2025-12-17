@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts';
 import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
 import { PrometheusService } from '../../prometheus/prometheus.service';
-import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '../prompts/menu-recommendation.prompts';
 import { BaseMenuService } from './base-menu.service';
 
 /**

@@ -3,5 +3,6 @@
  */
 export interface MenuRecommendationsResponse {
   recommendations: string[];
+  reason: string;
 }
 

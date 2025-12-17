@@ -1,11 +1,16 @@
 import {
   Injectable,
-  InternalServerErrorException,
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
+import {
+  buildPreferenceUserPrompt,
+  PREFERENCE_RESPONSE_SCHEMA,
+  PREFERENCE_SYSTEM_PROMPT,
+} from '@/external/openai/prompts';
 import { OPENAI_SETTINGS } from '../common/constants/business.constants';
 import { OpenAIResponseException } from '../common/exceptions/openai-response.exception';
 import { elapsedSeconds, mapStatusGroupFromError, parseTokens } from '../common/utils/metrics.util';
@@ -13,11 +18,6 @@ import { OPENAI_CONFIG } from '../external/openai/openai.constants';
 import { PrometheusService } from '../prometheus/prometheus.service';
 import { PreferenceAnalysisResponse } from './interfaces/preference-analysis.interface';
 import { UserPreferences } from './interfaces/user-preferences.interface';
-import {
-  buildPreferenceUserPrompt,
-  PREFERENCE_RESPONSE_SCHEMA,
-  PREFERENCE_SYSTEM_PROMPT,
-} from './prompts/preference-update.prompts';
 
 @Injectable()
 export class PreferenceUpdateAiService implements OnModuleInit {
@@ -62,7 +62,11 @@ export class PreferenceUpdateAiService implements OnModuleInit {
     },
   ): Promise<PreferenceAnalysisResponse> {
     if (!this.openai) {
-      throw new InternalServerErrorException('OpenAI client is not configured');
+      throw new ExternalApiException(
+        'OpenAI',
+        undefined,
+        'OpenAI API key가 없습니다.',
+      );
     }
 
     const system = PREFERENCE_SYSTEM_PROMPT;
@@ -152,8 +156,10 @@ export class PreferenceUpdateAiService implements OnModuleInit {
         this.prometheusService.recordExternalApi(extService, statusGroup, durationSeconds);
       }
 
-      throw new InternalServerErrorException(
-        'Failed to update preferences via LLM',
+      throw new ExternalApiException(
+        'OpenAI',
+        error instanceof Error ? error : undefined,
+        '취향 분석 생성에 실패했습니다.',
       );
     }
   }

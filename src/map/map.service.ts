@@ -1,10 +1,11 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { NaverMapClient } from '../external/naver/clients/naver-map.client';
-import { NaverReverseGeocodeResult } from '../external/naver/naver.types';
-import { SearchRestaurantsDto } from '../search/dto/search-restaurants.dto';
-import { RestaurantSummary } from '../search/interfaces/search.interface';
-import { SearchService } from '../search/search.service';
-import { MapMarker, MapRestaurantsResponse } from './interfaces/map.interface';
+import { BadRequestException, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { NaverMapClient } from '@/external/naver/clients/naver-map.client';
+import { NaverReverseGeocodeResult } from '@/external/naver/naver.types';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
+import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
+import { RestaurantSummary } from '@/search/interfaces/search.interface';
+import { SearchService } from '@/search/search.service';
+import { MapMarker, MapRestaurantsResponse } from '@/map/interfaces/map.interface';
 
 @Injectable()
 export class MapService {
@@ -29,7 +30,7 @@ export class MapService {
     latitude: number,
     longitude: number,
     includeRoadAddress: boolean = false,
-  ): Promise<string | null> {
+  ): Promise<string> {
     this.logger.log(`🔍 [역지오코딩 요청] lat=${latitude}, lng=${longitude}`);
 
     try {
@@ -41,9 +42,11 @@ export class MapService {
 
       const address = this.extractAddressFromResults(results, includeRoadAddress);
 
-      if (address) {
-        this.logger.log(`✅ [역지오코딩 응답] address="${address}"`);
+      if (!address) {
+        throw new BadRequestException('주소를 찾을 수 없습니다.');
       }
+
+      this.logger.log(`✅ [역지오코딩 응답] address="${address}"`);
 
       return address;
     } catch (error) {
@@ -52,7 +55,14 @@ export class MapService {
         `❌ [역지오코딩 에러] lat=${latitude}, lng=${longitude}, error=${message}`,
         error instanceof Error ? error.stack : undefined,
       );
-      return null;
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new ExternalApiException(
+        'Naver Map',
+        error instanceof Error ? error : undefined,
+        '역지오코딩에 실패했습니다.',
+      );
     }
   }
 

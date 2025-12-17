@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Gpt51MenuService } from '../gpt/gpt51-menu.service';
+import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 
 /**
  * OpenAI 메뉴 추천 서비스
@@ -20,7 +21,7 @@ export class OpenAiMenuService {
     likes: string[],
     dislikes: string[],
     analysis?: string,
-  ): Promise<string[]> {
+  ): Promise<MenuRecommendationsResponse> {
     return this.menuService.generateMenuRecommendations(
       prompt,
       likes,
