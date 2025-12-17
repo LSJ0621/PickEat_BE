@@ -1,14 +1,15 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AuthenticatedEntity } from '../../common/interfaces/authenticated-user.interface';
-import { GooglePlacesClient } from '../../external/google/clients/google-places.client';
-import { GoogleSearchClient } from '../../external/google/clients/google-search.client';
-import { MenuRecommendation } from '../entities/menu-recommendation.entity';
-import { PlaceRecommendation } from '../entities/place-recommendation.entity';
-import { normalizePlaceIdForStorage } from '../place-id.util';
-import { MenuRecommendationService } from './menu-recommendation.service';
-import { OpenAiPlacesService } from './openai-places.service';
+import { runPipeline } from '@/common/pipeline/pipeline';
+import { AuthenticatedEntity } from '@/common/interfaces/authenticated-user.interface';
+import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
+import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
+import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
+import { PlaceRecommendation } from '@/menu/entities/place-recommendation.entity';
+import { normalizePlaceIdForStorage } from '@/menu/place-id.util';
+import { MenuRecommendationService } from '@/menu/services/menu-recommendation.service';
+import { OpenAiPlacesService } from '@/menu/services/openai-places.service';
 
 /**
  * 가게/장소 관련 서비스
@@ -40,12 +41,15 @@ export class PlaceService {
       userRatingCount: place.userRatingCount ?? null,
       priceLevel: place.priceLevel ?? null,
       reviews:
-        place.reviews?.map((review) => ({
-          rating: review.rating ?? null,
-          originalText: review.originalText?.text ?? review.text?.text ?? null,
-          relativePublishTimeDescription:
-            review.relativePublishTimeDescription ?? null,
-        })) ?? null,
+        place.reviews
+          ?.slice(0, 3)
+          .map((review) => ({
+            rating: review.rating ?? null,
+            originalText:
+              review.originalText?.text ?? review.text?.text ?? null,
+            relativePublishTimeDescription:
+              review.relativePublishTimeDescription ?? null,
+          })) ?? null,
     }));
 
     return { places: result };
@@ -121,6 +125,7 @@ export class PlaceService {
     const base = {
       id: recommendation.id,
       prompt: recommendation.prompt,
+      reason: recommendation.reason,
       recommendedAt: recommendation.recommendedAt,
       requestAddress: recommendation.requestAddress,
     };
@@ -219,39 +224,103 @@ export class PlaceService {
     textQuery: string,
     menuName: string,
   ) {
-    this.logger.log(
-      `🔁 [가게 추천 플로우 시작] query="${textQuery}" - Google Places 검색 후 LLM 추천`,
+    const context: {
+      places: Array<{
+        id: string;
+        name: string | null;
+        rating: number | null;
+        userRatingCount: number | null;
+        priceLevel: string | null;
+        reviews:
+          | Array<{
+              rating: number | null;
+              originalText: string | null;
+              relativePublishTimeDescription: string | null;
+            }>
+          | null;
+      }>;
+      recommendations: Awaited<
+        ReturnType<typeof this.openAiPlacesService.recommendFromGooglePlaces>
+      > | null;
+    } = {
+      places: [],
+      recommendations: null,
+    };
+
+    await runPipeline(
+      [
+        {
+          name: 'googlePlacesSearch',
+          run: async (ctx) => {
+            const { places } =
+              await this.searchRestaurantsWithGooglePlaces(textQuery);
+
+            if (!places?.length) {
+              throw new BadRequestException(
+                `"${textQuery}"에 대한 검색 결과를 찾을 수 없습니다. 다른 검색어로 시도해주세요.`,
+              );
+            }
+
+            ctx.places = places;
+          },
+        },
+        {
+          name: 'openAiRecommendation',
+          run: async (ctx) => {
+            ctx.recommendations =
+              await this.openAiPlacesService.recommendFromGooglePlaces(
+                textQuery,
+                ctx.places,
+              );
+
+            if (!ctx.recommendations.recommendations?.length) {
+              throw new BadRequestException(
+                'AI 추천 결과를 생성하지 못했습니다. 검색어를 조정해 주세요.',
+              );
+            }
+          },
+        },
+        {
+          name: 'persistPlaceRecommendations',
+          run: async (ctx) => {
+            const recommendationEntities =
+              ctx.recommendations?.recommendations?.map((rec) =>
+                this.placeRecommendationRepository.create({
+                  menuRecommendation: menuRecord,
+                  placeId: normalizePlaceIdForStorage(rec.placeId),
+                  reason: rec.reason,
+                  menuName,
+                }),
+              ) ?? [];
+
+            await this.placeRecommendationRepository.save(
+              recommendationEntities,
+            );
+          },
+        },
+      ],
+      context,
+      {
+        onStepStart: (name) => {
+          this.logger.log(
+            `🔁 [가게 추천 스텝 시작] step=${name}, query="${textQuery}"`,
+          );
+        },
+        onStepSuccess: (name) => {
+          this.logger.log(
+            `✅ [가게 추천 스텝 완료] step=${name}, query="${textQuery}"`,
+          );
+        },
+        onStepError: (name, error) => {
+          const message = error instanceof Error ? error.message : 'unknown error';
+          this.logger.error(
+            `❌ [가게 추천 스텝 에러] step=${name}, query="${textQuery}", error=${message}`,
+            error instanceof Error ? error.stack : undefined,
+          );
+        },
+      },
     );
 
-    const { places } = await this.searchRestaurantsWithGooglePlaces(textQuery);
-
-    if (!places || places.length === 0) {
-      throw new BadRequestException(
-        `"${textQuery}"에 대한 검색 결과를 찾을 수 없습니다. 다른 검색어로 시도해주세요.`,
-      );
-    }
-
-    const recommendations =
-      await this.openAiPlacesService.recommendFromGooglePlaces(
-        textQuery,
-        places,
-      );
-
-    await this.placeRecommendationRepository.save(
-      recommendations.recommendations?.map((rec) =>
-        this.placeRecommendationRepository.create({
-          menuRecommendation: menuRecord,
-          placeId: normalizePlaceIdForStorage(rec.placeId),
-          reason: rec.reason,
-          menuName,
-        }),
-      ) ?? [],
-    );
-
-    this.logger.log(
-      `✅ [가게 추천 플로우 완료] query="${textQuery}", recommended=${recommendations.recommendations.length}`,
-    );
-
-    return recommendations;
+    return context.recommendations!;
   }
 }

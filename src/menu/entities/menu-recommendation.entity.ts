@@ -32,6 +32,9 @@ export class MenuRecommendation {
   @Column('text', { array: true })
   recommendations: string[];
 
+  @Column({ type: 'text', default: '' })
+  reason: string;
+
   @Column('text')
   prompt: string;
 

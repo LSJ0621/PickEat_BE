@@ -1,11 +1,16 @@
 import {
   Injectable,
-  InternalServerErrorException,
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import {
+  buildGooglePlacesUserPrompt,
+  GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
+  GOOGLE_PLACES_SYSTEM_PROMPT,
+} from '@/external/openai/prompts';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
 import { mapStatusGroupFromError, parseTokens } from '../../common/utils/metrics.util';
 import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
@@ -14,11 +19,6 @@ import {
   PlaceCandidate,
   PlaceRecommendationsResponse,
 } from '../interface/openai-places.interface';
-import {
-  GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
-  GOOGLE_PLACES_SYSTEM_PROMPT,
-  buildGooglePlacesUserPrompt,
-} from '../prompts/google-places-recommendation.prompts';
 
 @Injectable()
 export class OpenAiPlacesService implements OnModuleInit {
@@ -53,7 +53,9 @@ export class OpenAiPlacesService implements OnModuleInit {
     candidates: PlaceCandidate[],
   ): Promise<PlaceRecommendationsResponse> {
     if (!this.openai) {
-      throw new InternalServerErrorException(
+      throw new ExternalApiException(
+        'OpenAI',
+        undefined,
         'OpenAI API key is not configured',
       );
     }
@@ -154,8 +156,10 @@ export class OpenAiPlacesService implements OnModuleInit {
         this.prometheusService.recordExternalApi(extService, statusGroup, duration / 1000);
       }
 
-      throw new InternalServerErrorException(
-        'Failed to fetch place recommendations',
+      throw new ExternalApiException(
+        'OpenAI',
+        error instanceof Error ? error : undefined,
+        'OpenAI 장소 추천에 실패했습니다.',
       );
     }
   }
