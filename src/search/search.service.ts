@@ -1,13 +1,7 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-  forwardRef,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { runPipeline } from '@/common/pipeline/pipeline';
 import { NaverSearchClient } from '@/external/naver/clients/naver-search.client';
-import { MapService } from '@/map/map.service';
+import { LocationService } from '@/external/naver/services/location.service';
 import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
 import {
   NaverLocalSearchItem,
@@ -20,8 +14,7 @@ export class SearchService {
   private readonly logger = new Logger(SearchService.name);
 
   constructor(
-    @Inject(forwardRef(() => MapService))
-    private readonly mapService: MapService,
+    private readonly locationService: LocationService,
     private readonly naverSearchClient: NaverSearchClient,
   ) {}
 
@@ -44,7 +37,7 @@ export class SearchService {
         {
           name: 'reverseGeocode',
           run: async (ctx) => {
-            ctx.address = await this.mapService.reverseGeocode(
+            ctx.address = await this.locationService.reverseGeocode(
               dto.latitude,
               dto.longitude,
               dto.includeRoadAddress ?? false,
