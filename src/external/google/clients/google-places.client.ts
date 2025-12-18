@@ -19,6 +19,7 @@ import { PrometheusService } from '../../../prometheus/prometheus.service';
 export class GooglePlacesClient {
   private readonly logger = new Logger(GooglePlacesClient.name);
   private readonly apiKey: string;
+  private readonly appUrl: string;
   private readonly baseUrl = GOOGLE_PLACES_CONFIG.BASE_URL;
 
   constructor(
@@ -27,6 +28,7 @@ export class GooglePlacesClient {
     private readonly prometheusService: PrometheusService,
   ) {
     this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
+    this.appUrl = this.config.getOrThrow<string>('APP_URL');
     if (!this.apiKey) {
       this.logger.warn('GOOGLE_API_KEY가 설정되지 않았습니다.');
     }
@@ -108,7 +110,7 @@ export class GooglePlacesClient {
           params: { languageCode: GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE },
           headers: {
             ...this.buildHeaders(fieldMask),
-            'Referer': 'http://localhost:3000',
+            'Referer': this.appUrl,
           },
         }),
       );
@@ -151,7 +153,7 @@ export class GooglePlacesClient {
           },
           headers: {
             'X-Goog-Api-Key': this.apiKey,
-            'Referer': 'http://localhost:3000',
+            'Referer': this.appUrl,
           },
         }),
       );
@@ -194,7 +196,7 @@ export class GooglePlacesClient {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': this.apiKey,
       'X-Goog-FieldMask': fieldMask,
-      'Referer': 'http://localhost:3000',
+      'Referer': this.appUrl,
     };
   }
 

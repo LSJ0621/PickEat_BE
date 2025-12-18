@@ -19,6 +19,10 @@ class EnvironmentVariables {
   @IsNotEmpty()
   CORS_ORIGIN: string;
 
+  @IsString()
+  @IsNotEmpty()
+  APP_URL: string;
+
   // Database (Postgres)
   @IsString()
   @IsNotEmpty()
