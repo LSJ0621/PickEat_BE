@@ -26,6 +26,7 @@ export class GoogleSearchClient {
   private readonly logger = new Logger(GoogleSearchClient.name);
   private readonly apiKey: string;
   private readonly cseCx: string;
+  private readonly appUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
@@ -34,6 +35,7 @@ export class GoogleSearchClient {
   ) {
     this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
     this.cseCx = this.config.get<string>('GOOGLE_CSE_CX', '');
+    this.appUrl = this.config.getOrThrow<string>('APP_URL');
 
     if (!this.apiKey || !this.cseCx) {
       this.logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.');
@@ -71,7 +73,7 @@ export class GoogleSearchClient {
             hl: GOOGLE_CSE_CONFIG.DEFAULTS.LANGUAGE,
           },
           headers: {
-            'Referer': 'http://localhost:3000',
+            'Referer': this.appUrl,
           },
         }),
       );
