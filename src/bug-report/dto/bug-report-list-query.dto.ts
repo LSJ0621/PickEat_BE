@@ -17,7 +17,9 @@ export class BugReportListQueryDto {
   limit?: number = 20;
 
   @IsOptional()
-  @IsEnum(BugReportStatus, { message: '상태는 UNCONFIRMED 또는 CONFIRMED여야 합니다.' })
+  @IsEnum(BugReportStatus, {
+    message: '상태는 UNCONFIRMED 또는 CONFIRMED여야 합니다.',
+  })
   status?: BugReportStatus;
 
   @IsOptional()
@@ -26,4 +28,3 @@ export class BugReportListQueryDto {
   })
   date?: string; // 특정 날짜 필터 (YYYY-MM-DD)
 }
-

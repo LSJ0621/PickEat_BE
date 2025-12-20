@@ -5,7 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
 import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
 import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
-import { elapsedSeconds, mapStatusGroupFromError } from '../../../common/utils/metrics.util';
+import {
+  elapsedSeconds,
+  mapStatusGroupFromError,
+} from '../../../common/utils/metrics.util';
 import { PrometheusService } from '../../../prometheus/prometheus.service';
 import { GOOGLE_CSE_CONFIG } from '../google.constants';
 import { GoogleCseItem, GoogleCseResponse } from '../google.types';
@@ -38,7 +41,9 @@ export class GoogleSearchClient {
     this.appUrl = this.config.getOrThrow<string>('APP_URL');
 
     if (!this.apiKey || !this.cseCx) {
-      this.logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.');
+      this.logger.warn(
+        'GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.',
+      );
     }
   }
 
@@ -73,7 +78,7 @@ export class GoogleSearchClient {
             hl: GOOGLE_CSE_CONFIG.DEFAULTS.LANGUAGE,
           },
           headers: {
-            'Referer': this.appUrl,
+            Referer: this.appUrl,
           },
         }),
       );
@@ -97,7 +102,11 @@ export class GoogleSearchClient {
         this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
       }
       this.recordExternal(statusGroup, startedAt);
-      throw new ExternalApiException('Google CSE', error, '블로그 검색에 실패했습니다.');
+      throw new ExternalApiException(
+        'Google CSE',
+        error,
+        '블로그 검색에 실패했습니다.',
+      );
     }
   }
 
@@ -124,6 +133,10 @@ export class GoogleSearchClient {
     startedAt: number,
   ) {
     const durationSeconds = elapsedSeconds(startedAt);
-    this.prometheusService.recordExternalApi('cse', statusGroup, durationSeconds);
+    this.prometheusService.recordExternalApi(
+      'cse',
+      statusGroup,
+      durationSeconds,
+    );
   }
 }

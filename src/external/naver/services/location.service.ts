@@ -30,7 +30,10 @@ export class LocationService {
         { includeRoadAddress },
       );
 
-      const address = this.extractAddressFromResults(results, includeRoadAddress);
+      const address = this.extractAddressFromResults(
+        results,
+        includeRoadAddress,
+      );
 
       if (!address) {
         throw new BadRequestException('주소를 찾을 수 없습니다.');

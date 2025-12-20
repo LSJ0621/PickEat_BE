@@ -28,4 +28,3 @@ import { OpenAiModule } from './openai/openai.module';
   ],
 })
 export class ExternalModule {}
-

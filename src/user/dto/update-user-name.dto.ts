@@ -5,4 +5,3 @@ export class UpdateUserNameDto {
   @IsNotEmpty()
   name: string;
 }
-

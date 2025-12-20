@@ -6,4 +6,3 @@ import { S3Client } from './clients/s3.client';
   exports: [S3Client],
 })
 export class AwsModule {}
-

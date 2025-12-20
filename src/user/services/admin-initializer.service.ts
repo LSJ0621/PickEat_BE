@@ -23,7 +23,9 @@ export class AdminInitializerService implements OnModuleInit {
     const adminRole = this.configService.get<string>('ADMIN_ROLE') ?? 'ADMIN';
 
     if (!adminEmail || !adminPassword) {
-      this.logger.warn('ADMIN_EMAIL or ADMIN_PASSWORD is not set. Skipping admin seeding.');
+      this.logger.warn(
+        'ADMIN_EMAIL or ADMIN_PASSWORD is not set. Skipping admin seeding.',
+      );
       return;
     }
 
@@ -45,5 +47,3 @@ export class AdminInitializerService implements OnModuleInit {
     this.logger.log(`Admin user created: ${adminEmail}`);
   }
 }
-
-

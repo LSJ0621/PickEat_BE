@@ -157,7 +157,9 @@ export class PrometheusService {
       throw new Error('aiTokensCounter is not initialized');
     }
     if (!endpoint || typeof tokens !== 'number' || tokens < 0) {
-      throw new Error(`Invalid parameters: endpoint=${endpoint}, tokens=${tokens}`);
+      throw new Error(
+        `Invalid parameters: endpoint=${endpoint}, tokens=${tokens}`,
+      );
     }
     // tokens가 0이면 증가하지 않음 (정상적인 경우)
     if (tokens === 0) {
@@ -291,11 +293,16 @@ export class PrometheusService {
     seconds: number,
   ): void {
     try {
-      this.externalApiRequestsCounter.inc({ service, status_group: statusGroup });
-      this.externalApiDuration.observe({ service, status_group: statusGroup }, seconds);
+      this.externalApiRequestsCounter.inc({
+        service,
+        status_group: statusGroup,
+      });
+      this.externalApiDuration.observe(
+        { service, status_group: statusGroup },
+        seconds,
+      );
     } catch (error) {
       // noop
     }
   }
-
 }

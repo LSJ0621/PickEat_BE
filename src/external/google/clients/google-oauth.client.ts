@@ -42,7 +42,10 @@ export class GoogleOAuthClient {
     private readonly config: ConfigService,
   ) {
     this.clientId = this.config.get<string>('OAUTH_GOOGLE_CLIENT_ID', '');
-    this.clientSecret = this.config.get<string>('OAUTH_GOOGLE_CLIENT_SECRET', '');
+    this.clientSecret = this.config.get<string>(
+      'OAUTH_GOOGLE_CLIENT_SECRET',
+      '',
+    );
     this.redirectUri = this.config.get<string>('OAUTH_GOOGLE_REDIRECT_URI', '');
   }
 
@@ -81,7 +84,11 @@ export class GoogleOAuthClient {
       return response.data;
     } catch (error: any) {
       this.logOAuthError('토큰 발급', error);
-      throw new ExternalApiException('Google OAuth', error, 'Google 토큰 발급에 실패했습니다.');
+      throw new ExternalApiException(
+        'Google OAuth',
+        error,
+        'Google 토큰 발급에 실패했습니다.',
+      );
     }
   }
 
@@ -91,17 +98,24 @@ export class GoogleOAuthClient {
   async getUserProfile(accessToken: string): Promise<GoogleUserProfile> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get<GoogleUserProfile>(GOOGLE_OAUTH_CONFIG.USERINFO_URL, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
+        this.httpService.get<GoogleUserProfile>(
+          GOOGLE_OAUTH_CONFIG.USERINFO_URL,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           },
-        }),
+        ),
       );
 
       return response.data;
     } catch (error: any) {
       this.logOAuthError('프로필 조회', error);
-      throw new ExternalApiException('Google OAuth', error, 'Google 프로필 조회에 실패했습니다.');
+      throw new ExternalApiException(
+        'Google OAuth',
+        error,
+        'Google 프로필 조회에 실패했습니다.',
+      );
     }
   }
 
@@ -116,4 +130,3 @@ export class GoogleOAuthClient {
     }
   }
 }
-

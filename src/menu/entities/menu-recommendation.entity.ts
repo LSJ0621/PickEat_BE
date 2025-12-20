@@ -2,32 +2,27 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
 import { MenuSelection } from './menu-selection.entity';
 import { PlaceRecommendation } from './place-recommendation.entity';
 
 @Entity()
+@Index('idx_menu_recommendation_user_date', ['user', 'recommendedAt'])
 export class MenuRecommendation {
   @PrimaryGeneratedColumn()
   id: number;
 
   @ManyToOne(() => User, (user) => user.recommendations, {
     onDelete: 'CASCADE',
-    nullable: true,
+    nullable: false,
   })
-  user: User | null;
-
-  @ManyToOne(() => SocialLogin, {
-    onDelete: 'CASCADE',
-    nullable: true,
-  })
-  socialLogin: SocialLogin | null;
+  user: User;
 
   @Column('text', { array: true })
   recommendations: string[];

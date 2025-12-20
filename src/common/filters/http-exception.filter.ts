@@ -1,10 +1,10 @@
 import {
-    ArgumentsHost,
-    Catch,
-    ExceptionFilter,
-    HttpException,
-    HttpStatus,
-    Logger,
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { QueryFailedError } from 'typeorm';
@@ -83,7 +83,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
         errorResponse: {
           statusCode: status,
           error: this.getErrorName(status),
-          message: Array.isArray(message) ? message.join(', ') : String(message),
+          message: Array.isArray(message)
+            ? message.join(', ')
+            : String(message),
           timestamp,
           path,
         },

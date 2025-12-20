@@ -9,4 +9,3 @@ export class SearchRestaurantBlogsDto {
   @IsNotEmpty()
   restaurantName: string; // 가게이름만
 }
-

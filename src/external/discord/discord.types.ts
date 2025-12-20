@@ -25,4 +25,3 @@ export interface DiscordWebhookPayload {
   content?: string;
   embeds?: DiscordEmbed[];
 }
-

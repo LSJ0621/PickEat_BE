@@ -2,12 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AuthenticatedEntity } from '../common/interfaces/authenticated-user.interface';
+import { User } from '../user/entities/user.entity';
 import { PreferenceUpdateAiService } from '../user/preference-update-ai.service';
 import { UserService } from '../user/user.service';
 import {
-    MenuSelection,
-    MenuSelectionStatus,
+  MenuSelection,
+  MenuSelectionStatus,
 } from './entities/menu-selection.entity';
 import { normalizeMenuName, normalizeMenuPayload } from './menu-payload.util';
 
@@ -29,7 +29,7 @@ export class PreferencesScheduler {
     try {
       const pending = await this.menuSelectionRepository.find({
         where: { status: MenuSelectionStatus.PENDING },
-        relations: ['user', 'socialLogin'],
+        relations: ['user'],
         order: { selectedAt: 'ASC' },
         take: this.batchSize,
       });
@@ -104,14 +104,17 @@ export class PreferencesScheduler {
           continue;
         }
         try {
-          await this.applySelectionsToPreferencesAnalysis(group.entity, slotMenus);
+          await this.applySelectionsToPreferencesAnalysis(
+            group.user,
+            slotMenus,
+          );
           await this.markSelections(
             group.selections,
             MenuSelectionStatus.SUCCEEDED,
           );
         } catch (error) {
           this.logger.error(
-            `❌ [취향 분석 실패] entityId=${group.entity.id}: ${
+            `❌ [취향 분석 실패] userId=${group.user.id}: ${
               error instanceof Error ? error.message : 'unknown error'
             }`,
           );
@@ -135,7 +138,7 @@ export class PreferencesScheduler {
     try {
       const failed = await this.menuSelectionRepository.find({
         where: { status: MenuSelectionStatus.FAILED },
-        relations: ['user', 'socialLogin'],
+        relations: ['user'],
         order: { selectedAt: 'ASC' },
         take: this.batchSize,
       });
@@ -210,14 +213,17 @@ export class PreferencesScheduler {
           continue;
         }
         try {
-          await this.applySelectionsToPreferencesAnalysis(group.entity, slotMenus);
+          await this.applySelectionsToPreferencesAnalysis(
+            group.user,
+            slotMenus,
+          );
           await this.markSelections(
             group.selections,
             MenuSelectionStatus.SUCCEEDED,
           );
         } catch (error) {
           this.logger.error(
-            `❌ [취향 분석 재시도 실패] entityId=${group.entity.id}: ${
+            `❌ [취향 분석 재시도 실패] userId=${group.user.id}: ${
               error instanceof Error ? error.message : 'unknown error'
             }`,
           );
@@ -236,7 +242,7 @@ export class PreferencesScheduler {
   }
 
   private async applySelectionsToPreferencesAnalysis(
-    entity: AuthenticatedEntity,
+    user: User,
     slotMenus: {
       breakfast: string[];
       lunch: string[];
@@ -244,7 +250,7 @@ export class PreferencesScheduler {
       etc: string[];
     },
   ) {
-    const current = await this.userService.getEntityPreferences(entity);
+    const current = await this.userService.getEntityPreferences(user);
     const aiResult =
       await this.preferenceUpdateAiService.generatePreferenceAnalysis(
         current,
@@ -252,43 +258,32 @@ export class PreferencesScheduler {
       );
 
     await this.userService.updateEntityPreferencesAnalysis(
-      entity,
+      user,
       aiResult.analysis,
     );
   }
 
   private groupByOwner(selections: MenuSelection[]): {
-    entity: AuthenticatedEntity;
+    user: User;
     selections: MenuSelection[];
   }[] {
     const map = new Map<
-      string,
+      number,
       {
-        entity: AuthenticatedEntity;
+        user: User;
         selections: MenuSelection[];
       }
     >();
     selections.forEach((selection) => {
       if (selection.user) {
-        const key = `user-${selection.user.id}`;
-        if (!map.has(key)) {
-          map.set(key, {
-            entity: selection.user,
+        const userId = selection.user.id;
+        if (!map.has(userId)) {
+          map.set(userId, {
+            user: selection.user,
             selections: [],
           });
         }
-        map.get(key)!.selections.push(selection);
-        return;
-      }
-      if (selection.socialLogin) {
-        const key = `social-${selection.socialLogin.id}`;
-        if (!map.has(key)) {
-          map.set(key, {
-            entity: selection.socialLogin,
-            selections: [],
-          });
-        }
-        map.get(key)!.selections.push(selection);
+        map.get(userId)!.selections.push(selection);
       }
     });
     return Array.from(map.values());

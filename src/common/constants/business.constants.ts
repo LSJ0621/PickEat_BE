@@ -57,4 +57,3 @@ export const OPENAI_SETTINGS = {
   /** 취향 분석 max_completion_tokens */
   PREFERENCE_MAX_TOKENS: 500,
 } as const;
-

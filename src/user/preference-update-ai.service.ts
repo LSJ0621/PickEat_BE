@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
@@ -13,7 +9,11 @@ import {
 } from '@/external/openai/prompts';
 import { OPENAI_SETTINGS } from '../common/constants/business.constants';
 import { OpenAIResponseException } from '../common/exceptions/openai-response.exception';
-import { elapsedSeconds, mapStatusGroupFromError, parseTokens } from '../common/utils/metrics.util';
+import {
+  elapsedSeconds,
+  mapStatusGroupFromError,
+  parseTokens,
+} from '../common/utils/metrics.util';
 import { OPENAI_CONFIG } from '../external/openai/openai.constants';
 import { PrometheusService } from '../prometheus/prometheus.service';
 import { PreferenceAnalysisResponse } from './interfaces/preference-analysis.interface';
@@ -139,7 +139,11 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       if (this.prometheusService) {
         const durationSeconds = elapsedSeconds(startedAt);
         this.prometheusService.recordAiDuration(endpoint, durationSeconds);
-        this.prometheusService.recordExternalApi(extService, '2xx', durationSeconds);
+        this.prometheusService.recordExternalApi(
+          extService,
+          '2xx',
+          durationSeconds,
+        );
       }
       return {
         analysis: parsed.analysis.trim(),
@@ -153,7 +157,11 @@ export class PreferenceUpdateAiService implements OnModuleInit {
         const durationSeconds = elapsedSeconds(startedAt);
         this.prometheusService.recordAiDuration('preference', durationSeconds);
         const statusGroup = mapStatusGroupFromError(error);
-        this.prometheusService.recordExternalApi(extService, statusGroup, durationSeconds);
+        this.prometheusService.recordExternalApi(
+          extService,
+          statusGroup,
+          durationSeconds,
+        );
       }
 
       throw new ExternalApiException(
@@ -180,5 +188,4 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       throw new OpenAIResponseException('분석 결과가 비어있습니다', data);
     }
   }
-
 }

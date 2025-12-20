@@ -6,6 +6,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  VersionColumn,
 } from 'typeorm';
 import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
 import { MenuSelection } from '../../menu/entities/menu-selection.entity';
@@ -20,26 +21,23 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ nullable: true })
-  password: string;
+  @Column({ type: 'varchar', nullable: true })
+  password: string | null;
 
-  @Column({ nullable: true })
-  name: string;
+  @Column({ type: 'varchar', nullable: true })
+  socialId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  socialType: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  name: string | null;
 
   @Column({ default: 'USER' })
   role: string;
 
   @Column({ type: 'jsonb', nullable: true })
   preferences: UserPreferences | null;
-
-  @Column({ nullable: true })
-  address: string;
-
-  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
-  latitude: number | null;
-
-  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
-  longitude: number | null;
 
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;
@@ -55,6 +53,9 @@ export class User {
 
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
+
+  @VersionColumn()
+  version: number;
 
   @CreateDateColumn()
   createdAt: Date;

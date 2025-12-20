@@ -9,4 +9,3 @@ import { KakaoOAuthClient } from './clients/kakao-oauth.client';
   exports: [KakaoLocalClient, KakaoOAuthClient],
 })
 export class KakaoModule {}
-
