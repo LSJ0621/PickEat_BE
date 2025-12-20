@@ -1,5 +1,4 @@
 import { UserPreferences } from '../../user/interfaces/user-preferences.interface';
-import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
 
 /**
@@ -28,7 +27,6 @@ export interface AuthProfile {
 }
 
 /**
- * 인증 엔티티 타입 (User 또는 SocialLogin)
+ * 인증 엔티티 타입
  */
-export type AuthEntity = User | SocialLogin;
-
+export type AuthEntity = User;

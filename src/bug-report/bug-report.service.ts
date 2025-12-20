@@ -2,7 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthUserPayload } from '../auth/decorators/current-user.decorator';
-import { PageInfo, PaginatedResponse } from '../common/interfaces/pagination.interface';
+import {
+  PageInfo,
+  PaginatedResponse,
+} from '../common/interfaces/pagination.interface';
 import { S3Client } from '../external/aws/clients/s3.client';
 import { UserService } from '../user/user.service';
 import { BugReportListQueryDto } from './dto/bug-report-list-query.dto';
@@ -38,14 +41,14 @@ export class BugReportService {
         : null;
 
     const bugReport = this.bugReportRepository.create({
-      userId: user.id,
+      user: user,
       category: dto.category,
       title: dto.title,
       description: dto.description,
       images: imageUrls,
     });
 
-    return this.bugReportRepository.save(bugReport);
+    return await this.bugReportRepository.save(bugReport);
   }
 
   /**
@@ -134,5 +137,3 @@ export class BugReportService {
     return { start, end };
   }
 }
-
-

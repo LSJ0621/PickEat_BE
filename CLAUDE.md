@@ -188,15 +188,17 @@ Values in `src/external/**/*.constants.ts` (BASE_URL, ENDPOINTS, auth headers) a
 
 ## Database Architecture
 
-### Polymorphic Relationships
-Many entities support both `User` and `SocialLogin` associations:
-- `MenuRecommendation`, `MenuSelection`, `UserAddress` can belong to either User OR SocialLogin
-- Check for both `userId`/`user` and `socialLoginId`/`socialLogin` fields
+### User Entity (Unified Model)
+The User entity supports both email/password accounts and OAuth social login:
+- `password`: For email/password accounts (nullable)
+- `socialId` + `socialType`: For OAuth accounts (nullable)
+- The two authentication methods are mutually exclusive (only one can exist)
+- All related entities reference only the User entity
+- Optimistic locking supported (`@VersionColumn()`)
 
 ### Key Entities
-- **User**: Email/password accounts with soft deletes, JSONB preferences
-- **SocialLogin**: OAuth accounts (Kakao/Google/Naver) with optimistic locking (`@Version`)
-- **UserAddress**: Polymorphic addresses with default/search flags, soft deletes
+- **User**: Unified user model (email/password + OAuth), soft deletes, JSONB preferences, optimistic locking
+- **UserAddress**: User addresses (default/search flags, soft deletes)
 - **MenuRecommendation**: AI-generated recommendations with reasoning
 - **MenuSelection**: User's daily menu choices with status tracking (PENDING/IN_PROGRESS/SUCCEEDED/FAILED/CANCELLED)
 - **PlaceRecommendation**: Google Places results linked to menu recommendations

@@ -11,7 +11,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { AUTH_TIMING } from '../common/constants/business.constants';
-import { SocialLogin } from '../user/entities/social-login.entity';
 import { UserAddress } from '../user/entities/user-address.entity';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
@@ -21,7 +20,11 @@ import { ReRegisterDto } from './dto/re-register.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { EmailPurpose } from './dto/send-email-code.dto';
-import { AuthEntity, AuthProfile, AuthResult } from './interfaces/auth.interface';
+import {
+  AuthEntity,
+  AuthProfile,
+  AuthResult,
+} from './interfaces/auth.interface';
 import { AuthSocialService } from './services/auth-social.service';
 import { AuthTokenService } from './services/auth-token.service';
 import { EmailVerificationService } from './services/email-verification.service';
@@ -37,14 +40,14 @@ export class AuthService {
     private readonly emailVerificationService: EmailVerificationService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(SocialLogin)
-    private readonly socialLoginRepository: Repository<SocialLogin>,
   ) {}
 
   // ========== 소셜 로그인 (위임) ==========
 
   async kakaoLogin(code: string): Promise<AuthResult> {
-    return this.authSocialService.kakaoLogin(code, (entity) => this.buildAuthResult(entity));
+    return this.authSocialService.kakaoLogin(code, (entity) =>
+      this.buildAuthResult(entity),
+    );
   }
 
   async kakaoLoginWithToken(accessToken: string): Promise<AuthResult> {
@@ -54,10 +57,14 @@ export class AuthService {
   }
 
   async googleLogin(code: string): Promise<AuthResult> {
-    return this.authSocialService.googleLogin(code, (entity) => this.buildAuthResult(entity));
+    return this.authSocialService.googleLogin(code, (entity) =>
+      this.buildAuthResult(entity),
+    );
   }
 
-  async reRegisterSocial(reRegisterSocialDto: ReRegisterSocialDto): Promise<{ message: string }> {
+  async reRegisterSocial(
+    reRegisterSocialDto: ReRegisterSocialDto,
+  ): Promise<{ message: string }> {
     return this.authSocialService.reRegisterSocial(reRegisterSocialDto);
   }
 
@@ -110,13 +117,6 @@ export class AuthService {
     });
 
     if (!user) {
-      const socialLogin = await this.socialLoginRepository.findOne({
-        where: { email },
-        withDeleted: true,
-      });
-      if (socialLogin) {
-        return null;
-      }
       return null;
     }
 
@@ -139,7 +139,9 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<AuthResult> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
     if (!user) {
-      throw new UnauthorizedException('이메일 또는 비밀번호가 올바르지 않습니다.');
+      throw new UnauthorizedException(
+        '이메일 또는 비밀번호가 올바르지 않습니다.',
+      );
     }
     return this.buildAuthResult(user);
   }
@@ -150,14 +152,23 @@ export class AuthService {
 
   // ========== 비밀번호 관련 ==========
 
-  async sendResetPasswordCode(email: string): Promise<{ remainCount: number; message: string }> {
+  async sendResetPasswordCode(
+    email: string,
+  ): Promise<{ remainCount: number; message: string }> {
     await this.ensureRegularUserAccount(email);
-    return this.emailVerificationService.sendCode(email, EmailPurpose.RESET_PASSWORD);
+    return this.emailVerificationService.sendCode(
+      email,
+      EmailPurpose.RESET_PASSWORD,
+    );
   }
 
   async verifyResetPasswordCode(email: string, code: string): Promise<void> {
     await this.ensureRegularUserAccount(email);
-    await this.emailVerificationService.verifyCode(email, code, EmailPurpose.RESET_PASSWORD);
+    await this.emailVerificationService.verifyCode(
+      email,
+      code,
+      EmailPurpose.RESET_PASSWORD,
+    );
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
@@ -234,13 +245,10 @@ export class AuthService {
   // ========== 프로필 조회 ==========
 
   async getUserProfile(email: string): Promise<AuthProfile> {
-    const { user, socialLogin } = await this.userService.findUserOrSocialLoginByEmail(email);
-    const entity = user ?? socialLogin;
-    if (!entity) {
-      throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
-    }
+    const entity = await this.userService.getAuthenticatedEntity(email);
 
-    const defaultAddress = await this.userService.getEntityDefaultAddress(entity);
+    const defaultAddress =
+      await this.userService.getEntityDefaultAddress(entity);
     const addressResponse = this.buildAddressResponse(entity, defaultAddress);
 
     return {
@@ -253,9 +261,11 @@ export class AuthService {
   // ========== Auth Result 빌드 ==========
 
   async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
-    const { token, refreshToken } = await this.authTokenService.issueTokens(entity);
+    const { token, refreshToken } =
+      await this.authTokenService.issueTokens(entity);
 
-    const defaultAddress = await this.userService.getEntityDefaultAddress(entity);
+    const defaultAddress =
+      await this.userService.getEntityDefaultAddress(entity);
     const addressResponse = this.buildAddressResponse(entity, defaultAddress);
 
     return {
@@ -273,12 +283,12 @@ export class AuthService {
   private async checkEmailAvailability(
     email: string,
     throwOnConflict: boolean,
-  ): Promise<{ available: boolean; message: string; canReRegister?: boolean } | void> {
+  ): Promise<{
+    available: boolean;
+    message: string;
+    canReRegister?: boolean;
+  } | void> {
     const existingUser = await this.userRepository.findOne({
-      where: { email },
-      withDeleted: true,
-    });
-    const existingSocialLogin = await this.socialLoginRepository.findOne({
       where: { email },
       withDeleted: true,
     });
@@ -289,19 +299,12 @@ export class AuthService {
       }
       return { available: false, message: '이미 사용 중인 이메일입니다.' };
     }
-    if (existingSocialLogin && !existingSocialLogin.deletedAt) {
-      if (throwOnConflict) {
-        throw new BadRequestException('이미 등록된 이메일입니다.');
-      }
-      return { available: false, message: '이미 사용 중인 이메일입니다.' };
-    }
 
-    if (
-      (existingUser && existingUser.deletedAt) ||
-      (existingSocialLogin && existingSocialLogin.deletedAt)
-    ) {
+    if (existingUser && existingUser.deletedAt) {
       if (throwOnConflict) {
-        throw new BadRequestException('기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.');
+        throw new BadRequestException(
+          '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
+        );
       }
       return {
         available: false,
@@ -325,19 +328,17 @@ export class AuthService {
     longitude: number | null;
   } {
     return {
-      address: defaultAddress
-        ? defaultAddress.roadAddress
-        : this.nullableString(entity.address),
+      address: defaultAddress ? defaultAddress.roadAddress : null,
       latitude: defaultAddress
         ? typeof defaultAddress.latitude === 'string'
           ? parseFloat(defaultAddress.latitude)
           : defaultAddress.latitude
-        : this.nullableNumber(entity.latitude),
+        : null,
       longitude: defaultAddress
         ? typeof defaultAddress.longitude === 'string'
           ? parseFloat(defaultAddress.longitude)
           : defaultAddress.longitude
-        : this.nullableNumber(entity.longitude),
+        : null,
     };
   }
 
@@ -360,10 +361,6 @@ export class AuthService {
   private async ensureRegularUserAccount(email: string): Promise<User> {
     const user = await this.userService.findByEmail(email);
     if (!user) {
-      const socialLogin = await this.userService.findSocialLoginByEmail(email);
-      if (socialLogin) {
-        throw new BadRequestException('소셜 로그인으로 가입한 계정입니다.');
-      }
       throw new BadRequestException('등록되지 않은 이메일입니다.');
     }
 

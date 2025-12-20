@@ -3,30 +3,25 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SocialLogin } from './social-login.entity';
 import { User } from './user.entity';
 
 @Entity('user_address')
+@Index('idx_user_address_default', ['user', 'isDefault'])
+@Index('idx_user_address_search', ['user', 'isSearchAddress'])
 export class UserAddress {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // User 또는 SocialLogin 중 하나만 참조
   @ManyToOne(() => User, (user) => user.addresses, {
-    nullable: true,
+    nullable: false,
     onDelete: 'CASCADE',
   })
-  user: User | null;
-
-  @ManyToOne(() => SocialLogin, (socialLogin) => socialLogin.addresses, {
-    nullable: true,
-    onDelete: 'CASCADE',
-  })
-  socialLogin: SocialLogin | null;
+  user: User;
 
   @Column({ type: 'varchar' })
   roadAddress: string; // 도로명 주소 (카카오 API에서 받아옴)
@@ -58,4 +53,3 @@ export class UserAddress {
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null; // Soft delete
 }
-

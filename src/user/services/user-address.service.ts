@@ -1,57 +1,36 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
 import { USER_LIMITS } from '../../common/constants/business.constants';
-import {
-  AuthenticatedEntity,
-  isSocialLogin,
-  isUser,
-} from '../../common/interfaces/authenticated-user.interface';
 import { CreateUserAddressDto } from '../dto/create-user-address.dto';
 import { UpdateUserAddressDto } from '../dto/update-user-address.dto';
-import { SocialLogin } from '../entities/social-login.entity';
 import { UserAddress } from '../entities/user-address.entity';
 import { User } from '../entities/user.entity';
 import { AddressSearchResult } from '../interfaces/address-search-result.interface';
 
 @Injectable()
 export class UserAddressService {
-  private readonly logger = new Logger(UserAddressService.name);
-
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(SocialLogin)
-    private readonly socialLoginRepository: Repository<SocialLogin>,
     @InjectRepository(UserAddress)
     private readonly userAddressRepository: Repository<UserAddress>,
   ) {}
 
-  // ========== 통합 메서드 (AuthenticatedEntity 사용) ==========
-
-  async getAddresses(entity: AuthenticatedEntity): Promise<UserAddress[]> {
-    const whereCondition = isUser(entity)
-      ? { user: { id: entity.id }, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
+  async getAddresses(entity: User): Promise<UserAddress[]> {
     return this.userAddressRepository.find({
-      where: whereCondition,
+      where: { user: { id: entity.id }, deletedAt: IsNull() },
       order: { createdAt: 'DESC' },
     });
   }
 
   async createAddress(
-    entity: AuthenticatedEntity,
+    entity: User,
     dto: CreateUserAddressDto,
   ): Promise<UserAddress> {
-    const whereCondition = isUser(entity)
-      ? { user: { id: entity.id }, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, deletedAt: IsNull() };
+    const whereCondition = { user: { id: entity.id }, deletedAt: IsNull() };
 
     const activeCount = await this.userAddressRepository.count({
       where: whereCondition,
@@ -65,9 +44,9 @@ export class UserAddressService {
 
     const { selectedAddress, alias, isDefault, isSearchAddress } = dto;
     const shouldSetDefault = activeCount === 0 || isDefault === true;
-    const shouldSetSearchAddress = activeCount === 0 || isSearchAddress === true;
+    const shouldSetSearchAddress =
+      activeCount === 0 || isSearchAddress === true;
 
-    // 기본 주소 설정 시 기존 기본 주소 해제
     if (shouldSetDefault) {
       await this.userAddressRepository.update(
         { ...whereCondition, isDefault: true },
@@ -75,7 +54,6 @@ export class UserAddressService {
       );
     }
 
-    // 검색 주소 설정 시 기존 검색 주소 해제
     if (shouldSetSearchAddress) {
       await this.userAddressRepository.update(
         { ...whereCondition, isSearchAddress: true },
@@ -83,7 +61,8 @@ export class UserAddressService {
       );
     }
 
-    const addressData: Partial<UserAddress> = {
+    const address = this.userAddressRepository.create({
+      user: entity,
       roadAddress: selectedAddress.roadAddress || selectedAddress.address,
       postalCode: selectedAddress.postalCode,
       latitude: parseFloat(selectedAddress.latitude),
@@ -91,87 +70,69 @@ export class UserAddressService {
       alias: alias || null,
       isDefault: shouldSetDefault,
       isSearchAddress: shouldSetSearchAddress,
-    };
+    });
 
-    if (isUser(entity)) {
-      (addressData as any).user = entity;
-    } else {
-      (addressData as any).socialLogin = entity;
-    }
-
-    const address = this.userAddressRepository.create(addressData);
     return this.userAddressRepository.save(address);
   }
 
   async updateAddress(
-    entity: AuthenticatedEntity,
+    entity: User,
     addressId: number,
     dto: UpdateUserAddressDto,
   ): Promise<UserAddress> {
-    const whereCondition = isUser(entity)
-      ? { id: addressId, user: { id: entity.id }, deletedAt: IsNull() }
-      : { id: addressId, socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
     const address = await this.userAddressRepository.findOne({
-      where: whereCondition,
+      where: { id: addressId, user: { id: entity.id }, deletedAt: IsNull() },
     });
 
     if (!address) {
       throw new NotFoundException('주소를 찾을 수 없습니다.');
     }
 
-    const ownerWhereCondition = isUser(entity)
-      ? { user: { id: entity.id }, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, deletedAt: IsNull() };
+    const whereCondition = { user: { id: entity.id }, deletedAt: IsNull() };
 
-    // 기본 주소 설정 시 기존 기본 주소 해제
     if (dto.isDefault === true && !address.isDefault) {
       await this.userAddressRepository.update(
-        { ...ownerWhereCondition, isDefault: true },
+        { ...whereCondition, isDefault: true },
         { isDefault: false },
       );
     }
 
-    // 검색 주소 설정 시 기존 검색 주소 해제
     if (dto.isSearchAddress === true && !address.isSearchAddress) {
       await this.userAddressRepository.update(
-        { ...ownerWhereCondition, isSearchAddress: true },
+        { ...whereCondition, isSearchAddress: true },
         { isSearchAddress: false },
       );
     }
 
-    // 부분 업데이트
     if (dto.roadAddress !== undefined) address.roadAddress = dto.roadAddress;
     if (dto.latitude !== undefined) address.latitude = dto.latitude;
     if (dto.longitude !== undefined) address.longitude = dto.longitude;
     if (dto.alias !== undefined) address.alias = dto.alias;
     if (dto.isDefault !== undefined) address.isDefault = dto.isDefault;
-    if (dto.isSearchAddress !== undefined) address.isSearchAddress = dto.isSearchAddress;
+    if (dto.isSearchAddress !== undefined)
+      address.isSearchAddress = dto.isSearchAddress;
 
     return this.userAddressRepository.save(address);
   }
 
-  async deleteAddress(entity: AuthenticatedEntity, addressId: number): Promise<void> {
-    const whereCondition = isUser(entity)
-      ? { id: addressId, user: { id: entity.id }, deletedAt: IsNull() }
-      : { id: addressId, socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
+  async deleteAddress(entity: User, addressId: number): Promise<void> {
     const address = await this.userAddressRepository.findOne({
-      where: whereCondition,
+      where: { id: addressId, user: { id: entity.id }, deletedAt: IsNull() },
     });
 
     if (!address) {
       throw new NotFoundException('주소를 찾을 수 없습니다.');
     }
 
-    const ownerWhereCondition = isUser(entity)
-      ? { user: { id: entity.id }, id: Not(addressId), deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, id: Not(addressId), deletedAt: IsNull() };
+    const whereCondition = {
+      user: { id: entity.id },
+      id: Not(addressId),
+      deletedAt: IsNull(),
+    };
 
-    // 기본 주소 삭제 시 다른 주소를 기본으로 설정
     if (address.isDefault) {
       const otherAddress = await this.userAddressRepository.findOne({
-        where: ownerWhereCondition,
+        where: whereCondition,
       });
       if (otherAddress) {
         otherAddress.isDefault = true;
@@ -179,10 +140,9 @@ export class UserAddressService {
       }
     }
 
-    // 검색 주소 삭제 시 다른 주소를 검색 주소로 설정
     if (address.isSearchAddress) {
       const otherAddress = await this.userAddressRepository.findOne({
-        where: ownerWhereCondition,
+        where: whereCondition,
       });
       if (otherAddress) {
         otherAddress.isSearchAddress = true;
@@ -193,23 +153,25 @@ export class UserAddressService {
     await this.userAddressRepository.softRemove(address);
   }
 
-  async deleteAddresses(entity: AuthenticatedEntity, addressIds: number[]): Promise<void> {
+  async deleteAddresses(entity: User, addressIds: number[]): Promise<void> {
     if (!addressIds || addressIds.length === 0) {
       throw new BadRequestException('삭제할 주소 ID가 없습니다.');
     }
 
-    const whereCondition = isUser(entity)
-      ? { id: In(addressIds), user: { id: entity.id }, deletedAt: IsNull() }
-      : { id: In(addressIds), socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
     const addresses = await this.userAddressRepository.find({
-      where: whereCondition,
+      where: {
+        id: In(addressIds),
+        user: { id: entity.id },
+        deletedAt: IsNull(),
+      },
     });
 
     const foundIds = addresses.map((addr) => addr.id);
     const notFoundIds = addressIds.filter((id) => !foundIds.includes(id));
     if (notFoundIds.length > 0) {
-      throw new NotFoundException(`주소를 찾을 수 없습니다. ID: ${notFoundIds.join(', ')}`);
+      throw new NotFoundException(
+        `주소를 찾을 수 없습니다. ID: ${notFoundIds.join(', ')}`,
+      );
     }
 
     const defaultAddresses = addresses.filter((addr) => addr.isDefault);
@@ -219,20 +181,21 @@ export class UserAddressService {
       );
     }
 
-    const deletedSearchAddresses = addresses.filter((addr) => addr.isSearchAddress);
+    const deletedSearchAddresses = addresses.filter(
+      (addr) => addr.isSearchAddress,
+    );
 
     for (const address of addresses) {
       await this.userAddressRepository.softRemove(address);
     }
 
-    // 검색 주소가 삭제된 경우 다른 주소를 검색 주소로 설정
     if (deletedSearchAddresses.length > 0) {
-      const remainingWhereCondition = isUser(entity)
-        ? { user: { id: entity.id }, id: Not(In(addressIds)), deletedAt: IsNull() }
-        : { socialLogin: { id: entity.id }, id: Not(In(addressIds)), deletedAt: IsNull() };
-
       const remainingAddress = await this.userAddressRepository.findOne({
-        where: remainingWhereCondition,
+        where: {
+          user: { id: entity.id },
+          id: Not(In(addressIds)),
+          deletedAt: IsNull(),
+        },
       });
       if (remainingAddress) {
         remainingAddress.isSearchAddress = true;
@@ -241,72 +204,68 @@ export class UserAddressService {
     }
   }
 
-  async setDefaultAddress(entity: AuthenticatedEntity, addressId: number): Promise<UserAddress> {
-    const whereCondition = isUser(entity)
-      ? { id: addressId, user: { id: entity.id }, deletedAt: IsNull() }
-      : { id: addressId, socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
+  async setDefaultAddress(
+    entity: User,
+    addressId: number,
+  ): Promise<UserAddress> {
     const address = await this.userAddressRepository.findOne({
-      where: whereCondition,
+      where: { id: addressId, user: { id: entity.id }, deletedAt: IsNull() },
     });
 
     if (!address) {
       throw new NotFoundException('주소를 찾을 수 없습니다.');
     }
 
-    const ownerWhereCondition = isUser(entity)
-      ? { user: { id: entity.id }, isDefault: true, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, isDefault: true, deletedAt: IsNull() };
-
-    await this.userAddressRepository.update(ownerWhereCondition, { isDefault: false });
+    await this.userAddressRepository.update(
+      { user: { id: entity.id }, isDefault: true, deletedAt: IsNull() },
+      { isDefault: false },
+    );
 
     address.isDefault = true;
     return this.userAddressRepository.save(address);
   }
 
-  async setSearchAddress(entity: AuthenticatedEntity, addressId: number): Promise<UserAddress> {
-    const whereCondition = isUser(entity)
-      ? { id: addressId, user: { id: entity.id }, deletedAt: IsNull() }
-      : { id: addressId, socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
+  async setSearchAddress(
+    entity: User,
+    addressId: number,
+  ): Promise<UserAddress> {
     const address = await this.userAddressRepository.findOne({
-      where: whereCondition,
+      where: { id: addressId, user: { id: entity.id }, deletedAt: IsNull() },
     });
 
     if (!address) {
       throw new NotFoundException('주소를 찾을 수 없습니다.');
     }
 
-    const ownerWhereCondition = isUser(entity)
-      ? { user: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() };
-
-    await this.userAddressRepository.update(ownerWhereCondition, { isSearchAddress: false });
+    await this.userAddressRepository.update(
+      { user: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() },
+      { isSearchAddress: false },
+    );
 
     address.isSearchAddress = true;
     return this.userAddressRepository.save(address);
   }
 
-  async getDefaultAddress(entity: AuthenticatedEntity): Promise<UserAddress | null> {
-    const whereCondition = isUser(entity)
-      ? { user: { id: entity.id }, isDefault: true, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, isDefault: true, deletedAt: IsNull() };
-
-    return this.userAddressRepository.findOne({ where: whereCondition });
+  async getDefaultAddress(entity: User): Promise<UserAddress | null> {
+    return this.userAddressRepository.findOne({
+      where: { user: { id: entity.id }, isDefault: true, deletedAt: IsNull() },
+    });
   }
 
-  async getSearchAddress(entity: AuthenticatedEntity): Promise<UserAddress | null> {
-    const whereCondition = isUser(entity)
-      ? { user: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() };
-
-    return this.userAddressRepository.findOne({ where: whereCondition });
+  async getSearchAddress(entity: User): Promise<UserAddress | null> {
+    return this.userAddressRepository.findOne({
+      where: {
+        user: { id: entity.id },
+        isSearchAddress: true,
+        deletedAt: IsNull(),
+      },
+    });
   }
 
   async updateSingleAddress(
-    entity: AuthenticatedEntity,
+    entity: User,
     selectedAddress: AddressSearchResult,
-  ): Promise<AuthenticatedEntity> {
+  ): Promise<UserAddress> {
     const address = selectedAddress.roadAddress || selectedAddress.address;
     const latitude =
       selectedAddress.latitude && selectedAddress.latitude !== ''
@@ -317,29 +276,17 @@ export class UserAddressService {
         ? parseFloat(selectedAddress.longitude)
         : null;
 
-    if (isUser(entity)) {
-      entity.address = address;
-      entity.latitude = latitude;
-      entity.longitude = longitude;
-      await this.userRepository.save(entity);
-    } else if (isSocialLogin(entity)) {
-      entity.address = address;
-      entity.latitude = latitude;
-      entity.longitude = longitude;
-      await this.socialLoginRepository.save(entity);
+    if (!latitude || !longitude) {
+      throw new BadRequestException('위도와 경도 정보가 필요합니다.');
     }
 
-    // UserAddress 리스트가 비어있으면 자동으로 추가
-    const whereCondition = isUser(entity)
-      ? { user: { id: entity.id }, deletedAt: IsNull() }
-      : { socialLogin: { id: entity.id }, deletedAt: IsNull() };
-
     const existingAddresses = await this.userAddressRepository.count({
-      where: whereCondition,
+      where: { user: { id: entity.id }, deletedAt: IsNull() },
     });
 
-    if (existingAddresses === 0 && address && latitude && longitude) {
-      const addressData: Partial<UserAddress> = {
+    if (existingAddresses === 0) {
+      const newAddress = this.userAddressRepository.create({
+        user: entity,
         roadAddress: address,
         postalCode: selectedAddress.postalCode,
         latitude,
@@ -347,20 +294,33 @@ export class UserAddressService {
         isDefault: true,
         isSearchAddress: true,
         alias: null,
-      };
-
-      if (isUser(entity)) {
-        (addressData as any).user = entity;
-      } else {
-        (addressData as any).socialLogin = entity;
-      }
-
-      const newAddress = this.userAddressRepository.create(addressData);
-      await this.userAddressRepository.save(newAddress);
+      });
+      return this.userAddressRepository.save(newAddress);
     }
 
-    return entity;
+    const searchAddress = await this.getSearchAddress(entity);
+    if (searchAddress) {
+      searchAddress.roadAddress = address;
+      searchAddress.postalCode = selectedAddress.postalCode || null;
+      searchAddress.latitude = latitude;
+      searchAddress.longitude = longitude;
+      return this.userAddressRepository.save(searchAddress);
+    }
+
+    const firstAddress = await this.userAddressRepository.findOne({
+      where: { user: { id: entity.id }, deletedAt: IsNull() },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (firstAddress) {
+      firstAddress.roadAddress = address;
+      firstAddress.postalCode = selectedAddress.postalCode || null;
+      firstAddress.latitude = latitude;
+      firstAddress.longitude = longitude;
+      firstAddress.isSearchAddress = true;
+      return this.userAddressRepository.save(firstAddress);
+    }
+
+    throw new BadRequestException('주소 업데이트에 실패했습니다.');
   }
-
 }
-

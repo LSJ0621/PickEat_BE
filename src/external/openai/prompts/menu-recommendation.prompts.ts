@@ -25,9 +25,6 @@ export const SYSTEM_PROMPT = [
   '- "해당 요청은 메뉴 추천을 도와드리기 어려운 내용입니다. 음식 선택과 관련된 방식으로 다시 요청해 주세요."',
 ].join('\n');
 
-
-
-
 export function buildUserPrompt(
   userPrompt: string,
   likes: string[],
@@ -47,7 +44,6 @@ export function buildUserPrompt(
   ].join('\n');
 }
 
-
 export const MENU_RECOMMENDATIONS_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -64,7 +60,7 @@ export const MENU_RECOMMENDATIONS_JSON_SCHEMA = {
     reason: {
       type: 'string',
       minLength: 1,
-      maxLength:500,
+      maxLength: 500,
       description: '추천 전체 이유 한 문단(존댓말, 500자 내외)',
     },
   },

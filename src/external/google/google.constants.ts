@@ -43,4 +43,3 @@ export const GOOGLE_OAUTH_CONFIG = {
   TOKEN_URL: 'https://oauth2.googleapis.com/token',
   USERINFO_URL: 'https://openidconnect.googleapis.com/v1/userinfo',
 } as const;
-

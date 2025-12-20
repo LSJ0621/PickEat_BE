@@ -9,6 +9,7 @@
  */
 export function normalizePlaceIdForStorage(placeId: string): string {
   if (!placeId) return placeId;
-  return placeId.startsWith('places/') ? placeId.replace(/^places\//, '') : placeId;
+  return placeId.startsWith('places/')
+    ? placeId.replace(/^places\//, '')
+    : placeId;
 }
-

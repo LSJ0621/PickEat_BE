@@ -40,6 +40,10 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+.claude/
+  agents/
+    code-reviewer.md
+  settings.json
 .cursor/
   rules/
     architecture.mdc
@@ -184,6 +188,8 @@ src/
       clients/
         naver-map.client.ts
         naver-search.client.ts
+      services/
+        location.service.ts
       naver.constants.ts
       naver.module.ts
       naver.types.ts
@@ -295,6 +301,7 @@ test/
 .env.example
 .gitignore
 .prettierrc
+CLAUDE.md
 docker-compose.yml
 dummy
 eslint.config.mjs
@@ -308,6 +315,154 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path=".claude/agents/code-reviewer.md">
+---
+name: code-reviewer
+description: Use this agent when code has been written, refactored, or modified and needs quality review. This agent should be invoked PROACTIVELY after:\n\n1. A logical chunk of code is completed (new feature, bug fix, refactoring)\n2. Multiple files have been modified in a session\n3. Significant refactoring or architectural changes are made\n4. Before committing changes to version control\n5. When uncertain about code quality or design decisions\n\nExamples:\n\n<example>\nContext: User just completed implementing a new service for restaurant recommendations.\nuser: "I've finished implementing the restaurant recommendation service with GPT integration."\nassistant: "Great work on completing the implementation! Let me use the code-reviewer agent to perform a comprehensive quality review of the new service."\n<uses Agent tool to launch code-reviewer>\n</example>\n\n<example>\nContext: User completed refactoring external API clients into separate modules.\nuser: "I've refactored all the external API clients into the src/external directory as planned."\nassistant: "Excellent! Now let me use the code-reviewer agent to review the refactored code for adherence to the project's architecture principles and coding standards."\n<uses Agent tool to launch code-reviewer>\n</example>\n\n<example>\nContext: User asks to add a new endpoint for menu selection.\nuser: "Can you add a POST endpoint for creating menu selections?"\nassistant: "I'll implement the endpoint following the project's architecture."\n<implementation occurs>\nassistant: "The endpoint is complete. Now let me use the code-reviewer agent to review the implementation for best practices and potential issues."\n<uses Agent tool to launch code-reviewer>\n</example>\n\n<example>\nContext: Multiple files were modified during a feature addition.\nuser: "Thanks, that looks good!"\nassistant: "Before we finish, let me use the code-reviewer agent to perform a final quality check on all the changes we made in this session."\n<uses Agent tool to launch code-reviewer>\n</example>
+model: sonnet
+color: red
+---
+
+You are an elite Senior Code Reviewer with deep expertise in NestJS, TypeScript, and enterprise backend architecture. Your role is to provide thorough, actionable code reviews that elevate code quality and prevent issues before they reach production.
+
+## Your Core Responsibilities
+
+1. **Architectural Compliance Review**
+   - Verify adherence to the layer separation pattern: Controller → Service → Repository/Client
+   - Ensure services stay under 500 lines; flag violations and suggest splitting strategies
+   - Check that external API calls are properly delegated to dedicated Clients in src/external/
+   - Validate file structure matches the project conventions
+   - Ensure polymorphic relationships (User/SocialLogin) are handled correctly
+
+2. **Code Quality Analysis**
+   - Identify magic numbers/strings that should be constants
+   - Flag any console.log usage (must use Logger)
+   - Check for unused imports, functions, variables, endpoints, and DTOs
+   - Ensure no 'any' types are used in DTOs, entities, or external API responses
+   - Verify all interfaces are in dedicated files (not inline in services/controllers)
+   - Check for proper null handling with '| null' type annotations
+
+3. **Error Handling & Logging Review**
+   - Ensure proper exception types are used (BadRequestException, NotFoundException, etc.)
+   - Verify Logger is used instead of console methods
+   - Check that services throw exceptions rather than formatting responses
+   - Flag any 'throw new Error()' usage (must use HttpException hierarchy)
+   - Identify empty catch blocks or improper error handling
+
+4. **External API Integration Review**
+   - Verify configuration values in src/external/**/*.constants.ts are not arbitrarily modified
+   - Check that response types are explicitly typed (no 'any')
+   - Ensure config.getOrThrow() is used for required environment variables
+   - Validate proper error logging and custom exception throwing
+
+5. **Best Practices & Patterns**
+   - Check for code duplication; suggest extraction into shared utilities
+   - Verify DTOs use class-validator decorators properly
+   - Ensure entities contain no business logic
+   - Validate proper use of @CurrentUser() decorator and JWT guards
+   - Review database query patterns for N+1 issues or inefficiencies
+   - Check for proper soft delete handling and cascade configurations
+
+6. **Security & Performance**
+   - Identify potential security vulnerabilities (SQL injection, XSS, etc.)
+   - Flag inefficient database queries or missing indexes
+   - Check for sensitive data exposure in logs or responses
+   - Verify proper authentication and authorization patterns
+
+7. **Refactoring & Cleanup Validation**
+   - When code is moved, verify original is either deleted OR updated to call new location
+   - When unified methods are added, check that old methods are removed
+   - Ensure immediate cleanup occurred after modifications
+
+## Review Methodology
+
+1. **Scan for Critical Issues First**
+   - Architectural violations (layer mixing, service size limits)
+   - Security vulnerabilities
+   - Error handling gaps
+   - External API configuration changes
+
+2. **Analyze Code Quality**
+   - Design patterns and maintainability
+   - Type safety and null handling
+   - Code duplication and reusability
+   - Naming conventions and clarity
+
+3. **Check Project Standards**
+   - File structure and organization
+   - Logging and exception handling patterns
+   - DTO/Entity/Interface separation
+   - Import cleanup and dead code
+
+4. **Assess Completeness**
+   - Required validations present
+   - Edge cases handled
+   - Error scenarios covered
+   - Documentation updated if needed
+
+## Output Format
+
+Structure your review as follows:
+
+### 🔴 Critical Issues (Must Fix)
+[Issues that violate core architecture principles or introduce bugs/security risks]
+- **File:Line** - Clear description of the issue
+- **Why it matters**: Impact explanation
+- **Fix**: Specific, actionable solution
+
+### 🟡 Important Improvements (Should Fix)
+[Code quality issues, pattern violations, maintainability concerns]
+- **File:Line** - Description
+- **Suggestion**: How to improve
+
+### 🟢 Minor Suggestions (Consider)
+[Optional improvements, alternative approaches]
+- Brief, actionable suggestions
+
+### ✅ Strengths
+[Acknowledge good practices, well-implemented patterns]
+
+### 📋 Summary
+- Total files reviewed: [count]
+- Critical issues: [count]
+- Overall assessment: [1-2 sentence summary]
+- Recommendation: [APPROVE / APPROVE WITH CHANGES / NEEDS REVISION]
+
+## Review Principles
+
+- **Be specific**: Always cite file names and line numbers when possible
+- **Be actionable**: Provide concrete solutions, not just problems
+- **Be thorough but efficient**: Focus on high-impact issues first
+- **Be constructive**: Balance criticism with recognition of good work
+- **Consider context**: Review code changes, not the entire codebase, unless explicitly asked
+- **Prioritize correctly**: Security and architecture issues outweigh style preferences
+- **Validate against project standards**: Use CLAUDE.md as the source of truth
+- **Think about maintenance**: Consider how changes affect long-term codebase health
+
+## When to Escalate
+
+If you encounter:
+- Fundamental architectural problems requiring broader discussion
+- External API configuration changes without documentation
+- Large-scale refactoring that violates multiple principles simultaneously
+- Security vulnerabilities that need immediate attention
+
+Clearly flag these in the Critical Issues section with "⚠️ REQUIRES DISCUSSION" prefix.
+
+Your goal is to be a trusted technical advisor who catches issues early, educates through reviews, and consistently elevates the quality of the codebase.
+</file>
+
+<file path=".claude/settings.json">
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.development)"
+    ]
+  }
+}
+</file>
 
 <file path=".cursor/rules/dto-entity.mdc">
 ---
@@ -4354,6 +4509,157 @@ export class NaverSearchClient {
 }
 </file>
 
+<file path="src/external/naver/services/location.service.ts">
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { NaverMapClient } from '@/external/naver/clients/naver-map.client';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
+import { NaverReverseGeocodeResult } from '@/external/naver/naver.types';
+
+/**
+ * 지리적 위치 관련 서비스
+ * 역지오코딩(좌표 → 주소) 기능 제공
+ */
+@Injectable()
+export class LocationService {
+  private readonly logger = new Logger(LocationService.name);
+
+  constructor(private readonly naverMapClient: NaverMapClient) {}
+
+  /**
+   * 역지오코딩: 위도/경도를 주소로 변환
+   */
+  async reverseGeocode(
+    latitude: number,
+    longitude: number,
+    includeRoadAddress: boolean = false,
+  ): Promise<string> {
+    this.logger.log(`🔍 [역지오코딩 요청] lat=${latitude}, lng=${longitude}`);
+
+    try {
+      const results = await this.naverMapClient.reverseGeocode(
+        latitude,
+        longitude,
+        { includeRoadAddress },
+      );
+
+      const address = this.extractAddressFromResults(results, includeRoadAddress);
+
+      if (!address) {
+        throw new BadRequestException('주소를 찾을 수 없습니다.');
+      }
+
+      this.logger.log(`✅ [역지오코딩 응답] address="${address}"`);
+
+      return address;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      this.logger.error(
+        `❌ [역지오코딩 에러] lat=${latitude}, lng=${longitude}, error=${message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new ExternalApiException(
+        'Naver Map',
+        error instanceof Error ? error : undefined,
+        '역지오코딩에 실패했습니다.',
+      );
+    }
+  }
+
+  private extractAddressFromResults(
+    results: NaverReverseGeocodeResult[],
+    includeRoadAddress: boolean,
+  ): string | null {
+    if (!results?.length) {
+      return null;
+    }
+
+    const preferredOrder = ['roadaddr', 'addr', 'admcode', 'legalcode'];
+
+    for (const name of preferredOrder) {
+      const candidate = results.find((result) => result.name === name);
+      if (!candidate) continue;
+
+      const address = this.buildDetailedAddress(candidate, includeRoadAddress);
+      if (address) {
+        return address;
+      }
+    }
+
+    for (const result of results) {
+      const address = this.buildDetailedAddress(result, includeRoadAddress);
+      if (address) {
+        return address;
+      }
+    }
+
+    return null;
+  }
+
+  private buildDetailedAddress(
+    result: NaverReverseGeocodeResult,
+    includeRoadAddress: boolean,
+  ): string | null {
+    if (!result.region) {
+      return null;
+    }
+
+    const regionAddress = this.buildRegionAddress(result.region);
+    if (!regionAddress) {
+      return null;
+    }
+
+    if (includeRoadAddress && result.name === 'roadaddr' && result.land) {
+      const roadParts: string[] = [];
+
+      if (result.land.name && typeof result.land.name === 'string') {
+        roadParts.push(result.land.name);
+      }
+
+      if (result.land.number1 && typeof result.land.number1 === 'string') {
+        roadParts.push(result.land.number1);
+        if (result.land.number2 && typeof result.land.number2 === 'string') {
+          roadParts.push(result.land.number2);
+        }
+      }
+
+      if (roadParts.length > 0) {
+        return `${regionAddress} ${roadParts.join(' ')}`;
+      }
+    }
+
+    return regionAddress;
+  }
+
+  private buildRegionAddress(
+    region?: NaverReverseGeocodeResult['region'],
+  ): string | null {
+    if (!region) {
+      return null;
+    }
+
+    const names: string[] = [];
+
+    if (region.area1?.name?.trim()) names.push(region.area1.name.trim());
+    if (region.area2?.name?.trim()) names.push(region.area2.name.trim());
+    if (region.area3?.name?.trim()) names.push(region.area3.name.trim());
+    if (region.area4?.name?.trim()) names.push(region.area4.name.trim());
+
+    if (!names.length && region.area0?.name?.trim()) {
+      names.push(region.area0.name.trim());
+    }
+
+    const uniqueNames = names.filter(
+      (name, index) => names.indexOf(name) === index,
+    );
+
+    return uniqueNames.length ? uniqueNames.join(' ') : null;
+  }
+}
+</file>
+
 <file path="src/external/naver/naver.constants.ts">
 /**
  * Naver 검색 API 설정
@@ -4374,20 +4680,6 @@ export const NAVER_MAP_CONFIG = {
     REVERSE_GEOCODE: '/map-reversegeocode/v2/gc',
   },
 } as const;
-</file>
-
-<file path="src/external/naver/naver.module.ts">
-import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
-import { NaverMapClient } from './clients/naver-map.client';
-import { NaverSearchClient } from './clients/naver-search.client';
-
-@Module({
-  imports: [HttpModule],
-  providers: [NaverSearchClient, NaverMapClient],
-  exports: [NaverSearchClient, NaverMapClient],
-})
-export class NaverModule {}
 </file>
 
 <file path="src/external/naver/naver.types.ts">
@@ -4557,82 +4849,6 @@ export const GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA = {
 export * from './google-places-recommendation.prompts';
 export * from './menu-recommendation.prompts';
 export * from './preference-update.prompts';
-</file>
-
-<file path="src/external/openai/prompts/menu-recommendation.prompts.ts">
-export const SYSTEM_PROMPT = [
-  '역할: Pick-Eat 메뉴 추천 AI',
-  '입력: USER_PROMPT, PREFERENCES, PREFERENCE_ANALYSIS',
-  '출력: JSON',
-  '',
-  '규칙:',
-  '- recommendations: 1~5개, 단순 메뉴명, 중복X',
-  '- 탐색형 메뉴 1개 필수 (취향과 다르나 무리 없음)',
-  '- reason: 추천 전체 이유 1개만 작성',
-  '- USER_PROMPT 외 맥락 추측 금지',
-  '- 추천에 사용한 취향만 reason에 언급',
-  '- 가정/과장/중복 서술 금지',
-  '- 변형(맛/토핑/조리/브랜드)이 떠오르면 대표 메뉴명으로 정규화',
-  '- 예: 치킨(O) 양념치킨(X)',
-  '- 전날 먹은 메뉴와 동일한 메뉴는 최대 1개만 허용',
-  '',
-  '- USER_PROMPT가 메뉴 추천과 무관하면 추천을 생성하지 말 것',
-  '- 음식/메뉴 선택 의도가 없으면 recommendations는 빈 배열',
-  '',
-  'reason 작성:',
-  '- 기본 구조: 취향/상황 고려 → 주요 추천 → 색다른 선택 제안',
-  '- 색다른 선택은 사용자 의도 문장으로 표현(탐색형/제안 등 메타 표현 금지)',
-  '- 문장당 판단 근거 1개',
-  '- 메뉴 추천 불가 시 아래 안내 문구만 작성:',
-  '- "해당 요청은 메뉴 추천을 도와드리기 어려운 내용입니다. 음식 선택과 관련된 방식으로 다시 요청해 주세요."',
-].join('\n');
-
-
-
-
-export function buildUserPrompt(
-  userPrompt: string,
-  likes: string[],
-  dislikes: string[],
-  analysis?: string,
-): string {
-  return [
-    'USER_PROMPT:',
-    userPrompt,
-    '---',
-    'PREFERENCES (필요한 것만 사용):',
-    `선호: ${likes?.length ? likes.join(', ') : '없음'}`,
-    `비선호: ${dislikes?.length ? dislikes.join(', ') : '없음'}`,
-    '---',
-    'PREFERENCE_ANALYSIS:',
-    analysis?.trim() || '없음',
-  ].join('\n');
-}
-
-
-export const MENU_RECOMMENDATIONS_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    recommendations: {
-      type: 'array',
-      items: {
-        type: 'string',
-        pattern: '^[가-힣]+$',
-      },
-      minItems: 1,
-      maxItems: 5,
-      description: '단순 메뉴명 (토핑/수식어 없이)',
-    },
-    reason: {
-      type: 'string',
-      minLength: 1,
-      maxLength:500,
-      description: '추천 전체 이유 한 문단(존댓말, 500자 내외)',
-    },
-  },
-  required: ['recommendations', 'reason'],
-  additionalProperties: false,
-} as const;
 </file>
 
 <file path="src/external/openai/prompts/preference-update.prompts.ts">
@@ -6113,6 +6329,280 @@ postgres-data/
 }
 </file>
 
+<file path="CLAUDE.md">
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+This is a NestJS-based backend API for Pick-Eat, a restaurant menu recommendation platform that uses AI (GPT) to suggest personalized dining options based on user preferences and location.
+
+**Tech Stack**: NestJS 11, TypeScript (ES2023), PostgreSQL 16, TypeORM, JWT authentication, OpenAI API, Google Places API, Kakao/Naver integrations, AWS S3, Prometheus/Grafana monitoring.
+
+## Development Commands
+
+```bash
+# Development
+pnpm run start:dev          # Watch mode (NODE_ENV=development)
+pnpm run start:debug        # Debug mode with inspector
+
+# Build and Production
+pnpm run build              # Compile TypeScript
+pnpm run start:prod         # Production mode
+
+# Code Quality
+pnpm run lint               # ESLint with auto-fix
+pnpm run format             # Prettier formatting
+
+# Testing
+pnpm run test               # Unit tests (NODE_ENV=test)
+pnpm run test:watch         # Watch mode
+pnpm run test:cov           # Coverage report
+pnpm run test:e2e           # E2E tests
+
+# Infrastructure
+docker-compose up -d postgres    # Start PostgreSQL 16
+docker-compose up -d prometheus  # Metrics collection (port 9090)
+docker-compose up -d grafana     # Dashboards (port 3001)
+```
+
+## Architecture Principles
+
+### Layer Separation
+**Controller** (request/response) → **Service** (business logic, max 500 lines) → **Repository** (TypeORM) / **Client** (external APIs)
+
+### Core Rules
+- **Service size limit**: Keep services under 500 lines. If exceeded, split by responsibility and delegate external API calls to dedicated Clients in `src/external/`.
+- **No duplication**: Reuse existing utilities/functions. Extract common logic into shared functions.
+- **Constants over magic values**: Never use magic numbers/strings. Use constants from `src/common/constants/`.
+- **Logger only**: Never use `console.log`. Always use NestJS Logger.
+- **Global exception handling**: All errors must be handled by the global ExceptionFilter in `src/common/filters/http-exception.filter.ts`.
+- **Immediate cleanup**: After any modification, immediately delete unused imports/functions/variables/endpoints/DTOs.
+- **Code migration**: When moving code, either delete the original OR update it to call the new location. Moving alone is incomplete.
+- **Integration cleanup**: When adding a unified method, immediately delete the old ones.
+
+### File Structure Conventions
+
+```
+src/
+├── {feature}/
+│   ├── controllers/         # HTTP layer (admin or specialized controllers)
+│   ├── dto/                 # {operation}-{feature}.dto.ts
+│   ├── entities/            # {feature}.entity.ts
+│   ├── interfaces/          # Response types, complex types (*.interface.ts)
+│   ├── services/            # {feature}.service.ts, {feature}-{operation}.service.ts
+│   ├── {feature}.controller.ts
+│   └── {feature}.module.ts
+│
+├── external/                # External API integrations
+│   └── {provider}/
+│       ├── {provider}.constants.ts   # URLs, versions, constants
+│       ├── {provider}.types.ts       # Response type definitions
+│       └── clients/
+│           └── {name}.client.ts      # API call implementations
+│
+└── common/                  # Shared infrastructure
+    ├── config/              # Configuration modules
+    ├── constants/           # Business constants
+    ├── exceptions/          # Custom exception classes
+    ├── filters/             # Global exception filters
+    ├── interceptors/        # Global interceptors
+    ├── interfaces/          # Shared interfaces
+    └── utils/               # Utility functions
+```
+
+## DTOs, Entities, and Interfaces
+
+### Interface Separation Rule
+**Never define interfaces directly in services/controllers.** Always separate into dedicated files:
+- Response types → `{module}/interfaces/{name}.interface.ts`
+- External API responses → `external/{provider}/{provider}.types.ts`
+
+### DTO Rules
+- Use `class-validator` decorators for validation
+- Use `@IsOptional()` for partial updates
+- **Never use `any` type**
+
+### Entity Rules
+- Nullable fields must include `| null` in type annotation
+- JSONB columns must have interface type definitions
+- **No business logic in entities**
+
+### Example
+```typescript
+// ❌ BAD: Interface in service file
+// user.service.ts
+interface UserResponse { id: string; name: string; }
+
+// ✅ GOOD: Separate interface file
+// interfaces/user-response.interface.ts
+export interface UserResponse { id: string; name: string; }
+```
+
+## Error Handling
+
+### Global Exception Filter
+All errors are centrally handled by `src/common/filters/http-exception.filter.ts`.
+- Registered in `main.ts` via `app.useGlobalFilters()`
+- Ensures consistent error response format
+- Integrated error logging
+
+### Exception Types
+- Invalid input → `BadRequestException`
+- Resource not found → `NotFoundException`
+- No permission → `ForbiddenException`
+- Authentication failed → `UnauthorizedException`
+- External API failure → Custom `ExternalApiException` (in `src/common/exceptions/`)
+
+### Rules
+- Use Logger class for all logging
+- Use HttpException hierarchy
+- **Services only throw exceptions**, never format responses (Filter handles formatting)
+- **Never use `throw new Error()` directly**
+- **Never use `console.log`/`console.error`**
+- **Never write empty catch blocks**
+
+## External API Integration
+
+### File Structure
+Each provider has:
+1. `{provider}.constants.ts` - URLs, versions, constants
+2. `{provider}.types.ts` - Response type definitions (no `any` types)
+3. `clients/{name}.client.ts` - API call implementations
+
+### Rules
+- Define URLs/versions in constants, responses in types with explicit typing (no `any`)
+- Use `config.getOrThrow()` for required environment variables
+- Log errors with Logger, then throw custom exceptions
+- **Services must never directly write HTTP headers/parameters**
+
+### ⚠️ Configuration Values are Validated (IMPORTANT!)
+`BASE_URL`, `ENDPOINTS`, authentication headers are verified values from official documentation.
+- **Do NOT modify during refactoring**
+- If changes needed: verify with official docs + separate task + document reasoning
+
+### Current External Integrations
+- **AWS S3**: File uploads
+- **Discord**: Bug report webhooks
+- **Google**: Places API, OAuth sign-in
+- **Kakao**: Login, address search
+- **Naver**: Maps, search
+- **OpenAI**: GPT-based recommendations
+
+## Refactoring Guidelines
+
+### Before Refactoring
+1. Use `grep` to identify dependencies and impact scope
+2. Create a plan before making changes
+
+### After Refactoring
+1. Run build (`pnpm run build`)
+2. Fix errors immediately
+3. Remove duplicate/unused code
+
+### Core Principles
+- **One responsibility at a time** (no feature additions during refactoring)
+- Preserve behavior, maintain testable state at each step
+- When moving code, **always delete original OR update to call new location**
+- When adding unified method, **immediately delete old methods**
+
+### External API Refactoring (CRITICAL!)
+Values in `src/external/**/*.constants.ts` (BASE_URL, ENDPOINTS, auth headers) are **verified values**.
+- Changes require official documentation verification
+- Must be done as separate task with documented reasoning
+
+### Prohibited
+- Moving/splitting without dependency check
+- Changing multiple files simultaneously without plan
+- Creating new structure without cleanup
+- Arbitrary changes to external API configuration
+
+## Database Architecture
+
+### Polymorphic Relationships
+Many entities support both `User` and `SocialLogin` associations:
+- `MenuRecommendation`, `MenuSelection`, `UserAddress` can belong to either User OR SocialLogin
+- Check for both `userId`/`user` and `socialLoginId`/`socialLogin` fields
+
+### Key Entities
+- **User**: Email/password accounts with soft deletes, JSONB preferences
+- **SocialLogin**: OAuth accounts (Kakao/Google/Naver) with optimistic locking (`@Version`)
+- **UserAddress**: Polymorphic addresses with default/search flags, soft deletes
+- **MenuRecommendation**: AI-generated recommendations with reasoning
+- **MenuSelection**: User's daily menu choices with status tracking (PENDING/IN_PROGRESS/SUCCEEDED/FAILED/CANCELLED)
+- **PlaceRecommendation**: Google Places results linked to menu recommendations
+- **EmailVerification**: Time-limited codes for email verification (purpose-based: SIGNUP, RE_REGISTER, PASSWORD_RESET)
+- **BugReport**: User bug reports with file uploads, status tracking (UNCONFIRMED/CONFIRMED/FIXED/CLOSED)
+
+### Design Patterns
+- Soft deletes with `@DeleteDateColumn()` for audit trail
+- JSONB columns for flexible nested data (preferences, imageURLs)
+- Cascading deletes with `onDelete: 'CASCADE'`
+- Enums for status fields
+
+## Authentication & Authorization
+
+### Strategy
+- JWT access tokens (15-minute TTL) + Refresh tokens (httpOnly cookies)
+- Local strategy (email/password) + Social OAuth (Kakao, Google)
+- Role-based access control: `USER`, `ADMIN`
+- Email verification required for registration
+
+### Current User Access
+Controllers use `@CurrentUser()` decorator to extract JWT payload:
+```typescript
+@CurrentUser() authUser: AuthUserPayload
+```
+
+### Guards
+All endpoints (except auth routes) are protected by `@UseGuards(JwtAuthGuard)`.
+
+## Monitoring & Logging
+
+### Logging
+- **Pino HTTP logger** with structured logging
+- Sensitive data redaction (auth headers)
+- Pretty printing in development
+- Ignored paths: `/metrics`
+
+### Metrics
+- **Prometheus** metrics collection via `prom-client`
+- `HttpMetricsInterceptor` tracks request/response
+- `PrometheusService` for custom metrics (globally injectable)
+- Metrics exposed at `/metrics` endpoint
+
+### Dashboards
+Grafana dashboards configured in `docker-compose.yml`.
+
+## Path Aliases
+
+TypeScript is configured with path alias `@/*` → `src/*`:
+```typescript
+import { AuthUserPayload } from '@/auth/interfaces/auth-user-payload.interface';
+```
+
+## Environment Configuration
+
+- Separate files: `.env.development`, `.env.test`, `.env.production`
+- Validation schema in `src/common/config/env.validation.ts`
+- Required variables validated on startup
+- Use `ConfigService.getOrThrow()` for required values
+
+## Scheduled Tasks
+
+- Uses `@nestjs/schedule` module
+- Example: `PreferencesScheduler` in `src/menu/preferences.scheduler.ts`
+- Cron-based batch processing with `@Cron()` decorators
+
+## Email Integration
+
+- NestJS Mailer with Handlebars templates
+- Templates in `src/auth/templates/`
+- Purpose-based verification codes (SIGNUP, RE_REGISTER, PASSWORD_RESET)
+- Time-limited verification codes in `EmailVerification` entity
+</file>
+
 <file path="dummy">
 {
   "cells": [],
@@ -7578,228 +8068,6 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
 };
 </file>
 
-<file path="src/common/config/env.validation.ts">
-import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsNotEmpty, IsString, validateSync } from 'class-validator';
-
-enum NodeEnv {
-  Development = 'development',
-  Production = 'production',
-}
-
-class EnvironmentVariables {
-  // Application
-  @IsEnum(NodeEnv)
-  NODE_ENV: NodeEnv;
-
-  @IsString()
-  @IsNotEmpty()
-  PORT: string;
-
-  @IsString()
-  @IsNotEmpty()
-  CORS_ORIGIN: string;
-
-  // Database (Postgres)
-  @IsString()
-  @IsNotEmpty()
-  POSTGRES_HOST: string;
-
-  @IsString()
-  @IsNotEmpty()
-  POSTGRES_PORT: string;
-
-  @IsString()
-  @IsNotEmpty()
-  POSTGRES_USER: string;
-
-  @IsString()
-  @IsNotEmpty()
-  POSTGRES_PASSWORD: string;
-
-  @IsString()
-  @IsNotEmpty()
-  POSTGRES_DB: string;
-
-  @IsString()
-  @IsNotEmpty()
-  POSTGRES_SYNCHRONIZE: string;
-
-  // JWT
-  @IsString()
-  @IsNotEmpty()
-  JWT_SECRET: string;
-
-  @IsString()
-  @IsNotEmpty()
-  JWT_REFRESH_SECRET: string;
-
-  // Email
-  @IsString()
-  @IsNotEmpty()
-  EMAIL_HOST: string;
-
-  @IsString()
-  @IsNotEmpty()
-  EMAIL_PORT: string;
-
-  @IsString()
-  @IsNotEmpty()
-  EMAIL_SECURE: string;
-
-  @IsString()
-  @IsNotEmpty()
-  EMAIL_ADDRESS: string;
-
-  @IsString()
-  @IsNotEmpty()
-  EMAIL_PASSWORD: string;
-
-  // OpenAI
-  @IsString()
-  @IsNotEmpty()
-  OPENAI_API_KEY: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OPENAI_MODEL: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OPENAI_MENU_MODEL: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OPENAI_PREFERENCE_MODEL: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OPENAI_PLACES_MODEL: string;
-
-  // Kakao API
-  @IsString()
-  @IsNotEmpty()
-  KAKAO_REST_API_KEY: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OAUTH_KAKAO_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OAUTH_KAKAO_REDIRECT_URI: string;
-
-  // Google API
-  @IsString()
-  @IsNotEmpty()
-  GOOGLE_API_KEY: string;
-
-  @IsString()
-  @IsNotEmpty()
-  GOOGLE_CSE_CX: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OAUTH_GOOGLE_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OAUTH_GOOGLE_CLIENT_SECRET: string;
-
-  @IsString()
-  @IsNotEmpty()
-  OAUTH_GOOGLE_REDIRECT_URI: string;
-
-  // Naver API
-  @IsString()
-  @IsNotEmpty()
-  NAVER_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  NAVER_CLIENT_SECRET: string;
-
-  @IsString()
-  @IsNotEmpty()
-  NAVER_MAP_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  NAVER_MAP_CLIENT_SECRET: string;
-
-  // Docker Compose / Monitoring
-  @IsString()
-  @IsNotEmpty()
-  GRAFANA_ADMIN_USER: string;
-
-  @IsString()
-  @IsNotEmpty()
-  GRAFANA_ADMIN_PASSWORD: string;
-
-  // Admin User (optional, for initial seeding)
-  @IsString()
-  @IsNotEmpty()
-  ADMIN_NAME: string;
-
-  @IsString()
-  @IsNotEmpty()
-  ADMIN_EMAIL: string;
-
-  @IsString()
-  @IsNotEmpty()
-  ADMIN_PASSWORD: string;
-
-  @IsString()
-  @IsNotEmpty()
-  ADMIN_ROLE: string;
-
-  // AWS S3
-  @IsString()
-  @IsNotEmpty()
-  AWS_S3_ACCESS_KEY_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  AWS_S3_SECRET_ACCESS_KEY: string;
-
-  @IsString()
-  @IsNotEmpty()
-  AWS_S3_BUCKET: string;
-
-  @IsString()
-  @IsNotEmpty()
-  AWS_S3_REGION: string;
-
-  @IsString()
-  @IsNotEmpty()
-  AWS_S3_BUCKET_PUBLIC: string; // 'true' or 'false' - 버킷이 public-read인지 여부
-
-  // Discord Webhook
-  @IsString()
-  @IsNotEmpty()
-  DISCORD_BUG_REPORT_WEBHOOK_URL: string;
-}
-
-export function validate(config: Record<string, unknown>) {
-  const validatedConfig = plainToInstance(EnvironmentVariables, config, {
-    enableImplicitConversion: true,
-  });
-
-  const errors = validateSync(validatedConfig, {
-    skipMissingProperties: false,
-  });
-
-  if (errors.length > 0) {
-    const missingKeys = errors.map((error) => error.property);
-    throw new Error(
-      `필수 환경 변수가 설정되지 않았습니다: ${missingKeys.join(', ')}`,
-    );
-  }
-
-  return validatedConfig;
-}
-</file>
-
 <file path="src/common/filters/http-exception.filter.ts">
 import {
     ArgumentsHost,
@@ -7961,358 +8229,95 @@ export class HttpExceptionFilter implements ExceptionFilter {
 }
 </file>
 
-<file path="src/external/google/clients/google-places.client.ts">
-import { HttpService } from '@nestjs/axios';
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
-import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
-import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import { elapsedSeconds, mapStatusGroupFromError } from '../../../common/utils/metrics.util';
-import { GOOGLE_PLACES_CONFIG } from '../google.constants';
-import {
-  GooglePlaceDetails,
-  GooglePlacePhotoUriResponse,
-  GooglePlaceSearchResult,
-  GooglePlacesSearchResponse,
-} from '../google.types';
-import { PrometheusService } from '../../../prometheus/prometheus.service';
+<file path="src/external/naver/naver.module.ts">
+import { HttpModule } from '@nestjs/axios';
+import { Module } from '@nestjs/common';
+import { NaverMapClient } from './clients/naver-map.client';
+import { NaverSearchClient } from './clients/naver-search.client';
+import { LocationService } from './services/location.service';
 
-@Injectable()
-export class GooglePlacesClient {
-  private readonly logger = new Logger(GooglePlacesClient.name);
-  private readonly apiKey: string;
-  private readonly baseUrl = GOOGLE_PLACES_CONFIG.BASE_URL;
-
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly config: ConfigService,
-    private readonly prometheusService: PrometheusService,
-  ) {
-    this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
-    if (!this.apiKey) {
-      this.logger.warn('GOOGLE_API_KEY가 설정되지 않았습니다.');
-    }
-  }
-
-  /**
-   * 텍스트 기반 장소 검색
-   */
-  async searchByText(
-    query: string,
-    options?: { maxResults?: number; languageCode?: string },
-  ): Promise<GooglePlaceSearchResult[]> {
-    if (!this.apiKey) {
-      throw new ConfigMissingException('GOOGLE_API_KEY');
-    }
-
-    const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.SEARCH_TEXT}`;
-
-    this.logger.log(`🔍 [Places 검색] query="${query}"`);
-
-    const startedAt = Date.now();
-    const service = 'places';
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.post<GooglePlacesSearchResponse>(
-          url,
-          {
-            textQuery: query,
-            languageCode:
-              options?.languageCode ?? GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE,
-            maxResultCount:
-              options?.maxResults ?? SEARCH_DEFAULTS.GOOGLE_PLACES_MAX_RESULTS,
-          },
-          {
-            headers: this.buildHeaders(GOOGLE_PLACES_CONFIG.FIELD_MASKS.SEARCH),
-          },
-        ),
-      );
-
-      const places = response.data?.places ?? [];
-      this.logger.log(`✅ [Places 검색 완료] count=${places.length}`);
-      this.recordExternal(statusGroup, startedAt);
-      return places;
-    } catch (error: any) {
-      statusGroup = mapStatusGroupFromError(error);
-      this.logError('Places 검색', query, error);
-      this.recordExternal(statusGroup, startedAt);
-      throw new ExternalApiException('Google Places', error, 'Places 검색에 실패했습니다.');
-    }
-  }
-
-  /**
-   * 장소 상세 정보 조회
-   */
-  async getDetails(
-    placeId: string,
-    options?: { includeBusinessStatus?: boolean },
-  ): Promise<GooglePlaceDetails | null> {
-    if (!this.apiKey) {
-      throw new ConfigMissingException('GOOGLE_API_KEY');
-    }
-
-    const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.DETAILS(placeId)}`;
-    const fieldMask = options?.includeBusinessStatus
-      ? GOOGLE_PLACES_CONFIG.FIELD_MASKS.DETAILS_WITH_BUSINESS_STATUS
-      : GOOGLE_PLACES_CONFIG.FIELD_MASKS.DETAILS;
-
-    this.logger.log(`🔍 [Places 상세 조회] placeId="${placeId}"`);
-
-    const startedAt = Date.now();
-    const service = 'places';
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get<GooglePlaceDetails>(url, {
-          params: { languageCode: GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE },
-          headers: {
-            ...this.buildHeaders(fieldMask),
-            'Referer': 'http://localhost:3000',
-          },
-        }),
-      );
-
-      const result = response.data ?? null;
-      this.recordExternal(statusGroup, startedAt);
-      return result;
-    } catch (error: any) {
-      statusGroup = mapStatusGroupFromError(error);
-      this.logError('Places 상세 조회', placeId, error);
-      this.recordExternal(statusGroup, startedAt);
-      throw new ExternalApiException('Google Places', error, 'Places 상세 조회에 실패했습니다.');
-    }
-  }
-
-  /**
-   * 사진 URI 조회
-   */
-  async getPhotoUri(
-    photoName: string,
-    options?: { maxWidth?: number; maxHeight?: number },
-  ): Promise<string | null> {
-    if (!this.apiKey) {
-      return null;
-    }
-
-    const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.PHOTO(photoName)}`;
-
-    const startedAt = Date.now();
-    const service = 'places';
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get<GooglePlacePhotoUriResponse>(url, {
-          params: {
-            maxHeightPx: options?.maxHeight ?? 400,
-            maxWidthPx: options?.maxWidth ?? 400,
-            skipHttpRedirect: true,
-          },
-          headers: {
-            'X-Goog-Api-Key': this.apiKey,
-            'Referer': 'http://localhost:3000',
-          },
-        }),
-      );
-
-      const result = response.data?.photoUri ?? null;
-      this.recordExternal(statusGroup, startedAt);
-      return result;
-    } catch (error: any) {
-      statusGroup = mapStatusGroupFromError(error);
-      this.logger.error(
-        `❌ [Places 사진 URI 에러] name="${photoName}", error=${error.message}`,
-      );
-      this.recordExternal(statusGroup, startedAt);
-      return null;
-    }
-  }
-
-  /**
-   * 여러 사진의 URI 일괄 조회
-   */
-  async resolvePhotoUris(
-    photos: Array<{ name?: string }> | null | undefined,
-    options?: { maxWidth?: number; maxHeight?: number },
-  ): Promise<string[]> {
-    if (!photos || photos.length === 0 || !this.apiKey) {
-      return [];
-    }
-
-    const tasks = photos.map(async (photo) => {
-      if (!photo?.name) return null;
-      return this.getPhotoUri(photo.name, options);
-    });
-
-    const results = await Promise.all(tasks);
-    return results.filter((uri): uri is string => uri !== null);
-  }
-
-  private buildHeaders(fieldMask: string): Record<string, string> {
-    return {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': this.apiKey,
-      'X-Goog-FieldMask': fieldMask,
-      'Referer': 'http://localhost:3000',
-    };
-  }
-
-  private logError(operation: string, identifier: string, error: any): void {
-    const message = error instanceof Error ? error.message : 'unknown error';
-    const statusCode = error?.response?.status;
-    const errorData = error?.response?.data;
-
-    this.logger.error(
-      `❌ [${operation} 에러] identifier="${identifier}", status=${statusCode}, error=${message}`,
-    );
-    if (errorData) {
-      this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
-    }
-  }
-
-  private recordExternal(
-    statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout',
-    startedAt: number,
-  ) {
-    const durationSeconds = elapsedSeconds(startedAt);
-    this.prometheusService.recordExternalApi('places', statusGroup, durationSeconds);
-  }
-}
+@Module({
+  imports: [HttpModule],
+  providers: [NaverSearchClient, NaverMapClient, LocationService],
+  exports: [NaverSearchClient, NaverMapClient, LocationService],
+})
+export class NaverModule {}
 </file>
 
-<file path="src/external/google/clients/google-search.client.ts">
-import { HttpService } from '@nestjs/axios';
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
-import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
-import { elapsedSeconds, mapStatusGroupFromError } from '../../../common/utils/metrics.util';
-import { PrometheusService } from '../../../prometheus/prometheus.service';
-import { GOOGLE_CSE_CONFIG } from '../google.constants';
-import { GoogleCseItem, GoogleCseResponse } from '../google.types';
+<file path="src/external/openai/prompts/menu-recommendation.prompts.ts">
+export const SYSTEM_PROMPT = [
+  '역할: Pick-Eat 메뉴 추천 AI',
+  '입력: USER_PROMPT, PREFERENCES, PREFERENCE_ANALYSIS',
+  '출력: JSON',
+  '',
+  '규칙:',
+  '- recommendations: 1~5개, 단순 메뉴명, 중복X',
+  '- 탐색형 메뉴 1개 필수 (취향과 다르나 무리 없음)',
+  '- reason: 추천 전체 이유 1개만 작성',
+  '- USER_PROMPT 외 맥락 추측 금지',
+  '- 추천에 사용한 취향만 reason에 언급',
+  '- 가정/과장/중복 서술 금지',
+  '- 변형(맛/토핑/조리/브랜드)이 떠오르면 대표 메뉴명으로 정규화',
+  '- 예: 치킨(O) 양념치킨(X)',
+  '- 전날 먹은 메뉴와 동일한 메뉴는 최대 1개만 허용',
+  '',
+  '- USER_PROMPT가 메뉴 추천과 무관하면 추천을 생성하지 말 것',
+  '- 음식/메뉴 선택 의도가 없으면 recommendations는 빈 배열',
+  '',
+  'reason 작성:',
+  '- 기본 구조: 취향/상황 고려 → 주요 추천 → 색다른 선택 제안',
+  '- 색다른 선택은 사용자 의도 문장으로 표현(탐색형/제안 등 메타 표현 금지)',
+  '- 문장당 판단 근거 1개',
+  '- 메뉴 추천 불가 시 아래 안내 문구만 작성:',
+  '- "해당 요청은 메뉴 추천을 도와드리기 어려운 내용입니다. 음식 선택과 관련된 방식으로 다시 요청해 주세요."',
+].join('\n');
 
-/**
- * 블로그 검색 결과
- */
-export interface BlogSearchResult {
-  title: string | null;
-  url: string | null;
-  snippet: string | null;
-  thumbnailUrl: string | null;
-  source: string | null;
+
+
+
+export function buildUserPrompt(
+  userPrompt: string,
+  likes: string[],
+  dislikes: string[],
+  analysis?: string,
+): string {
+  return [
+    'USER_PROMPT:',
+    userPrompt,
+    '---',
+    'PREFERENCES (필요한 것만 사용):',
+    `선호: ${likes?.length ? likes.join(', ') : '없음'}`,
+    `비선호: ${dislikes?.length ? dislikes.join(', ') : '없음'}`,
+    '---',
+    'PREFERENCE_ANALYSIS:',
+    analysis?.trim() || '없음',
+  ].join('\n');
 }
 
-@Injectable()
-export class GoogleSearchClient {
-  private readonly logger = new Logger(GoogleSearchClient.name);
-  private readonly apiKey: string;
-  private readonly cseCx: string;
 
-  constructor(
-    private readonly httpService: HttpService,
-    private readonly config: ConfigService,
-    private readonly prometheusService: PrometheusService,
-  ) {
-    this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
-    this.cseCx = this.config.get<string>('GOOGLE_CSE_CX', '');
-
-    if (!this.apiKey || !this.cseCx) {
-      this.logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.');
-    }
-  }
-
-  /**
-   * 블로그/웹 문서 검색
-   */
-  async searchBlogs(
-    query: string,
-    exactTerms?: string,
-    options?: { numResults?: number },
-  ): Promise<BlogSearchResult[]> {
-    if (!this.apiKey || !this.cseCx) {
-      throw new ConfigMissingException(['GOOGLE_API_KEY', 'GOOGLE_CSE_CX']);
-    }
-
-    this.logger.log(
-      `🔍 [CSE 블로그 검색] query="${query}", exactTerms="${exactTerms}"`,
-    );
-
-    const startedAt = Date.now();
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get<GoogleCseResponse>(GOOGLE_CSE_CONFIG.BASE_URL, {
-          params: {
-            key: this.apiKey,
-            cx: this.cseCx,
-            q: query,
-            exactTerms: exactTerms,
-            num: options?.numResults ?? SEARCH_DEFAULTS.GOOGLE_CSE_NUM_RESULTS,
-            hl: GOOGLE_CSE_CONFIG.DEFAULTS.LANGUAGE,
-          },
-          headers: {
-            'Referer': 'http://localhost:3000',
-          },
-        }),
-      );
-
-      const items = response.data?.items ?? [];
-      const blogs = items.map((item) => this.mapCseItemToBlogResult(item));
-
-      this.logger.log(`✅ [CSE 블로그 검색 완료] count=${blogs.length}`);
-      this.recordExternal(statusGroup, startedAt);
-      return blogs;
-    } catch (error: any) {
-      statusGroup = mapStatusGroupFromError(error);
-      const message = error instanceof Error ? error.message : 'unknown error';
-      const statusCode = error?.response?.status;
-      const errorData = error?.response?.data;
-
-      this.logger.error(
-        `❌ [CSE 블로그 검색 에러] query="${query}", status=${statusCode}, error=${message}`,
-      );
-      if (errorData) {
-        this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
-      }
-      this.recordExternal(statusGroup, startedAt);
-      throw new ExternalApiException('Google CSE', error, '블로그 검색에 실패했습니다.');
-    }
-  }
-
-  private mapCseItemToBlogResult(item: GoogleCseItem): BlogSearchResult {
-    const pagemap = item.pagemap ?? {};
-    const thumbnail =
-      pagemap.cse_thumbnail?.[0]?.src ??
-      pagemap.metatags?.[0]?.['og:image'] ??
-      null;
-    const source =
-      pagemap.metatags?.[0]?.['og:site_name'] ?? item.displayLink ?? null;
-
-    return {
-      title: item.title ?? null,
-      url: item.link ?? null,
-      snippet: item.snippet ?? null,
-      thumbnailUrl: thumbnail,
-      source,
-    };
-  }
-
-  private recordExternal(
-    statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout',
-    startedAt: number,
-  ) {
-    const durationSeconds = elapsedSeconds(startedAt);
-    this.prometheusService.recordExternalApi('cse', statusGroup, durationSeconds);
-  }
-}
+export const MENU_RECOMMENDATIONS_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    recommendations: {
+      type: 'array',
+      items: {
+        type: 'string',
+        pattern: '^[가-힣]+$',
+      },
+      minItems: 1,
+      maxItems: 5,
+      description: '단순 메뉴명 (토핑/수식어 없이)',
+    },
+    reason: {
+      type: 'string',
+      minLength: 1,
+      maxLength:500,
+      description: '추천 전체 이유 한 문단(존댓말, 500자 내외)',
+    },
+  },
+  required: ['recommendations', 'reason'],
+  additionalProperties: false,
+} as const;
 </file>
 
 <file path="src/external/external.module.ts">
@@ -9248,77 +9253,6 @@ export interface KakaoLocalAddressDocument {
     y: string;
   };
 }
-</file>
-
-<file path=".env.example">
-# Application
-NODE_ENV=
-PORT=
-CORS_ORIGIN=
-
-# Database (Postgres)
-POSTGRES_HOST=
-POSTGRES_PORT=
-POSTGRES_USER=
-POSTGRES_PASSWORD=
-POSTGRES_DB=
-POSTGRES_SYNCHRONIZE=
-
-# JWT
-JWT_SECRET=
-JWT_REFRESH_SECRET=
-
-# Email (for verification)
-EMAIL_HOST=
-EMAIL_PORT=
-EMAIL_SECURE=
-EMAIL_ADDRESS=
-EMAIL_PASSWORD=
-
-# OpenAI
-OPENAI_API_KEY=
-OPENAI_MODEL=
-OPENAI_MENU_MODEL=
-OPENAI_PREFERENCE_MODEL=
-OPENAI_PLACES_MODEL=
-
-# Kakao API
-KAKAO_REST_API_KEY=
-OAUTH_KAKAO_CLIENT_ID=
-OAUTH_KAKAO_REDIRECT_URI=
-
-# Google API
-GOOGLE_API_KEY=
-GOOGLE_CSE_CX=
-OAUTH_GOOGLE_CLIENT_ID=
-OAUTH_GOOGLE_CLIENT_SECRET=
-OAUTH_GOOGLE_REDIRECT_URI=
-
-# Naver API
-NAVER_CLIENT_ID=
-NAVER_CLIENT_SECRET=
-NAVER_MAP_CLIENT_ID=
-NAVER_MAP_CLIENT_SECRET=
-
-# Docker Compose / Monitoring (optional, defaults shown)
-GRAFANA_ADMIN_USER=
-GRAFANA_ADMIN_PASSWORD=
-
-# Admin User (optional, for initial seeding)
-ADMIN_NAME=
-ADMIN_EMAIL=
-ADMIN_PASSWORD=
-ADMIN_ROLE=
-
-# AWS S3
-AWS_S3_ACCESS_KEY_ID=
-AWS_S3_SECRET_ACCESS_KEY=
-AWS_S3_BUCKET=
-AWS_S3_REGION=
-AWS_S3_BUCKET_PUBLIC=                    # 'true' or 'false' - 버킷이 public-read인지 여부
-
-# Discord Webhook (버그 리포트 알림)
-DISCORD_BUG_REPORT_WEBHOOK_URL=
 </file>
 
 <file path="README.md">
@@ -10268,6 +10202,232 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
 </html>
 </file>
 
+<file path="src/common/config/env.validation.ts">
+import { plainToInstance } from 'class-transformer';
+import { IsEnum, IsNotEmpty, IsString, validateSync } from 'class-validator';
+
+enum NodeEnv {
+  Development = 'development',
+  Production = 'production',
+}
+
+class EnvironmentVariables {
+  // Application
+  @IsEnum(NodeEnv)
+  NODE_ENV: NodeEnv;
+
+  @IsString()
+  @IsNotEmpty()
+  PORT: string;
+
+  @IsString()
+  @IsNotEmpty()
+  CORS_ORIGIN: string;
+
+  @IsString()
+  @IsNotEmpty()
+  APP_URL: string;
+
+  // Database (Postgres)
+  @IsString()
+  @IsNotEmpty()
+  POSTGRES_HOST: string;
+
+  @IsString()
+  @IsNotEmpty()
+  POSTGRES_PORT: string;
+
+  @IsString()
+  @IsNotEmpty()
+  POSTGRES_USER: string;
+
+  @IsString()
+  @IsNotEmpty()
+  POSTGRES_PASSWORD: string;
+
+  @IsString()
+  @IsNotEmpty()
+  POSTGRES_DB: string;
+
+  @IsString()
+  @IsNotEmpty()
+  POSTGRES_SYNCHRONIZE: string;
+
+  // JWT
+  @IsString()
+  @IsNotEmpty()
+  JWT_SECRET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_SECRET: string;
+
+  // Email
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_HOST: string;
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_PORT: string;
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_SECURE: string;
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_ADDRESS: string;
+
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_PASSWORD: string;
+
+  // OpenAI
+  @IsString()
+  @IsNotEmpty()
+  OPENAI_API_KEY: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OPENAI_MODEL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OPENAI_MENU_MODEL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OPENAI_PREFERENCE_MODEL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OPENAI_PLACES_MODEL: string;
+
+  // Kakao API
+  @IsString()
+  @IsNotEmpty()
+  KAKAO_REST_API_KEY: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OAUTH_KAKAO_CLIENT_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OAUTH_KAKAO_REDIRECT_URI: string;
+
+  // Google API
+  @IsString()
+  @IsNotEmpty()
+  GOOGLE_API_KEY: string;
+
+  @IsString()
+  @IsNotEmpty()
+  GOOGLE_CSE_CX: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OAUTH_GOOGLE_CLIENT_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OAUTH_GOOGLE_CLIENT_SECRET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  OAUTH_GOOGLE_REDIRECT_URI: string;
+
+  // Naver API
+  @IsString()
+  @IsNotEmpty()
+  NAVER_CLIENT_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  NAVER_CLIENT_SECRET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  NAVER_MAP_CLIENT_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  NAVER_MAP_CLIENT_SECRET: string;
+
+  // Docker Compose / Monitoring
+  @IsString()
+  @IsNotEmpty()
+  GRAFANA_ADMIN_USER: string;
+
+  @IsString()
+  @IsNotEmpty()
+  GRAFANA_ADMIN_PASSWORD: string;
+
+  // Admin User (optional, for initial seeding)
+  @IsString()
+  @IsNotEmpty()
+  ADMIN_NAME: string;
+
+  @IsString()
+  @IsNotEmpty()
+  ADMIN_EMAIL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  ADMIN_PASSWORD: string;
+
+  @IsString()
+  @IsNotEmpty()
+  ADMIN_ROLE: string;
+
+  // AWS S3
+  @IsString()
+  @IsNotEmpty()
+  AWS_S3_ACCESS_KEY_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  AWS_S3_SECRET_ACCESS_KEY: string;
+
+  @IsString()
+  @IsNotEmpty()
+  AWS_S3_BUCKET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  AWS_S3_REGION: string;
+
+  @IsString()
+  @IsNotEmpty()
+  AWS_S3_BUCKET_PUBLIC: string; // 'true' or 'false' - 버킷이 public-read인지 여부
+
+  // Discord Webhook
+  @IsString()
+  @IsNotEmpty()
+  DISCORD_BUG_REPORT_WEBHOOK_URL: string;
+}
+
+export function validate(config: Record<string, unknown>) {
+  const validatedConfig = plainToInstance(EnvironmentVariables, config, {
+    enableImplicitConversion: true,
+  });
+
+  const errors = validateSync(validatedConfig, {
+    skipMissingProperties: false,
+  });
+
+  if (errors.length > 0) {
+    const missingKeys = errors.map((error) => error.property);
+    throw new Error(
+      `필수 환경 변수가 설정되지 않았습니다: ${missingKeys.join(', ')}`,
+    );
+  }
+
+  return validatedConfig;
+}
+</file>
+
 <file path="src/common/config/logger.config.ts">
 import { Params } from 'nestjs-pino';
 
@@ -10311,6 +10471,364 @@ export const loggerConfig: Params = {
         : undefined,
   },
 };
+</file>
+
+<file path="src/external/google/clients/google-places.client.ts">
+import { HttpService } from '@nestjs/axios';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
+import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
+import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
+import { elapsedSeconds, mapStatusGroupFromError } from '../../../common/utils/metrics.util';
+import { GOOGLE_PLACES_CONFIG } from '../google.constants';
+import {
+  GooglePlaceDetails,
+  GooglePlacePhotoUriResponse,
+  GooglePlaceSearchResult,
+  GooglePlacesSearchResponse,
+} from '../google.types';
+import { PrometheusService } from '../../../prometheus/prometheus.service';
+
+@Injectable()
+export class GooglePlacesClient {
+  private readonly logger = new Logger(GooglePlacesClient.name);
+  private readonly apiKey: string;
+  private readonly appUrl: string;
+  private readonly baseUrl = GOOGLE_PLACES_CONFIG.BASE_URL;
+
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly config: ConfigService,
+    private readonly prometheusService: PrometheusService,
+  ) {
+    this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
+    this.appUrl = this.config.getOrThrow<string>('APP_URL');
+    if (!this.apiKey) {
+      this.logger.warn('GOOGLE_API_KEY가 설정되지 않았습니다.');
+    }
+  }
+
+  /**
+   * 텍스트 기반 장소 검색
+   */
+  async searchByText(
+    query: string,
+    options?: { maxResults?: number; languageCode?: string },
+  ): Promise<GooglePlaceSearchResult[]> {
+    if (!this.apiKey) {
+      throw new ConfigMissingException('GOOGLE_API_KEY');
+    }
+
+    const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.SEARCH_TEXT}`;
+
+    this.logger.log(`🔍 [Places 검색] query="${query}"`);
+
+    const startedAt = Date.now();
+    const service = 'places';
+    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post<GooglePlacesSearchResponse>(
+          url,
+          {
+            textQuery: query,
+            languageCode:
+              options?.languageCode ?? GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE,
+            maxResultCount:
+              options?.maxResults ?? SEARCH_DEFAULTS.GOOGLE_PLACES_MAX_RESULTS,
+          },
+          {
+            headers: this.buildHeaders(GOOGLE_PLACES_CONFIG.FIELD_MASKS.SEARCH),
+          },
+        ),
+      );
+
+      const places = response.data?.places ?? [];
+      this.logger.log(`✅ [Places 검색 완료] count=${places.length}`);
+      this.recordExternal(statusGroup, startedAt);
+      return places;
+    } catch (error: any) {
+      statusGroup = mapStatusGroupFromError(error);
+      this.logError('Places 검색', query, error);
+      this.recordExternal(statusGroup, startedAt);
+      throw new ExternalApiException('Google Places', error, 'Places 검색에 실패했습니다.');
+    }
+  }
+
+  /**
+   * 장소 상세 정보 조회
+   */
+  async getDetails(
+    placeId: string,
+    options?: { includeBusinessStatus?: boolean },
+  ): Promise<GooglePlaceDetails | null> {
+    if (!this.apiKey) {
+      throw new ConfigMissingException('GOOGLE_API_KEY');
+    }
+
+    const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.DETAILS(placeId)}`;
+    const fieldMask = options?.includeBusinessStatus
+      ? GOOGLE_PLACES_CONFIG.FIELD_MASKS.DETAILS_WITH_BUSINESS_STATUS
+      : GOOGLE_PLACES_CONFIG.FIELD_MASKS.DETAILS;
+
+    this.logger.log(`🔍 [Places 상세 조회] placeId="${placeId}"`);
+
+    const startedAt = Date.now();
+    const service = 'places';
+    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<GooglePlaceDetails>(url, {
+          params: { languageCode: GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE },
+          headers: {
+            ...this.buildHeaders(fieldMask),
+            'Referer': this.appUrl,
+          },
+        }),
+      );
+
+      const result = response.data ?? null;
+      this.recordExternal(statusGroup, startedAt);
+      return result;
+    } catch (error: any) {
+      statusGroup = mapStatusGroupFromError(error);
+      this.logError('Places 상세 조회', placeId, error);
+      this.recordExternal(statusGroup, startedAt);
+      throw new ExternalApiException('Google Places', error, 'Places 상세 조회에 실패했습니다.');
+    }
+  }
+
+  /**
+   * 사진 URI 조회
+   */
+  async getPhotoUri(
+    photoName: string,
+    options?: { maxWidth?: number; maxHeight?: number },
+  ): Promise<string | null> {
+    if (!this.apiKey) {
+      return null;
+    }
+
+    const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.PHOTO(photoName)}`;
+
+    const startedAt = Date.now();
+    const service = 'places';
+    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<GooglePlacePhotoUriResponse>(url, {
+          params: {
+            maxHeightPx: options?.maxHeight ?? 400,
+            maxWidthPx: options?.maxWidth ?? 400,
+            skipHttpRedirect: true,
+          },
+          headers: {
+            'X-Goog-Api-Key': this.apiKey,
+            'Referer': this.appUrl,
+          },
+        }),
+      );
+
+      const result = response.data?.photoUri ?? null;
+      this.recordExternal(statusGroup, startedAt);
+      return result;
+    } catch (error: any) {
+      statusGroup = mapStatusGroupFromError(error);
+      this.logger.error(
+        `❌ [Places 사진 URI 에러] name="${photoName}", error=${error.message}`,
+      );
+      this.recordExternal(statusGroup, startedAt);
+      return null;
+    }
+  }
+
+  /**
+   * 여러 사진의 URI 일괄 조회
+   */
+  async resolvePhotoUris(
+    photos: Array<{ name?: string }> | null | undefined,
+    options?: { maxWidth?: number; maxHeight?: number },
+  ): Promise<string[]> {
+    if (!photos || photos.length === 0 || !this.apiKey) {
+      return [];
+    }
+
+    const tasks = photos.map(async (photo) => {
+      if (!photo?.name) return null;
+      return this.getPhotoUri(photo.name, options);
+    });
+
+    const results = await Promise.all(tasks);
+    return results.filter((uri): uri is string => uri !== null);
+  }
+
+  private buildHeaders(fieldMask: string): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': this.apiKey,
+      'X-Goog-FieldMask': fieldMask,
+      'Referer': this.appUrl,
+    };
+  }
+
+  private logError(operation: string, identifier: string, error: any): void {
+    const message = error instanceof Error ? error.message : 'unknown error';
+    const statusCode = error?.response?.status;
+    const errorData = error?.response?.data;
+
+    this.logger.error(
+      `❌ [${operation} 에러] identifier="${identifier}", status=${statusCode}, error=${message}`,
+    );
+    if (errorData) {
+      this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
+    }
+  }
+
+  private recordExternal(
+    statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout',
+    startedAt: number,
+  ) {
+    const durationSeconds = elapsedSeconds(startedAt);
+    this.prometheusService.recordExternalApi('places', statusGroup, durationSeconds);
+  }
+}
+</file>
+
+<file path="src/external/google/clients/google-search.client.ts">
+import { HttpService } from '@nestjs/axios';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
+import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
+import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
+import { elapsedSeconds, mapStatusGroupFromError } from '../../../common/utils/metrics.util';
+import { PrometheusService } from '../../../prometheus/prometheus.service';
+import { GOOGLE_CSE_CONFIG } from '../google.constants';
+import { GoogleCseItem, GoogleCseResponse } from '../google.types';
+
+/**
+ * 블로그 검색 결과
+ */
+export interface BlogSearchResult {
+  title: string | null;
+  url: string | null;
+  snippet: string | null;
+  thumbnailUrl: string | null;
+  source: string | null;
+}
+
+@Injectable()
+export class GoogleSearchClient {
+  private readonly logger = new Logger(GoogleSearchClient.name);
+  private readonly apiKey: string;
+  private readonly cseCx: string;
+  private readonly appUrl: string;
+
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly config: ConfigService,
+    private readonly prometheusService: PrometheusService,
+  ) {
+    this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
+    this.cseCx = this.config.get<string>('GOOGLE_CSE_CX', '');
+    this.appUrl = this.config.getOrThrow<string>('APP_URL');
+
+    if (!this.apiKey || !this.cseCx) {
+      this.logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_CX가 설정되지 않았습니다.');
+    }
+  }
+
+  /**
+   * 블로그/웹 문서 검색
+   */
+  async searchBlogs(
+    query: string,
+    exactTerms?: string,
+    options?: { numResults?: number },
+  ): Promise<BlogSearchResult[]> {
+    if (!this.apiKey || !this.cseCx) {
+      throw new ConfigMissingException(['GOOGLE_API_KEY', 'GOOGLE_CSE_CX']);
+    }
+
+    this.logger.log(
+      `🔍 [CSE 블로그 검색] query="${query}", exactTerms="${exactTerms}"`,
+    );
+
+    const startedAt = Date.now();
+    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<GoogleCseResponse>(GOOGLE_CSE_CONFIG.BASE_URL, {
+          params: {
+            key: this.apiKey,
+            cx: this.cseCx,
+            q: query,
+            exactTerms: exactTerms,
+            num: options?.numResults ?? SEARCH_DEFAULTS.GOOGLE_CSE_NUM_RESULTS,
+            hl: GOOGLE_CSE_CONFIG.DEFAULTS.LANGUAGE,
+          },
+          headers: {
+            'Referer': this.appUrl,
+          },
+        }),
+      );
+
+      const items = response.data?.items ?? [];
+      const blogs = items.map((item) => this.mapCseItemToBlogResult(item));
+
+      this.logger.log(`✅ [CSE 블로그 검색 완료] count=${blogs.length}`);
+      this.recordExternal(statusGroup, startedAt);
+      return blogs;
+    } catch (error: any) {
+      statusGroup = mapStatusGroupFromError(error);
+      const message = error instanceof Error ? error.message : 'unknown error';
+      const statusCode = error?.response?.status;
+      const errorData = error?.response?.data;
+
+      this.logger.error(
+        `❌ [CSE 블로그 검색 에러] query="${query}", status=${statusCode}, error=${message}`,
+      );
+      if (errorData) {
+        this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
+      }
+      this.recordExternal(statusGroup, startedAt);
+      throw new ExternalApiException('Google CSE', error, '블로그 검색에 실패했습니다.');
+    }
+  }
+
+  private mapCseItemToBlogResult(item: GoogleCseItem): BlogSearchResult {
+    const pagemap = item.pagemap ?? {};
+    const thumbnail =
+      pagemap.cse_thumbnail?.[0]?.src ??
+      pagemap.metatags?.[0]?.['og:image'] ??
+      null;
+    const source =
+      pagemap.metatags?.[0]?.['og:site_name'] ?? item.displayLink ?? null;
+
+    return {
+      title: item.title ?? null,
+      url: item.link ?? null,
+      snippet: item.snippet ?? null,
+      thumbnailUrl: thumbnail,
+      source,
+    };
+  }
+
+  private recordExternal(
+    statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout',
+    startedAt: number,
+  ) {
+    const durationSeconds = elapsedSeconds(startedAt);
+    this.prometheusService.recordExternalApi('cse', statusGroup, durationSeconds);
+  }
+}
 </file>
 
 <file path="src/external/openai/openai.constants.ts">
@@ -11139,23 +11657,6 @@ describe('SearchController', () => {
 });
 </file>
 
-<file path="src/search/search.module.ts">
-import { HttpModule } from '@nestjs/axios';
-import { Module, forwardRef } from '@nestjs/common';
-import { NaverModule } from '../external/naver/naver.module';
-import { MapModule } from '../map/map.module';
-import { SearchController } from './search.controller';
-import { SearchService } from './search.service';
-
-@Module({
-  imports: [HttpModule, forwardRef(() => MapModule), NaverModule],
-  controllers: [SearchController],
-  providers: [SearchService],
-  exports: [SearchService],
-})
-export class SearchModule {}
-</file>
-
 <file path="src/user/dto/update-user-address.dto.ts">
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
@@ -11205,6 +11706,78 @@ export const defaultUserPreferences = (): UserPreferences => ({
   dislikes: [],
   analysis: undefined,
 });
+</file>
+
+<file path=".env.example">
+# Application
+NODE_ENV=
+PORT=
+CORS_ORIGIN=
+APP_URL=
+
+# Database (Postgres)
+POSTGRES_HOST=
+POSTGRES_PORT=
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_DB=
+POSTGRES_SYNCHRONIZE=
+
+# JWT
+JWT_SECRET=
+JWT_REFRESH_SECRET=
+
+# Email (for verification)
+EMAIL_HOST=
+EMAIL_PORT=
+EMAIL_SECURE=
+EMAIL_ADDRESS=
+EMAIL_PASSWORD=
+
+# OpenAI
+OPENAI_API_KEY=
+OPENAI_MODEL=
+OPENAI_MENU_MODEL=
+OPENAI_PREFERENCE_MODEL=
+OPENAI_PLACES_MODEL=
+
+# Kakao API
+KAKAO_REST_API_KEY=
+OAUTH_KAKAO_CLIENT_ID=
+OAUTH_KAKAO_REDIRECT_URI=
+
+# Google API
+GOOGLE_API_KEY=
+GOOGLE_CSE_CX=
+OAUTH_GOOGLE_CLIENT_ID=
+OAUTH_GOOGLE_CLIENT_SECRET=
+OAUTH_GOOGLE_REDIRECT_URI=
+
+# Naver API
+NAVER_CLIENT_ID=
+NAVER_CLIENT_SECRET=
+NAVER_MAP_CLIENT_ID=
+NAVER_MAP_CLIENT_SECRET=
+
+# Docker Compose / Monitoring (optional, defaults shown)
+GRAFANA_ADMIN_USER=
+GRAFANA_ADMIN_PASSWORD=
+
+# Admin User (optional, for initial seeding)
+ADMIN_NAME=
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ADMIN_ROLE=
+
+# AWS S3
+AWS_S3_ACCESS_KEY_ID=
+AWS_S3_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET=
+AWS_S3_REGION=
+AWS_S3_BUCKET_PUBLIC=                    # 'true' or 'false' - 버킷이 public-read인지 여부
+
+# Discord Webhook (버그 리포트 알림)
+DISCORD_BUG_REPORT_WEBHOOK_URL=
 </file>
 
 <file path="tsconfig.json">
@@ -11289,23 +11862,6 @@ export class JwtTokenProvider {
     }); // refresh token은 7일 유효
   }
 }
-</file>
-
-<file path="src/map/map.module.ts">
-import { HttpModule } from '@nestjs/axios';
-import { Module, forwardRef } from '@nestjs/common';
-import { NaverModule } from '../external/naver/naver.module';
-import { SearchModule } from '../search/search.module';
-import { MapController } from './map.controller';
-import { MapService } from './map.service';
-
-@Module({
-  imports: [HttpModule, forwardRef(() => SearchModule), NaverModule],
-  controllers: [MapController],
-  providers: [MapService],
-  exports: [MapService],
-})
-export class MapModule {}
 </file>
 
 <file path="src/menu/gpt/base-menu.service.ts">
@@ -11499,6 +12055,22 @@ export abstract class BaseMenuService implements OnModuleInit {
 }
 </file>
 
+<file path="src/search/search.module.ts">
+import { HttpModule } from '@nestjs/axios';
+import { Module } from '@nestjs/common';
+import { NaverModule } from '../external/naver/naver.module';
+import { SearchController } from './search.controller';
+import { SearchService } from './search.service';
+
+@Module({
+  imports: [HttpModule, NaverModule],
+  controllers: [SearchController],
+  providers: [SearchService],
+  exports: [SearchService],
+})
+export class SearchModule {}
+</file>
+
 <file path="docker-compose.yml">
 version: '3.8'
 
@@ -11630,6 +12202,23 @@ export class MapController {
     return this.mapService.getRestaurantMarkers(dto);
   }
 }
+</file>
+
+<file path="src/map/map.module.ts">
+import { HttpModule } from '@nestjs/axios';
+import { Module } from '@nestjs/common';
+import { NaverModule } from '../external/naver/naver.module';
+import { SearchModule } from '../search/search.module';
+import { MapController } from './map.controller';
+import { MapService } from './map.service';
+
+@Module({
+  imports: [HttpModule, SearchModule, NaverModule],
+  controllers: [MapController],
+  providers: [MapService],
+  exports: [MapService],
+})
+export class MapModule {}
 </file>
 
 <file path="src/menu/services/openai-places.service.ts">
@@ -11800,71 +12389,6 @@ export class OpenAiPlacesService implements OnModuleInit {
   }
 
 }
-</file>
-
-<file path=".gitignore">
-# compiled output
-/dist
-/node_modules
-/build
-
-# Logs
-logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# OS
-.DS_Store
-
-# Tests
-/coverage
-/.nyc_output
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# dotenv environment variable files
-.env
-.env.*
-!.env.example
-
-# temp directory
-.temp
-.tmp
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Diagnostic reports (https://nodejs.org/api/report.html)
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
-
-# Local development artifacts
-postgres-data/
-.pnpm-store/
-
-# Monitoring data
-monitoring/prometheus/data/
-monitoring/grafana/data/
 </file>
 
 <file path="src/auth/services/email-verification.service.ts">
@@ -12760,17 +13284,216 @@ async function bootstrap() {
 void bootstrap();
 </file>
 
-<file path="src/search/search.service.ts">
+<file path=".gitignore">
+# compiled output
+/dist
+/node_modules
+/build
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+
+# Tests
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# dotenv environment variable files
+.env
+.env.*
+.env.development
+!.env.example
+
+# temp directory
+.temp
+.tmp
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Local development artifacts
+postgres-data/
+.pnpm-store/
+
+# Monitoring data
+monitoring/prometheus/data/
+monitoring/grafana/data/
+</file>
+
+<file path="src/user/entities/social-login.entity.ts">
 import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-  forwardRef,
-} from '@nestjs/common';
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+  VersionColumn,
+} from 'typeorm';
+import { MenuSelection } from '../../menu/entities/menu-selection.entity';
+import { UserPreferences } from '../interfaces/user-preferences.interface';
+import { UserAddress } from './user-address.entity';
+
+@Entity('social_login')
+export class SocialLogin {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column()
+  socialId: string;
+
+  @Column()
+  socialType: string;
+
+  @Column({ nullable: true })
+  name: string;
+
+  @Column({ nullable: true })
+  profileImage: string;
+
+  @Column({ default: 'USER' })
+  role: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  preferences: UserPreferences | null;
+
+  @Column({ nullable: true })
+  address: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitude: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitude: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  refreshToken: string | null;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @VersionColumn()
+  version: number;
+
+  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
+
+  @OneToMany(() => MenuSelection, (selection) => selection.socialLogin)
+  menuSelections: MenuSelection[];
+
+  @OneToMany(() => UserAddress, (address) => address.socialLogin, {
+    cascade: true,
+  })
+  addresses: UserAddress[];
+}
+</file>
+
+<file path="src/menu/entities/menu-recommendation.entity.ts">
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { SocialLogin } from '../../user/entities/social-login.entity';
+import { User } from '../../user/entities/user.entity';
+import { MenuSelection } from './menu-selection.entity';
+import { PlaceRecommendation } from './place-recommendation.entity';
+
+@Entity()
+export class MenuRecommendation {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @ManyToOne(() => User, (user) => user.recommendations, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
+  user: User | null;
+
+  @ManyToOne(() => SocialLogin, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
+  socialLogin: SocialLogin | null;
+
+  @Column('text', { array: true })
+  recommendations: string[];
+
+  @Column({ type: 'text', default: '' })
+  reason: string;
+
+  @Column('text')
+  prompt: string;
+
+  @Column({ type: 'text', nullable: false })
+  requestAddress: string; // 서버에서 사용자 기본 주소를 조회하여 저장 (필수)
+
+  @Column({ type: 'timestamptz' })
+  recommendedAt: Date;
+
+  @OneToMany(
+    () => PlaceRecommendation,
+    (placeRecommendation) => placeRecommendation.menuRecommendation,
+  )
+  placeRecommendations: PlaceRecommendation[];
+
+  @OneToMany(() => MenuSelection, (selection) => selection.menuRecommendation)
+  selections: MenuSelection[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+</file>
+
+<file path="src/search/search.service.ts">
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { runPipeline } from '@/common/pipeline/pipeline';
 import { NaverSearchClient } from '@/external/naver/clients/naver-search.client';
-import { MapService } from '@/map/map.service';
+import { LocationService } from '@/external/naver/services/location.service';
 import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
 import {
   NaverLocalSearchItem,
@@ -12783,8 +13506,7 @@ export class SearchService {
   private readonly logger = new Logger(SearchService.name);
 
   constructor(
-    @Inject(forwardRef(() => MapService))
-    private readonly mapService: MapService,
+    private readonly locationService: LocationService,
     private readonly naverSearchClient: NaverSearchClient,
   ) {}
 
@@ -12807,7 +13529,7 @@ export class SearchService {
         {
           name: 'reverseGeocode',
           run: async (ctx) => {
-            ctx.address = await this.mapService.reverseGeocode(
+            ctx.address = await this.locationService.reverseGeocode(
               dto.latitude,
               dto.longitude,
               dto.includeRoadAddress ?? false,
@@ -12916,319 +13638,6 @@ export class SearchService {
     }
     return Number((parsed / 1000).toFixed(2));
   }
-}
-</file>
-
-<file path="src/user/entities/social-login.entity.ts">
-import {
-  Column,
-  CreateDateColumn,
-  DeleteDateColumn,
-  Entity,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-  VersionColumn,
-} from 'typeorm';
-import { MenuSelection } from '../../menu/entities/menu-selection.entity';
-import { UserPreferences } from '../interfaces/user-preferences.interface';
-import { UserAddress } from './user-address.entity';
-
-@Entity('social_login')
-export class SocialLogin {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ unique: true })
-  email: string;
-
-  @Column()
-  socialId: string;
-
-  @Column()
-  socialType: string;
-
-  @Column({ nullable: true })
-  name: string;
-
-  @Column({ nullable: true })
-  profileImage: string;
-
-  @Column({ default: 'USER' })
-  role: string;
-
-  @Column({ type: 'jsonb', nullable: true })
-  preferences: UserPreferences | null;
-
-  @Column({ nullable: true })
-  address: string;
-
-  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
-  latitude: number | null;
-
-  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
-  longitude: number | null;
-
-  @Column({ type: 'text', nullable: true })
-  refreshToken: string | null;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @VersionColumn()
-  version: number;
-
-  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
-  deletedAt: Date | null;
-
-  @OneToMany(() => MenuSelection, (selection) => selection.socialLogin)
-  menuSelections: MenuSelection[];
-
-  @OneToMany(() => UserAddress, (address) => address.socialLogin, {
-    cascade: true,
-  })
-  addresses: UserAddress[];
-}
-</file>
-
-<file path="src/map/map.service.ts">
-import { BadRequestException, Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
-import { NaverMapClient } from '@/external/naver/clients/naver-map.client';
-import { NaverReverseGeocodeResult } from '@/external/naver/naver.types';
-import { ExternalApiException } from '@/common/exceptions/external-api.exception';
-import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
-import { RestaurantSummary } from '@/search/interfaces/search.interface';
-import { SearchService } from '@/search/search.service';
-import { MapMarker, MapRestaurantsResponse } from '@/map/interfaces/map.interface';
-
-@Injectable()
-export class MapService {
-  private readonly logger = new Logger(MapService.name);
-
-  constructor(
-    @Inject(forwardRef(() => SearchService))
-    private readonly searchService: SearchService,
-    private readonly naverMapClient: NaverMapClient,
-  ) {}
-
-  async getRestaurantMarkers(
-    dto: SearchRestaurantsDto,
-  ): Promise<MapRestaurantsResponse> {
-    const { restaurants } = await this.searchService.searchRestaurants(dto);
-    return {
-      markers: restaurants.map((restaurant) => this.toMarker(restaurant)),
-    };
-  }
-
-  async reverseGeocode(
-    latitude: number,
-    longitude: number,
-    includeRoadAddress: boolean = false,
-  ): Promise<string> {
-    this.logger.log(`🔍 [역지오코딩 요청] lat=${latitude}, lng=${longitude}`);
-
-    try {
-      const results = await this.naverMapClient.reverseGeocode(
-        latitude,
-        longitude,
-        { includeRoadAddress },
-      );
-
-      const address = this.extractAddressFromResults(results, includeRoadAddress);
-
-      if (!address) {
-        throw new BadRequestException('주소를 찾을 수 없습니다.');
-      }
-
-      this.logger.log(`✅ [역지오코딩 응답] address="${address}"`);
-
-      return address;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'unknown error';
-      this.logger.error(
-        `❌ [역지오코딩 에러] lat=${latitude}, lng=${longitude}, error=${message}`,
-        error instanceof Error ? error.stack : undefined,
-      );
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new ExternalApiException(
-        'Naver Map',
-        error instanceof Error ? error : undefined,
-        '역지오코딩에 실패했습니다.',
-      );
-    }
-  }
-
-  private extractAddressFromResults(
-    results: NaverReverseGeocodeResult[],
-    includeRoadAddress: boolean,
-  ): string | null {
-    if (!results?.length) {
-      return null;
-    }
-
-    const preferredOrder = ['roadaddr', 'addr', 'admcode', 'legalcode'];
-
-    for (const name of preferredOrder) {
-      const candidate = results.find((result) => result.name === name);
-      if (!candidate) continue;
-
-      const address = this.buildDetailedAddress(candidate, includeRoadAddress);
-      if (address) {
-        return address;
-      }
-    }
-
-    for (const result of results) {
-      const address = this.buildDetailedAddress(result, includeRoadAddress);
-      if (address) {
-        return address;
-      }
-    }
-
-    return null;
-  }
-
-  private buildDetailedAddress(
-    result: NaverReverseGeocodeResult,
-    includeRoadAddress: boolean,
-  ): string | null {
-    if (!result.region) {
-      return null;
-    }
-
-    const regionAddress = this.buildRegionAddress(result.region);
-    if (!regionAddress) {
-      return null;
-    }
-
-    if (includeRoadAddress && result.name === 'roadaddr' && result.land) {
-      const roadParts: string[] = [];
-
-      if (result.land.name && typeof result.land.name === 'string') {
-        roadParts.push(result.land.name);
-      }
-
-      if (result.land.number1 && typeof result.land.number1 === 'string') {
-        roadParts.push(result.land.number1);
-        if (result.land.number2 && typeof result.land.number2 === 'string') {
-          roadParts.push(result.land.number2);
-        }
-      }
-
-      if (roadParts.length > 0) {
-        return `${regionAddress} ${roadParts.join(' ')}`;
-      }
-    }
-
-    return regionAddress;
-  }
-
-  private buildRegionAddress(
-    region?: NaverReverseGeocodeResult['region'],
-  ): string | null {
-    if (!region) {
-      return null;
-    }
-
-    const names: string[] = [];
-
-    if (region.area1?.name?.trim()) names.push(region.area1.name.trim());
-    if (region.area2?.name?.trim()) names.push(region.area2.name.trim());
-    if (region.area3?.name?.trim()) names.push(region.area3.name.trim());
-    if (region.area4?.name?.trim()) names.push(region.area4.name.trim());
-
-    if (!names.length && region.area0?.name?.trim()) {
-      names.push(region.area0.name.trim());
-    }
-
-    const uniqueNames = names.filter(
-      (name, index) => names.indexOf(name) === index,
-    );
-
-    return uniqueNames.length ? uniqueNames.join(' ') : null;
-  }
-
-  private toMarker(restaurant: RestaurantSummary): MapMarker {
-    return {
-      name: restaurant.name,
-      address: restaurant.address,
-      roadAddress: restaurant.roadAddress,
-      phone: restaurant.phone,
-      mapx: restaurant.mapx,
-      mapy: restaurant.mapy,
-      distance: restaurant.distance,
-      link: restaurant.link,
-    };
-  }
-}
-</file>
-
-<file path="src/menu/entities/menu-recommendation.entity.ts">
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  ManyToOne,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
-import { SocialLogin } from '../../user/entities/social-login.entity';
-import { User } from '../../user/entities/user.entity';
-import { MenuSelection } from './menu-selection.entity';
-import { PlaceRecommendation } from './place-recommendation.entity';
-
-@Entity()
-export class MenuRecommendation {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @ManyToOne(() => User, (user) => user.recommendations, {
-    onDelete: 'CASCADE',
-    nullable: true,
-  })
-  user: User | null;
-
-  @ManyToOne(() => SocialLogin, {
-    onDelete: 'CASCADE',
-    nullable: true,
-  })
-  socialLogin: SocialLogin | null;
-
-  @Column('text', { array: true })
-  recommendations: string[];
-
-  @Column({ type: 'text', default: '' })
-  reason: string;
-
-  @Column('text')
-  prompt: string;
-
-  @Column({ type: 'text', nullable: false })
-  requestAddress: string; // 서버에서 사용자 기본 주소를 조회하여 저장 (필수)
-
-  @Column({ type: 'timestamptz' })
-  recommendedAt: Date;
-
-  @OneToMany(
-    () => PlaceRecommendation,
-    (placeRecommendation) => placeRecommendation.menuRecommendation,
-  )
-  placeRecommendations: PlaceRecommendation[];
-
-  @OneToMany(() => MenuSelection, (selection) => selection.menuRecommendation)
-  selections: MenuSelection[];
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }
 </file>
 
@@ -13508,6 +13917,41 @@ export class AuthController {
 }
 </file>
 
+<file path="src/map/map.service.ts">
+import { Injectable } from '@nestjs/common';
+import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
+import { RestaurantSummary } from '@/search/interfaces/search.interface';
+import { SearchService } from '@/search/search.service';
+import { MapMarker, MapRestaurantsResponse } from '@/map/interfaces/map.interface';
+
+@Injectable()
+export class MapService {
+  constructor(private readonly searchService: SearchService) {}
+
+  async getRestaurantMarkers(
+    dto: SearchRestaurantsDto,
+  ): Promise<MapRestaurantsResponse> {
+    const { restaurants } = await this.searchService.searchRestaurants(dto);
+    return {
+      markers: restaurants.map((restaurant) => this.toMarker(restaurant)),
+    };
+  }
+
+  private toMarker(restaurant: RestaurantSummary): MapMarker {
+    return {
+      name: restaurant.name,
+      address: restaurant.address,
+      roadAddress: restaurant.roadAddress,
+      phone: restaurant.phone,
+      mapx: restaurant.mapx,
+      mapy: restaurant.mapy,
+      distance: restaurant.distance,
+      link: restaurant.link,
+    };
+  }
+}
+</file>
+
 <file path="src/menu/menu.controller.ts">
 import {
   BadRequestException,
@@ -13728,6 +14172,86 @@ import { PlaceService } from './services/place.service';
 export class MenuModule {}
 </file>
 
+<file path="src/auth/auth.module.ts">
+import { MailerModule } from '@nestjs-modules/mailer';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
+import { HttpModule } from '@nestjs/axios';
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { join } from 'path';
+import { ExternalModule } from '@/external/external.module';
+import { SocialLogin } from '@/user/entities/social-login.entity';
+import { User } from '@/user/entities/user.entity';
+import { UserModule } from '@/user/user.module';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { EmailVerification } from './entities/email-verification.entity';
+import { JwtTokenProvider } from './provider/jwt-token.provider';
+import { AuthSocialService } from './services/auth-social.service';
+import { AuthTokenService } from './services/auth-token.service';
+import { EmailVerificationService } from './services/email-verification.service';
+import { JwtStrategy } from './strategy/jwt.strategy';
+import { LocalStrategy } from './strategy/local.strategy';
+
+@Module({
+  imports: [
+    HttpModule,
+    ExternalModule,
+    TypeOrmModule.forFeature([User, SocialLogin, EmailVerification]),
+    PassportModule,
+    UserModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.getOrThrow<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '15m' },
+      }),
+    }),
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        transport: {
+          host: config.get<string>('EMAIL_HOST'),
+          port: config.get<number>('EMAIL_PORT', 587),
+          secure: config.get<string>('EMAIL_SECURE') === 'true',
+          auth: {
+            user: config.get<string>('EMAIL_ADDRESS'),
+            pass: config.get<string>('EMAIL_PASSWORD'),
+          },
+        },
+        defaults: {
+          from: `"PickEat" <${config.get<string>('EMAIL_ADDRESS')}>`,
+        },
+        template: {
+          dir: join(process.cwd(), 'src', 'auth', 'templates'),
+          adapter: new HandlebarsAdapter(),
+          options: {
+            strict: true,
+          },
+        },
+      }),
+    }),
+  ],
+  controllers: [AuthController],
+  providers: [
+    AuthService,
+    AuthTokenService,
+    AuthSocialService,
+    JwtStrategy,
+    LocalStrategy,
+    JwtTokenProvider,
+    EmailVerificationService,
+  ],
+  exports: [JwtStrategy],
+})
+export class AuthModule {}
+</file>
+
 <file path="package.json">
 {
   "name": "pick-eat_be",
@@ -13834,86 +14358,6 @@ export class MenuModule {}
     "testEnvironment": "node"
   }
 }
-</file>
-
-<file path="src/auth/auth.module.ts">
-import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
-import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { join } from 'path';
-import { ExternalModule } from '@/external/external.module';
-import { SocialLogin } from '@/user/entities/social-login.entity';
-import { User } from '@/user/entities/user.entity';
-import { UserModule } from '@/user/user.module';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { EmailVerification } from './entities/email-verification.entity';
-import { JwtTokenProvider } from './provider/jwt-token.provider';
-import { AuthSocialService } from './services/auth-social.service';
-import { AuthTokenService } from './services/auth-token.service';
-import { EmailVerificationService } from './services/email-verification.service';
-import { JwtStrategy } from './strategy/jwt.strategy';
-import { LocalStrategy } from './strategy/local.strategy';
-
-@Module({
-  imports: [
-    HttpModule,
-    ExternalModule,
-    TypeOrmModule.forFeature([User, SocialLogin, EmailVerification]),
-    PassportModule,
-    UserModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '15m' },
-      }),
-    }),
-    MailerModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        transport: {
-          host: config.get<string>('EMAIL_HOST'),
-          port: config.get<number>('EMAIL_PORT', 587),
-          secure: config.get<string>('EMAIL_SECURE') === 'true',
-          auth: {
-            user: config.get<string>('EMAIL_ADDRESS'),
-            pass: config.get<string>('EMAIL_PASSWORD'),
-          },
-        },
-        defaults: {
-          from: `"PickEat" <${config.get<string>('EMAIL_ADDRESS')}>`,
-        },
-        template: {
-          dir: join(process.cwd(), 'src', 'auth', 'templates'),
-          adapter: new HandlebarsAdapter(),
-          options: {
-            strict: true,
-          },
-        },
-      }),
-    }),
-  ],
-  controllers: [AuthController],
-  providers: [
-    AuthService,
-    AuthTokenService,
-    AuthSocialService,
-    JwtStrategy,
-    LocalStrategy,
-    JwtTokenProvider,
-    EmailVerificationService,
-  ],
-  exports: [JwtStrategy],
-})
-export class AuthModule {}
 </file>
 
 <file path="src/app.module.ts">

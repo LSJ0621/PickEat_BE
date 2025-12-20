@@ -40,6 +40,11 @@ import { UserModule } from './user/user.module';
     MapModule,
   ],
   controllers: [AppController],
-  providers: [AppService, HttpMetricsInterceptor, DbMetricsService, HttpExceptionFilter],
+  providers: [
+    AppService,
+    HttpMetricsInterceptor,
+    DbMetricsService,
+    HttpExceptionFilter,
+  ],
 })
 export class AppModule {}

@@ -24,4 +24,3 @@ export interface PlaceRecommendationsResponse {
     reason: string;
   }>;
 }
-

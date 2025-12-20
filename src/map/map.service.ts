@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { SearchRestaurantsDto } from '@/search/dto/search-restaurants.dto';
 import { RestaurantSummary } from '@/search/interfaces/search.interface';
 import { SearchService } from '@/search/search.service';
-import { MapMarker, MapRestaurantsResponse } from '@/map/interfaces/map.interface';
+import {
+  MapMarker,
+  MapRestaurantsResponse,
+} from '@/map/interfaces/map.interface';
 
 @Injectable()
 export class MapService {

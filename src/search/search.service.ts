@@ -53,9 +53,7 @@ export class SearchService {
               `🔍 [네이버 검색 요청] query="${ctx.query}", lat=${dto.latitude}, lng=${dto.longitude}`,
             );
 
-            const items = await this.naverSearchClient.searchLocal(
-              ctx.query,
-            );
+            const items = await this.naverSearchClient.searchLocal(ctx.query);
 
             if (!items.length) {
               throw new BadRequestException('검색 결과가 없습니다.');
@@ -72,7 +70,8 @@ export class SearchService {
       context,
       {
         onStepError: (name, error) => {
-          const message = error instanceof Error ? error.message : 'unknown error';
+          const message =
+            error instanceof Error ? error.message : 'unknown error';
           this.logger.error(
             `❌ [네이버 검색 단계 에러] step=${name}, message=${message}`,
             error instanceof Error ? error.stack : undefined,

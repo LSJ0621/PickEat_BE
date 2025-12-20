@@ -15,4 +15,3 @@ export class OpenAIResponseException extends HttpException {
     );
   }
 }
-
