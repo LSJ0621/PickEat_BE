@@ -10,4 +10,3 @@ export class UserAddressResponseDto {
   createdAt: Date;
   updatedAt: Date;
 }
-

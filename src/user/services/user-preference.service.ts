@@ -1,12 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  AuthenticatedEntity,
-  isSocialLogin,
-  isUser,
-} from '../../common/interfaces/authenticated-user.interface';
-import { SocialLogin } from '../entities/social-login.entity';
 import { User } from '../entities/user.entity';
 import {
   defaultUserPreferences,
@@ -20,13 +14,9 @@ export class UserPreferenceService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(SocialLogin)
-    private readonly socialLoginRepository: Repository<SocialLogin>,
   ) {}
 
-  // ========== 통합 메서드 (AuthenticatedEntity 사용) ==========
-
-  async getPreferences(entity: AuthenticatedEntity): Promise<UserPreferences> {
+  async getPreferences(entity: User): Promise<UserPreferences> {
     const preferences = entity.preferences ?? defaultUserPreferences();
     return {
       likes: preferences.likes ?? [],
@@ -36,16 +26,20 @@ export class UserPreferenceService {
   }
 
   async updatePreferences(
-    entity: AuthenticatedEntity,
+    entity: User,
     likes?: string[],
     dislikes?: string[],
   ): Promise<UserPreferences> {
     const currentPreferences = entity.preferences ?? defaultUserPreferences();
 
     const normalizedLikes =
-      likes !== undefined ? this.normalizeTags(likes) : currentPreferences.likes;
+      likes !== undefined
+        ? this.normalizeTags(likes)
+        : currentPreferences.likes;
     const normalizedDislikes =
-      dislikes !== undefined ? this.normalizeTags(dislikes) : currentPreferences.dislikes;
+      dislikes !== undefined
+        ? this.normalizeTags(dislikes)
+        : currentPreferences.dislikes;
 
     entity.preferences = {
       likes: normalizedLikes,
@@ -53,17 +47,12 @@ export class UserPreferenceService {
       analysis: currentPreferences.analysis,
     };
 
-    if (isUser(entity)) {
-      await this.userRepository.save(entity);
-    } else if (isSocialLogin(entity)) {
-      await this.socialLoginRepository.save(entity);
-    }
-
+    await this.userRepository.save(entity);
     return entity.preferences;
   }
 
   async updatePreferencesAnalysis(
-    entity: AuthenticatedEntity,
+    entity: User,
     analysis: string,
   ): Promise<UserPreferences> {
     const currentPreferences = entity.preferences ?? defaultUserPreferences();
@@ -74,12 +63,7 @@ export class UserPreferenceService {
       analysis: analysis.trim(),
     };
 
-    if (isUser(entity)) {
-      await this.userRepository.save(entity);
-    } else if (isSocialLogin(entity)) {
-      await this.socialLoginRepository.save(entity);
-    }
-
+    await this.userRepository.save(entity);
     return entity.preferences;
   }
 
@@ -89,6 +73,4 @@ export class UserPreferenceService {
       .filter((tag): tag is string => Boolean(tag && tag.length));
     return Array.from(new Set(sanitized));
   }
-
 }
-

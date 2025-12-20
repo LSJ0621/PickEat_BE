@@ -22,7 +22,9 @@ export class NaverSearchClient {
     this.clientSecret = this.config.get<string>('NAVER_CLIENT_SECRET', '');
 
     if (!this.clientId || !this.clientSecret) {
-      this.logger.warn('NAVER_CLIENT_ID 또는 NAVER_CLIENT_SECRET가 설정되지 않았습니다.');
+      this.logger.warn(
+        'NAVER_CLIENT_ID 또는 NAVER_CLIENT_SECRET가 설정되지 않았습니다.',
+      );
     }
   }
 
@@ -34,7 +36,10 @@ export class NaverSearchClient {
     options?: { display?: number },
   ): Promise<NaverLocalSearchItem[]> {
     if (!this.clientId || !this.clientSecret) {
-      throw new ConfigMissingException(['NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET']);
+      throw new ConfigMissingException([
+        'NAVER_CLIENT_ID',
+        'NAVER_CLIENT_SECRET',
+      ]);
     }
 
     const url = `${NAVER_SEARCH_CONFIG.BASE_URL}${NAVER_SEARCH_CONFIG.ENDPOINTS.LOCAL_SEARCH}`;
@@ -67,10 +72,15 @@ export class NaverSearchClient {
         `❌ [Naver 로컬 검색 에러] query="${query}", status=${statusCode ?? 'unknown'}, error=${message}`,
       );
       if (errorData) {
-        this.logger.error(`에러 상세: ${JSON.stringify(errorData).slice(0, 500)}`);
+        this.logger.error(
+          `에러 상세: ${JSON.stringify(errorData).slice(0, 500)}`,
+        );
       }
-      throw new ExternalApiException('Naver Search', error, '로컬 검색에 실패했습니다.');
+      throw new ExternalApiException(
+        'Naver Search',
+        error,
+        '로컬 검색에 실패했습니다.',
+      );
     }
   }
 }
-

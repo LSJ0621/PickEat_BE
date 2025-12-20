@@ -22,10 +22,7 @@ export class Gpt51MenuService extends BaseMenuService {
    */
   private readonly model: string;
 
-  constructor(
-    config: ConfigService,
-    prometheusService: PrometheusService,
-  ) {
+  constructor(config: ConfigService, prometheusService: PrometheusService) {
     super('Gpt51MenuService', config, prometheusService);
     this.model =
       this.config.get<string>('OPENAI_MENU_MODEL') ||

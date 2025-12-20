@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
@@ -12,7 +8,10 @@ import {
   GOOGLE_PLACES_SYSTEM_PROMPT,
 } from '@/external/openai/prompts';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
-import { mapStatusGroupFromError, parseTokens } from '../../common/utils/metrics.util';
+import {
+  mapStatusGroupFromError,
+  parseTokens,
+} from '../../common/utils/metrics.util';
 import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
 import { PrometheusService } from '../../prometheus/prometheus.service';
 import {
@@ -117,12 +116,16 @@ export class OpenAiPlacesService implements OnModuleInit {
         if (this.prometheusService && Number.isFinite(totalTokens)) {
           this.prometheusService.recordAiSuccess(endpoint, totalTokens);
         }
-        }
+      }
 
       // Prometheus 메트릭 기록 (요청 지연 + 외부 API)
       if (this.prometheusService) {
         this.prometheusService.recordAiDuration(endpoint, duration / 1000);
-        this.prometheusService.recordExternalApi(extService, '2xx', duration / 1000);
+        this.prometheusService.recordExternalApi(
+          extService,
+          '2xx',
+          duration / 1000,
+        );
       }
 
       const choice = response.choices[0];
@@ -134,7 +137,10 @@ export class OpenAiPlacesService implements OnModuleInit {
       const parsed = JSON.parse(content) as PlaceRecommendationsResponse;
 
       if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
-        throw new OpenAIResponseException('응답 형식이 올바르지 않습니다', parsed);
+        throw new OpenAIResponseException(
+          '응답 형식이 올바르지 않습니다',
+          parsed,
+        );
       }
 
       return {
@@ -153,7 +159,11 @@ export class OpenAiPlacesService implements OnModuleInit {
         this.prometheusService.recordAiError('places');
         this.prometheusService.recordAiDuration('places', duration / 1000);
         const statusGroup = mapStatusGroupFromError(error);
-        this.prometheusService.recordExternalApi(extService, statusGroup, duration / 1000);
+        this.prometheusService.recordExternalApi(
+          extService,
+          statusGroup,
+          duration / 1000,
+        );
       }
 
       throw new ExternalApiException(
@@ -163,5 +173,4 @@ export class OpenAiPlacesService implements OnModuleInit {
       );
     }
   }
-
 }

@@ -31,9 +31,7 @@ export class DiscordWebhookClient {
       if (response.status >= 200 && response.status < 300) {
         this.logger.debug('Discord webhook 메시지 전송 성공');
       } else {
-        this.logger.warn(
-          `Discord webhook 응답 상태 코드: ${response.status}`,
-        );
+        this.logger.warn(`Discord webhook 응답 상태 코드: ${response.status}`);
       }
     } catch (error) {
       this.logger.error(
@@ -48,4 +46,3 @@ export class DiscordWebhookClient {
     }
   }
 }
-

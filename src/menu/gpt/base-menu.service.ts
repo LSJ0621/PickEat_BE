@@ -109,7 +109,9 @@ export abstract class BaseMenuService implements OnModuleInit {
       const finishReason = choice.finish_reason;
 
       if (!content) {
-        throw new OpenAIResponseException('응답 내용이 비어있습니다', { finishReason });
+        throw new OpenAIResponseException('응답 내용이 비어있습니다', {
+          finishReason,
+        });
       }
 
       const parsed = JSON.parse(content) as MenuRecommendationsResponse;
@@ -132,7 +134,11 @@ export abstract class BaseMenuService implements OnModuleInit {
       if (this.prometheusService) {
         const durationSeconds = elapsedSeconds(startedAt);
         this.prometheusService.recordAiDuration(endpoint, durationSeconds);
-        this.prometheusService.recordExternalApi(extService, '2xx', durationSeconds);
+        this.prometheusService.recordExternalApi(
+          extService,
+          '2xx',
+          durationSeconds,
+        );
       }
 
       return { recommendations: normalized, reason };
@@ -143,7 +149,11 @@ export abstract class BaseMenuService implements OnModuleInit {
         const durationSeconds = elapsedSeconds(startedAt);
         this.prometheusService.recordAiDuration('menu', durationSeconds);
         const statusGroup = mapStatusGroupFromError(error);
-        this.prometheusService.recordExternalApi(extService, statusGroup, durationSeconds);
+        this.prometheusService.recordExternalApi(
+          extService,
+          statusGroup,
+          durationSeconds,
+        );
       }
 
       throw new ExternalApiException(
@@ -184,5 +194,4 @@ export abstract class BaseMenuService implements OnModuleInit {
       .filter((name): name is string => name !== null && name.length > 0)
       .filter((name, index, array) => array.indexOf(name) === index);
   }
-
 }

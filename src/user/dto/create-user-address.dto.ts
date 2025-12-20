@@ -28,4 +28,3 @@ export class CreateUserAddressDto {
   @IsOptional()
   isSearchAddress?: boolean; // 검색 주소로 설정할지 여부
 }
-

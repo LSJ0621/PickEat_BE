@@ -49,9 +49,7 @@ export class HttpMetricsInterceptor implements NestInterceptor {
       }),
       catchError((error) => {
         const status =
-          typeof (error as any)?.getStatus === 'function'
-            ? (error as any).getStatus()
-            : 500;
+          typeof error?.getStatus === 'function' ? error.getStatus() : 500;
         record(status);
         return throwError(() => error);
       }),
@@ -69,7 +67,7 @@ export class HttpMetricsInterceptor implements NestInterceptor {
 
   private getRouteLabel(req: Request): string {
     // Prefer Express route template (already parameterized)
-    const routePath = (req.route as any)?.path;
+    const routePath = req.route?.path;
     const baseUrl = (req.baseUrl as any) || '';
 
     if (routePath && typeof routePath === 'string') {

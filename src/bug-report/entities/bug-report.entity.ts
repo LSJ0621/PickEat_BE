@@ -2,18 +2,26 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { User } from '../../user/entities/user.entity';
 import { BugReportStatus } from '../enum/bug-report-status.enum';
 
 @Entity()
+@Index('idx_bug_report_status_date', ['status', 'createdAt'])
+@Index('idx_bug_report_user', ['user'])
 export class BugReport {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'int' })
-  userId: number;
+  @ManyToOne(() => User, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
+  user: User;
 
   @Column({ type: 'varchar', length: 50 })
   category: string;
@@ -40,5 +48,3 @@ export class BugReport {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
-

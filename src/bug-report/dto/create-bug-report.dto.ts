@@ -16,5 +16,3 @@ export class CreateBugReportDto {
   @MaxLength(500, { message: '상세 내용은 최대 500자까지 입력 가능합니다.' })
   description: string;
 }
-
-

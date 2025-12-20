@@ -36,11 +36,10 @@ export class MenuController {
     @Body() recommendMenuDto: RecommendMenuDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
-    return this.menuService.recommend(
-      entity,
-      recommendMenuDto.prompt,
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
     );
+    return this.menuService.recommend(entity, recommendMenuDto.prompt);
   }
 
   @Post('selections')
@@ -48,7 +47,9 @@ export class MenuController {
     @Body() createMenuSelectionDto: CreateMenuSelectionDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const selection = await this.menuService.createSelection(
       entity,
       createMenuSelectionDto.menus,
@@ -62,7 +63,9 @@ export class MenuController {
     @Query('date') date: string | undefined,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const selections = await this.menuService.getSelections(entity, date);
     return { selections };
   }
@@ -77,8 +80,14 @@ export class MenuController {
     if (Number.isNaN(selectionId)) {
       throw new BadRequestException('유효하지 않은 선택 ID입니다.');
     }
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
-    const selection = await this.menuService.updateSelection(entity, selectionId, updateDto);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+    const selection = await this.menuService.updateSelection(
+      entity,
+      selectionId,
+      updateDto,
+    );
     return this.buildSelectionResponse(selection);
   }
 
@@ -87,7 +96,9 @@ export class MenuController {
     @Query() query: RecommendationHistoryQueryDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     return this.menuService.getHistory(
       entity,
       query.page,
@@ -101,7 +112,10 @@ export class MenuController {
   // 예: GET /menu/restaurant/blogs?query=부산시 해운대구 마라탕집&restaurantName=마라탕집
   @Get('restaurant/blogs')
   async searchRestaurantBlogs(@Query() dto: SearchRestaurantBlogsDto) {
-    return this.menuService.searchRestaurantBlogs(dto.query, dto.restaurantName);
+    return this.menuService.searchRestaurantBlogs(
+      dto.query,
+      dto.restaurantName,
+    );
   }
 
   // Google Places 텍스트 검색 + LLM 추천까지 한 번에 수행
@@ -116,7 +130,9 @@ export class MenuController {
     if (!menuName) {
       throw new BadRequestException('menuName 쿼리 파라미터가 필요합니다.');
     }
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const numericHistoryId =
       historyId !== undefined && historyId !== null
         ? Number(historyId)
@@ -140,7 +156,9 @@ export class MenuController {
     if (Number.isNaN(numericId)) {
       throw new BadRequestException('유효하지 않은 추천 이력 ID입니다.');
     }
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     return this.menuService.getRecommendationDetail(entity, numericId);
   }
 

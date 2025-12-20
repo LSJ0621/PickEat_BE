@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { runPipeline } from '@/common/pipeline/pipeline';
-import { AuthenticatedEntity } from '@/common/interfaces/authenticated-user.interface';
+import { User } from '@/user/entities/user.entity';
 import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
 import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
 import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
@@ -41,15 +41,12 @@ export class PlaceService {
       userRatingCount: place.userRatingCount ?? null,
       priceLevel: place.priceLevel ?? null,
       reviews:
-        place.reviews
-          ?.slice(0, 3)
-          .map((review) => ({
-            rating: review.rating ?? null,
-            originalText:
-              review.originalText?.text ?? review.text?.text ?? null,
-            relativePublishTimeDescription:
-              review.relativePublishTimeDescription ?? null,
-          })) ?? null,
+        place.reviews?.slice(0, 3).map((review) => ({
+          rating: review.rating ?? null,
+          originalText: review.originalText?.text ?? review.text?.text ?? null,
+          relativePublishTimeDescription:
+            review.relativePublishTimeDescription ?? null,
+        })) ?? null,
     }));
 
     return { places: result };
@@ -101,10 +98,10 @@ export class PlaceService {
   }
 
   /**
-   * 가게 추천 (User/SocialLogin 통합)
+   * 가게 추천
    */
   async recommendRestaurants(
-    entity: AuthenticatedEntity,
+    user: User,
     textQuery: string,
     menuName: string,
     menuRecommendationId: number,
@@ -113,7 +110,7 @@ export class PlaceService {
 
     const menuRecord = await this.menuRecommendationService.findById(
       menuRecommendationId,
-      entity,
+      user,
     );
 
     this.validateNoExistingRecommendation(menuRecord, menuName);
@@ -231,13 +228,11 @@ export class PlaceService {
         rating: number | null;
         userRatingCount: number | null;
         priceLevel: string | null;
-        reviews:
-          | Array<{
-              rating: number | null;
-              originalText: string | null;
-              relativePublishTimeDescription: string | null;
-            }>
-          | null;
+        reviews: Array<{
+          rating: number | null;
+          originalText: string | null;
+          relativePublishTimeDescription: string | null;
+        }> | null;
       }>;
       recommendations: Awaited<
         ReturnType<typeof this.openAiPlacesService.recommendFromGooglePlaces>
@@ -312,7 +307,8 @@ export class PlaceService {
           );
         },
         onStepError: (name, error) => {
-          const message = error instanceof Error ? error.message : 'unknown error';
+          const message =
+            error instanceof Error ? error.message : 'unknown error';
           this.logger.error(
             `❌ [가게 추천 스텝 에러] step=${name}, query="${textQuery}", error=${message}`,
             error instanceof Error ? error.stack : undefined,

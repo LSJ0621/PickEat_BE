@@ -16,4 +16,3 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     dropSchema: false,
   }),
 };
-

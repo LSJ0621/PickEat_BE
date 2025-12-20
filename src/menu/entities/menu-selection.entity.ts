@@ -2,11 +2,11 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
 import { MenuSlotPayload } from '../interface/menu-selection.interface';
 import { MenuRecommendation } from './menu-recommendation.entity';
@@ -20,6 +20,7 @@ export enum MenuSelectionStatus {
 }
 
 @Entity()
+@Index('idx_menu_selection_user_date', ['user', 'selectedDate'])
 export class MenuSelection {
   @PrimaryGeneratedColumn()
   id: number;
@@ -47,16 +48,10 @@ export class MenuSelection {
   retryCount: number;
 
   @ManyToOne(() => User, (user) => user.menuSelections, {
-    nullable: true,
+    nullable: false,
     onDelete: 'CASCADE',
   })
-  user: User | null;
-
-  @ManyToOne(() => SocialLogin, (socialLogin) => socialLogin.menuSelections, {
-    nullable: true,
-    onDelete: 'CASCADE',
-  })
-  socialLogin: SocialLogin | null;
+  user: User;
 
   @ManyToOne(
     () => MenuRecommendation,

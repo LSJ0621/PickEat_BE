@@ -10,4 +10,3 @@ import { GoogleSearchClient } from './clients/google-search.client';
   exports: [GooglePlacesClient, GoogleSearchClient, GoogleOAuthClient],
 })
 export class GoogleModule {}
-

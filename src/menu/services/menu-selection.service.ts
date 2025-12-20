@@ -1,10 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  AuthenticatedEntity,
-  isUser,
-} from '../../common/interfaces/authenticated-user.interface';
+import { User } from '../../user/entities/user.entity';
 import { UpdateMenuSelectionDto } from '../dto/update-menu-selection.dto';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import {
@@ -35,10 +32,10 @@ export class MenuSelectionService {
   ) {}
 
   /**
-   * 메뉴 선택 생성 (User/SocialLogin 통합)
+   * 메뉴 선택 생성
    */
   async createSelection(
-    entity: AuthenticatedEntity,
+    user: User,
     menus: Array<{ slot: string; name: string }>,
     historyId?: number,
   ): Promise<MenuSelection> {
@@ -50,15 +47,9 @@ export class MenuSelectionService {
     const now = new Date();
     const selectedDate = this.toDateString(now);
 
-    const whereClause = isUser(entity)
-      ? { user: { id: entity.id }, selectedDate }
-      : { socialLogin: { id: entity.id }, selectedDate };
-
-    const relations = isUser(entity) ? ['user'] : ['socialLogin'];
-
     const existing = await this.menuSelectionRepository.findOne({
-      where: whereClause,
-      relations,
+      where: { user: { id: user.id }, selectedDate },
+      relations: ['user'],
     });
 
     if (existing) {
@@ -68,37 +59,39 @@ export class MenuSelectionService {
         now,
         selectedDate,
         historyId,
-        () => this.menuRecommendationService.findOwnedRecommendation(historyId!, entity),
+        () =>
+          this.menuRecommendationService.findOwnedRecommendation(
+            historyId!,
+            user,
+          ),
       );
     }
 
     return this.createNewSelection(
       menuPayload,
-      entity,
+      user,
       now,
       selectedDate,
       historyId,
-      () => this.menuRecommendationService.findOwnedRecommendation(historyId!, entity),
+      () =>
+        this.menuRecommendationService.findOwnedRecommendation(
+          historyId!,
+          user,
+        ),
     );
   }
 
   /**
-   * 메뉴 선택 수정 (User/SocialLogin 통합)
+   * 메뉴 선택 수정
    */
   async updateSelection(
-    entity: AuthenticatedEntity,
+    user: User,
     selectionId: number,
     dto: UpdateMenuSelectionDto,
   ) {
-    const whereClause = isUser(entity)
-      ? { id: selectionId, user: { id: entity.id } }
-      : { id: selectionId, socialLogin: { id: entity.id } };
-
-    const relations = isUser(entity) ? ['user'] : ['socialLogin'];
-
     const selection = await this.menuSelectionRepository.findOne({
-      where: whereClause,
-      relations,
+      where: { id: selectionId, user: { id: user.id } },
+      relations: ['user'],
     });
 
     if (!selection) {
@@ -109,12 +102,10 @@ export class MenuSelectionService {
   }
 
   /**
-   * 메뉴 선택 이력 조회 (User/SocialLogin 통합)
+   * 메뉴 선택 이력 조회
    */
-  async getSelections(entity: AuthenticatedEntity, selectedDate?: string) {
-    const where: any = isUser(entity)
-      ? { user: { id: entity.id } }
-      : { socialLogin: { id: entity.id } };
+  async getSelections(user: User, selectedDate?: string) {
+    const where: any = { user: { id: user.id } };
 
     if (selectedDate) {
       where.selectedDate = selectedDate;
@@ -175,7 +166,7 @@ export class MenuSelectionService {
 
   private async createNewSelection(
     menuPayload: ReturnType<typeof buildMenuPayloadFromSlotInputs>,
-    entity: AuthenticatedEntity,
+    user: User,
     now: Date,
     selectedDate: string,
     historyId: number | undefined,
@@ -183,9 +174,7 @@ export class MenuSelectionService {
   ): Promise<MenuSelection> {
     const selection = this.menuSelectionRepository.create({
       menuPayload,
-      ...(isUser(entity)
-        ? { user: entity, socialLogin: null }
-        : { user: null, socialLogin: entity }),
+      user,
       selectedAt: now,
       selectedDate,
       status: MenuSelectionStatus.PENDING,
@@ -200,7 +189,10 @@ export class MenuSelectionService {
     return this.menuSelectionRepository.save(selection);
   }
 
-  private async performUpdate(selection: MenuSelection, dto: UpdateMenuSelectionDto) {
+  private async performUpdate(
+    selection: MenuSelection,
+    dto: UpdateMenuSelectionDto,
+  ) {
     const now = new Date();
     const selectedDate = this.toDateString(now);
 

@@ -8,7 +8,6 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
 import { ExternalModule } from '@/external/external.module';
-import { SocialLogin } from '@/user/entities/social-login.entity';
 import { User } from '@/user/entities/user.entity';
 import { UserModule } from '@/user/user.module';
 import { AuthController } from './auth.controller';
@@ -25,7 +24,7 @@ import { LocalStrategy } from './strategy/local.strategy';
   imports: [
     HttpModule,
     ExternalModule,
-    TypeOrmModule.forFeature([User, SocialLogin, EmailVerification]),
+    TypeOrmModule.forFeature([User, EmailVerification]),
     PassportModule,
     UserModule,
     JwtModule.registerAsync({

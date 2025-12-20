@@ -5,7 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
 import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
 import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import { elapsedSeconds, mapStatusGroupFromError } from '../../../common/utils/metrics.util';
+import {
+  elapsedSeconds,
+  mapStatusGroupFromError,
+} from '../../../common/utils/metrics.util';
 import { GOOGLE_PLACES_CONFIG } from '../google.constants';
 import {
   GooglePlaceDetails,
@@ -60,7 +63,8 @@ export class GooglePlacesClient {
           {
             textQuery: query,
             languageCode:
-              options?.languageCode ?? GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE,
+              options?.languageCode ??
+              GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE,
             maxResultCount:
               options?.maxResults ?? SEARCH_DEFAULTS.GOOGLE_PLACES_MAX_RESULTS,
           },
@@ -78,7 +82,11 @@ export class GooglePlacesClient {
       statusGroup = mapStatusGroupFromError(error);
       this.logError('Places 검색', query, error);
       this.recordExternal(statusGroup, startedAt);
-      throw new ExternalApiException('Google Places', error, 'Places 검색에 실패했습니다.');
+      throw new ExternalApiException(
+        'Google Places',
+        error,
+        'Places 검색에 실패했습니다.',
+      );
     }
   }
 
@@ -110,7 +118,7 @@ export class GooglePlacesClient {
           params: { languageCode: GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE },
           headers: {
             ...this.buildHeaders(fieldMask),
-            'Referer': this.appUrl,
+            Referer: this.appUrl,
           },
         }),
       );
@@ -122,7 +130,11 @@ export class GooglePlacesClient {
       statusGroup = mapStatusGroupFromError(error);
       this.logError('Places 상세 조회', placeId, error);
       this.recordExternal(statusGroup, startedAt);
-      throw new ExternalApiException('Google Places', error, 'Places 상세 조회에 실패했습니다.');
+      throw new ExternalApiException(
+        'Google Places',
+        error,
+        'Places 상세 조회에 실패했습니다.',
+      );
     }
   }
 
@@ -153,7 +165,7 @@ export class GooglePlacesClient {
           },
           headers: {
             'X-Goog-Api-Key': this.apiKey,
-            'Referer': this.appUrl,
+            Referer: this.appUrl,
           },
         }),
       );
@@ -196,7 +208,7 @@ export class GooglePlacesClient {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': this.apiKey,
       'X-Goog-FieldMask': fieldMask,
-      'Referer': this.appUrl,
+      Referer: this.appUrl,
     };
   }
 
@@ -218,6 +230,10 @@ export class GooglePlacesClient {
     startedAt: number,
   ) {
     const durationSeconds = elapsedSeconds(startedAt);
-    this.prometheusService.recordExternalApi('places', statusGroup, durationSeconds);
+    this.prometheusService.recordExternalApi(
+      'places',
+      statusGroup,
+      durationSeconds,
+    );
   }
 }

@@ -6,10 +6,9 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { GoogleOAuthClient } from '../../external/google/clients/google-oauth.client';
 import { KakaoOAuthClient } from '../../external/kakao/clients/kakao-oauth.client';
-import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
 import { SocialType } from '../../user/enum/social-type.enum';
 import { UserService } from '../../user/user.service';
@@ -26,8 +25,6 @@ export class AuthSocialService {
     private readonly userService: UserService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(SocialLogin)
-    private readonly socialLoginRepository: Repository<SocialLogin>,
     private readonly kakaoOAuthClient: KakaoOAuthClient,
     private readonly googleOAuthClient: GoogleOAuthClient,
   ) {}
@@ -36,22 +33,26 @@ export class AuthSocialService {
 
   async kakaoLogin(
     code: string,
-    buildAuthResult: (entity: User | SocialLogin) => Promise<AuthResult>,
+    buildAuthResult: (entity: User) => Promise<AuthResult>,
   ): Promise<AuthResult> {
     const accessTokenDto = await this.getKakaoAccessToken(code);
-    const kakaoProfileDto = await this.getKakaoProfile(accessTokenDto.access_token);
+    const kakaoProfileDto = await this.getKakaoProfile(
+      accessTokenDto.access_token,
+    );
     return this.processKakaoProfile(kakaoProfileDto, buildAuthResult);
   }
 
   async kakaoLoginWithToken(
     accessToken: string,
-    buildAuthResult: (entity: User | SocialLogin) => Promise<AuthResult>,
+    buildAuthResult: (entity: User) => Promise<AuthResult>,
   ): Promise<AuthResult> {
     const kakaoProfileDto = await this.getKakaoProfile(accessToken);
     return this.processKakaoProfile(kakaoProfileDto, buildAuthResult);
   }
 
-  private async getKakaoAccessToken(code: string): Promise<{ access_token: string }> {
+  private async getKakaoAccessToken(
+    code: string,
+  ): Promise<{ access_token: string }> {
     const tokenResponse = await this.kakaoOAuthClient.getAccessToken(code);
     return { access_token: tokenResponse.access_token };
   }
@@ -63,7 +64,7 @@ export class AuthSocialService {
 
   private async processKakaoProfile(
     kakaoProfileDto: KakaoProfileDto,
-    buildAuthResult: (entity: User | SocialLogin) => Promise<AuthResult>,
+    buildAuthResult: (entity: User) => Promise<AuthResult>,
   ): Promise<AuthResult> {
     const email = kakaoProfileDto.kakao_account.email;
     if (!email) {
@@ -72,22 +73,24 @@ export class AuthSocialService {
       );
     }
 
-    const activeUser = await this.userRepository.findOne({ where: { email } });
+    const activeUser = await this.userRepository.findOne({
+      where: { email, password: Not(null as any) },
+    });
     if (activeUser) {
-      throw new BadRequestException('이미 일반 회원가입으로 가입한 이메일입니다.');
+      throw new BadRequestException(
+        '이미 일반 회원가입으로 가입한 이메일입니다.',
+      );
     }
 
-    let originalUser = await this.userService.getUserBySocialId(kakaoProfileDto.id);
+    let user = await this.userService.getUserBySocialId(kakaoProfileDto.id);
 
-    if (!originalUser) {
-      const profileImage = kakaoProfileDto.properties?.profile_image;
-      originalUser = await this.userService.createOauth(
+    if (!user) {
+      user = await this.userService.createOauth(
         kakaoProfileDto.id,
         email,
         SocialType.KAKAO,
-        profileImage,
       );
-    } else if (originalUser.deletedAt) {
+    } else if (user.deletedAt) {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
@@ -99,21 +102,25 @@ export class AuthSocialService {
       );
     }
 
-    return buildAuthResult(originalUser);
+    return buildAuthResult(user);
   }
 
   // ========== Google OAuth ==========
 
   async googleLogin(
     code: string,
-    buildAuthResult: (entity: User | SocialLogin) => Promise<AuthResult>,
+    buildAuthResult: (entity: User) => Promise<AuthResult>,
   ): Promise<AuthResult> {
     const accessTokenDto = await this.getGoogleAccessToken(code);
-    const googleProfileDto = await this.getGoogleProfile(accessTokenDto.access_token);
+    const googleProfileDto = await this.getGoogleProfile(
+      accessTokenDto.access_token,
+    );
     return this.processGoogleProfile(googleProfileDto, buildAuthResult);
   }
 
-  private async getGoogleAccessToken(code: string): Promise<{ access_token: string }> {
+  private async getGoogleAccessToken(
+    code: string,
+  ): Promise<{ access_token: string }> {
     const tokenResponse = await this.googleOAuthClient.getAccessToken(code);
     return { access_token: tokenResponse.access_token };
   }
@@ -125,7 +132,7 @@ export class AuthSocialService {
 
   private async processGoogleProfile(
     googleProfileDto: GoogleProfileDto,
-    buildAuthResult: (entity: User | SocialLogin) => Promise<AuthResult>,
+    buildAuthResult: (entity: User) => Promise<AuthResult>,
   ): Promise<AuthResult> {
     const email = googleProfileDto.email;
     if (!email) {
@@ -134,24 +141,26 @@ export class AuthSocialService {
       );
     }
 
-    const activeUser = await this.userRepository.findOne({ where: { email } });
+    const activeUser = await this.userRepository.findOne({
+      where: { email, password: Not(null as any) },
+    });
     if (activeUser) {
-      throw new BadRequestException('이미 일반 회원가입으로 가입한 이메일입니다.');
+      throw new BadRequestException(
+        '이미 일반 회원가입으로 가입한 이메일입니다.',
+      );
     }
 
-    let originalUser = await this.userService.getUserBySocialId(googleProfileDto.sub);
+    let user = await this.userService.getUserBySocialId(googleProfileDto.sub);
 
-    if (!originalUser) {
-      const profileImage = googleProfileDto.picture;
+    if (!user) {
       const name = googleProfileDto.name;
-      originalUser = await this.userService.createOauth(
+      user = await this.userService.createOauth(
         googleProfileDto.sub,
         email,
         SocialType.GOOGLE,
-        profileImage,
         name,
       );
-    } else if (originalUser.deletedAt) {
+    } else if (user.deletedAt) {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
@@ -163,43 +172,46 @@ export class AuthSocialService {
       );
     }
 
-    return buildAuthResult(originalUser);
+    return buildAuthResult(user);
   }
 
   // ========== Re-register Social ==========
 
-  async reRegisterSocial(reRegisterSocialDto: ReRegisterSocialDto): Promise<{ message: string }> {
-    const deletedSocialLogin = await this.socialLoginRepository.findOne({
-      where: { email: reRegisterSocialDto.email },
+  async reRegisterSocial(
+    reRegisterSocialDto: ReRegisterSocialDto,
+  ): Promise<{ message: string }> {
+    const deletedUser = await this.userRepository.findOne({
+      where: { email: reRegisterSocialDto.email, socialId: Not(null as any) },
       withDeleted: true,
     });
 
-    if (!deletedSocialLogin || !deletedSocialLogin.deletedAt) {
+    if (!deletedUser || !deletedUser.deletedAt) {
       throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
     }
 
-    const activeUser = await this.userRepository.findOne({
-      where: { email: reRegisterSocialDto.email },
+    const activeRegularUser = await this.userRepository.findOne({
+      where: { email: reRegisterSocialDto.email, password: Not(null as any) },
     });
 
-    if (activeUser) {
-      throw new BadRequestException('이미 일반 회원가입으로 가입한 이메일입니다.');
+    if (activeRegularUser) {
+      throw new BadRequestException(
+        '이미 일반 회원가입으로 가입한 이메일입니다.',
+      );
     }
 
-    await this.socialLoginRepository.update(
+    await this.userRepository.update(
       { email: reRegisterSocialDto.email },
       { refreshToken: null, deletedAt: null },
     );
 
-    const socialLogin = await this.socialLoginRepository.findOne({
+    const user = await this.userRepository.findOne({
       where: { email: reRegisterSocialDto.email },
     });
 
-    if (!socialLogin) {
+    if (!user) {
       throw new BadRequestException('재가입 처리 중 오류가 발생했습니다.');
     }
 
     return { message: '재가입이 완료되었습니다. 로그인해주세요.' };
   }
 }
-
