@@ -9,7 +9,9 @@ export class AddressSearchService {
 
   constructor(private readonly kakaoLocalClient: KakaoLocalClient) {}
 
-  async searchAddress(searchDto: SearchAddressDto): Promise<AddressSearchResponse> {
+  async searchAddress(
+    searchDto: SearchAddressDto,
+  ): Promise<AddressSearchResponse> {
     this.logger.debug(`주소 검색 요청: ${searchDto.query}`);
     const result = await this.kakaoLocalClient.searchAddress(searchDto.query);
 
@@ -19,4 +21,3 @@ export class AddressSearchService {
     };
   }
 }
-

@@ -128,9 +128,7 @@ export class AuthController {
 
     // 회원가입 목적이고 사용자가 이미 존재하는 경우에만 emailVerified 업데이트
     if (verified && purpose === EmailPurpose.SIGNUP) {
-      const user = await this.userService.findByEmail(
-        verifyEmailCodeDto.email,
-      );
+      const user = await this.userService.findByEmail(verifyEmailCodeDto.email);
       if (user) {
         await this.userService.markEmailVerified(verifyEmailCodeDto.email);
       }

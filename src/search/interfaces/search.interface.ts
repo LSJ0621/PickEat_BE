@@ -44,4 +44,3 @@ export interface RestaurantSummary {
 export interface SearchRestaurantsResponse {
   restaurants: RestaurantSummary[];
 }
-

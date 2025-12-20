@@ -86,4 +86,3 @@ export interface KakaoUserProfile {
     email?: string;
   };
 }
-

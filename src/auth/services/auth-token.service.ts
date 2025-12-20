@@ -4,7 +4,6 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
-import { SocialLogin } from '../../user/entities/social-login.entity';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthEntity } from '../interfaces/auth.interface';
@@ -21,15 +20,18 @@ export class AuthTokenService {
     private readonly userService: UserService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(SocialLogin)
-    private readonly socialLoginRepository: Repository<SocialLogin>,
     private readonly config: ConfigService,
   ) {
     this.refreshTokenSecret = this.config.get<string>('JWT_REFRESH_SECRET', '');
   }
 
-  async issueTokens(entity: AuthEntity): Promise<{ token: string; refreshToken: string }> {
-    const token = this.jwtTokenProvider.createToken(entity.email, entity.role.toString());
+  async issueTokens(
+    entity: AuthEntity,
+  ): Promise<{ token: string; refreshToken: string }> {
+    const token = this.jwtTokenProvider.createToken(
+      entity.email,
+      entity.role.toString(),
+    );
     const refreshToken = this.jwtTokenProvider.createRefreshToken(
       entity.email,
       entity.role.toString(),
@@ -38,13 +40,14 @@ export class AuthTokenService {
     return { token, refreshToken };
   }
 
-  async persistRefreshToken(entity: AuthEntity, refreshToken: string | null): Promise<void> {
-    entity.refreshToken = refreshToken ? await bcrypt.hash(refreshToken, 10) : null;
-    if (entity instanceof User) {
-      await this.userRepository.save(entity);
-    } else {
-      await this.socialLoginRepository.save(entity);
-    }
+  async persistRefreshToken(
+    entity: AuthEntity,
+    refreshToken: string | null,
+  ): Promise<void> {
+    entity.refreshToken = refreshToken
+      ? await bcrypt.hash(refreshToken, 10)
+      : null;
+    await this.userRepository.save(entity);
   }
 
   async refreshAccessToken(
@@ -60,38 +63,32 @@ export class AuthTokenService {
       }
 
       const user = await this.userService.findByEmail(payload.email);
-      const socialLogin = user
-        ? null
-        : await this.userService.findSocialLoginByEmail(payload.email);
 
-      if (!user && !socialLogin) {
+      if (!user) {
         throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
       }
 
-      const storedRefreshToken = user?.refreshToken || socialLogin?.refreshToken;
-      if (!storedRefreshToken) {
+      if (!user.refreshToken) {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
 
-      const isTokenValid = await bcrypt.compare(refreshToken, storedRefreshToken);
+      const isTokenValid = await bcrypt.compare(
+        refreshToken,
+        user.refreshToken,
+      );
       if (!isTokenValid) {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
 
-      const targetUser = user || socialLogin;
-      if (!targetUser) {
-        throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
-      }
-
       const newAccessToken = this.jwtTokenProvider.createToken(
-        targetUser.email,
-        targetUser.role.toString(),
+        user.email,
+        user.role.toString(),
       );
       const newRefreshToken = this.jwtTokenProvider.createRefreshToken(
-        targetUser.email,
-        targetUser.role.toString(),
+        user.email,
+        user.role.toString(),
       );
-      await this.persistRefreshToken(targetUser, newRefreshToken);
+      await this.persistRefreshToken(user, newRefreshToken);
 
       return { token: newAccessToken, refreshToken: newRefreshToken };
     } catch (error) {
@@ -113,13 +110,14 @@ export class AuthTokenService {
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.refreshTokenSecret,
       });
-      const entity =
-        (await this.userService.findByEmail(payload.email)) ??
-        (await this.userService.findSocialLoginByEmail(payload.email));
-      if (entity && entity.refreshToken) {
-        const isTokenValid = await bcrypt.compare(refreshToken, entity.refreshToken);
+      const user = await this.userService.findByEmail(payload.email);
+      if (user && user.refreshToken) {
+        const isTokenValid = await bcrypt.compare(
+          refreshToken,
+          user.refreshToken,
+        );
         if (isTokenValid) {
-          await this.persistRefreshToken(entity, null);
+          await this.persistRefreshToken(user, null);
         }
       }
     } catch (error) {
@@ -129,4 +127,3 @@ export class AuthTokenService {
     }
   }
 }
-

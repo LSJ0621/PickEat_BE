@@ -1,7 +1,14 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { MenuRecommendation } from './menu-recommendation.entity';
 
 @Entity()
+@Index('idx_place_recommendation_menu', ['menuRecommendation'])
 export class PlaceRecommendation {
   @PrimaryGeneratedColumn()
   id: number;

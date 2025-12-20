@@ -7,4 +7,3 @@ export class DeleteUserAddressesDto {
   @IsNumber({}, { each: true })
   ids: number[];
 }
-

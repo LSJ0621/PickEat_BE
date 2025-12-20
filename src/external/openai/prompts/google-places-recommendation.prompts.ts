@@ -20,7 +20,6 @@ export const GOOGLE_PLACES_SYSTEM_PROMPT = [
   '- 리뷰에서 반복 언급된 맛/품질/양/재방문을 근거로 작성',
 ].join('\n');
 
-
 /**
  * User 프롬프트 생성
  * @param query 사용자가 검색한 텍스트 (예: "덕소 마라탕")
@@ -44,7 +43,6 @@ export function buildGooglePlacesUserPrompt(
     '조합 다양성 고려.',
   ].join('\n');
 }
-
 
 /**
  * JSON Schema for Structured Outputs (장소 추천 응답 스키마)

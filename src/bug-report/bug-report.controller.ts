@@ -1,13 +1,16 @@
 import {
-    Body,
-    Controller,
-    Post,
-    UploadedFiles,
-    UseGuards,
-    UseInterceptors,
+  Body,
+  Controller,
+  Post,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { AuthUserPayload, CurrentUser } from '../auth/decorators/current-user.decorator';
+import {
+  AuthUserPayload,
+  CurrentUser,
+} from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { BugReportService } from './bug-report.service';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
@@ -32,5 +35,3 @@ export class BugReportController {
     return { id: bugReport.id };
   }
 }
-
-

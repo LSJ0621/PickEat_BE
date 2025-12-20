@@ -5,7 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
 import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
 import { NAVER_MAP_CONFIG } from '../naver.constants';
-import { NaverReverseGeocodeResponse, NaverReverseGeocodeResult } from '../naver.types';
+import {
+  NaverReverseGeocodeResponse,
+  NaverReverseGeocodeResult,
+} from '../naver.types';
 
 @Injectable()
 export class NaverMapClient {
@@ -21,7 +24,9 @@ export class NaverMapClient {
     this.clientSecret = this.config.get<string>('NAVER_MAP_CLIENT_SECRET', '');
 
     if (!this.clientId || !this.clientSecret) {
-      this.logger.warn('NAVER_MAP_CLIENT_ID 또는 NAVER_MAP_CLIENT_SECRET가 설정되지 않았습니다.');
+      this.logger.warn(
+        'NAVER_MAP_CLIENT_ID 또는 NAVER_MAP_CLIENT_SECRET가 설정되지 않았습니다.',
+      );
     }
   }
 
@@ -34,13 +39,20 @@ export class NaverMapClient {
     options?: { includeRoadAddress?: boolean },
   ): Promise<NaverReverseGeocodeResult[]> {
     if (!this.clientId || !this.clientSecret) {
-      throw new ConfigMissingException(['NAVER_MAP_CLIENT_ID', 'NAVER_MAP_CLIENT_SECRET']);
+      throw new ConfigMissingException([
+        'NAVER_MAP_CLIENT_ID',
+        'NAVER_MAP_CLIENT_SECRET',
+      ]);
     }
 
     const url = `${NAVER_MAP_CONFIG.BASE_URL}${NAVER_MAP_CONFIG.ENDPOINTS.REVERSE_GEOCODE}`;
-    const orders = options?.includeRoadAddress ? 'legalcode,addr,roadaddr' : 'legalcode,addr';
+    const orders = options?.includeRoadAddress
+      ? 'legalcode,addr,roadaddr'
+      : 'legalcode,addr';
 
-    this.logger.debug(`🔍 [Naver Reverse Geocode] lat=${latitude}, lng=${longitude}`);
+    this.logger.debug(
+      `🔍 [Naver Reverse Geocode] lat=${latitude}, lng=${longitude}`,
+    );
 
     try {
       const response = await firstValueFrom(
@@ -69,8 +81,11 @@ export class NaverMapClient {
       if (errorData) {
         this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
       }
-      throw new ExternalApiException('Naver Map', error, 'Reverse Geocode에 실패했습니다.');
+      throw new ExternalApiException(
+        'Naver Map',
+        error,
+        'Reverse Geocode에 실패했습니다.',
+      );
     }
   }
 }
-

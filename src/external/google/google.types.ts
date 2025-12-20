@@ -80,4 +80,3 @@ export interface GoogleCseItem {
 export interface GoogleCseResponse {
   items?: GoogleCseItem[];
 }
-

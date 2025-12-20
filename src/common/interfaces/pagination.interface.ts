@@ -15,4 +15,3 @@ export interface PaginatedResponse<T> {
   items: T[];
   pageInfo: PageInfo;
 }
-

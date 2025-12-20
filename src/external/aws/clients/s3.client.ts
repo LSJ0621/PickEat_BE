@@ -1,4 +1,8 @@
-import { S3Client as AwsS3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client as AwsS3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,11 +18,16 @@ export class S3Client {
   private readonly isPublicBucket: boolean;
 
   constructor(private readonly configService: ConfigService) {
-    const accessKeyId = this.configService.getOrThrow<string>('AWS_S3_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.getOrThrow<string>('AWS_S3_SECRET_ACCESS_KEY');
+    const accessKeyId = this.configService.getOrThrow<string>(
+      'AWS_S3_ACCESS_KEY_ID',
+    );
+    const secretAccessKey = this.configService.getOrThrow<string>(
+      'AWS_S3_SECRET_ACCESS_KEY',
+    );
     this.bucketName = this.configService.getOrThrow<string>('AWS_S3_BUCKET');
     this.region = this.configService.getOrThrow<string>('AWS_S3_REGION');
-    this.isPublicBucket = this.configService.getOrThrow<string>('AWS_S3_BUCKET_PUBLIC') === 'true';
+    this.isPublicBucket =
+      this.configService.getOrThrow<string>('AWS_S3_BUCKET_PUBLIC') === 'true';
 
     this.s3Client = new AwsS3Client({
       region: this.region,
@@ -67,12 +76,20 @@ export class S3Client {
         });
       }
 
-      this.logger.debug(`Bug report image uploaded: ${key} (public: ${this.isPublicBucket})`);
+      this.logger.debug(
+        `Bug report image uploaded: ${key} (public: ${this.isPublicBucket})`,
+      );
       return url;
     } catch (error) {
-      this.logger.error(`Failed to upload bug report image to S3: ${error.message}`, error.stack);
-      throw new ExternalApiException('S3', error as Error, 'Failed to upload image');
+      this.logger.error(
+        `Failed to upload bug report image to S3: ${error.message}`,
+        error.stack,
+      );
+      throw new ExternalApiException(
+        'S3',
+        error as Error,
+        'Failed to upload image',
+      );
     }
   }
 }
-

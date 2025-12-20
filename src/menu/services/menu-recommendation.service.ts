@@ -1,11 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  AuthenticatedEntity,
-  isUser,
-} from '../../common/interfaces/authenticated-user.interface';
 import { PageInfo } from '../../common/interfaces/pagination.interface';
+import { User } from '../../user/entities/user.entity';
 import { UserAddressService } from '../../user/services/user-address.service';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import { OpenAiMenuService } from './openai-menu.service';
@@ -27,15 +24,12 @@ export class MenuRecommendationService {
   ) {}
 
   /**
-   * 메뉴 추천 (User/SocialLogin 통합)
+   * 메뉴 추천
    */
-  async recommend(
-    entity: AuthenticatedEntity,
-    prompt: string,
-  ) {
-    const likes = entity.preferences?.likes ?? [];
-    const dislikes = entity.preferences?.dislikes ?? [];
-    const analysis = entity.preferences?.analysis;
+  async recommend(user: User, prompt: string) {
+    const likes = user.preferences?.likes ?? [];
+    const dislikes = user.preferences?.dislikes ?? [];
+    const analysis = user.preferences?.analysis;
 
     const { recommendations, reason } =
       await this.openAiMenuService.generateMenuRecommendations(
@@ -46,13 +40,14 @@ export class MenuRecommendationService {
       );
 
     // 기본 주소 조회 (필수)
-    const defaultAddress = await this.userAddressService.getDefaultAddress(entity);
+    const defaultAddress =
+      await this.userAddressService.getDefaultAddress(user);
     if (!defaultAddress || !defaultAddress.roadAddress) {
       throw new BadRequestException('기본 주소를 설정해주세요.');
     }
 
     const record = this.recommendationRepository.create({
-      ...(isUser(entity) ? { user: entity } : { socialLogin: entity }),
+      user,
       prompt,
       recommendations,
       reason,
@@ -66,23 +61,24 @@ export class MenuRecommendationService {
   }
 
   /**
-   * 추천 이력 조회 (User/SocialLogin 통합, Pagination 지원)
+   * 추천 이력 조회 (Pagination 지원)
    */
   async getHistory(
-    entity: AuthenticatedEntity,
+    user: User,
     page: number = 1,
     limit: number = 10,
     date?: string,
-  ): Promise<{ items: ReturnType<typeof this.mapHistoryItem>[]; pageInfo: PageInfo }> {
-    const fieldName = isUser(entity) ? 'userId' : 'socialLoginId';
-
+  ): Promise<{
+    items: ReturnType<typeof this.mapHistoryItem>[];
+    pageInfo: PageInfo;
+  }> {
     const qb = this.recommendationRepository
       .createQueryBuilder('recommendation')
       .leftJoinAndSelect(
         'recommendation.placeRecommendations',
         'placeRecommendation',
       )
-      .where(`recommendation.${fieldName} = :id`, { id: entity.id })
+      .where('recommendation.user.id = :id', { id: user.id })
       .orderBy('recommendation.recommendedAt', 'DESC');
 
     if (date) {
@@ -112,23 +108,12 @@ export class MenuRecommendationService {
   }
 
   /**
-   * ID로 추천 이력 조회 (User/SocialLogin 통합)
+   * ID로 추천 이력 조회
    */
-  async findById(
-    id: number,
-    entity: AuthenticatedEntity,
-  ): Promise<MenuRecommendation> {
-    const whereClause = isUser(entity)
-      ? { id, user: { id: entity.id } }
-      : { id, socialLogin: { id: entity.id } };
-
-    const relations = isUser(entity)
-      ? ['placeRecommendations', 'user']
-      : ['placeRecommendations', 'socialLogin'];
-
+  async findById(id: number, user: User): Promise<MenuRecommendation> {
     const recommendation = await this.recommendationRepository.findOne({
-      where: whereClause as any,
-      relations,
+      where: { id, user: { id: user.id } },
+      relations: ['placeRecommendations', 'user'],
     });
 
     if (!recommendation) {
@@ -139,21 +124,15 @@ export class MenuRecommendationService {
   }
 
   /**
-   * 소유권 확인된 추천 이력 조회 (User/SocialLogin 통합)
+   * 소유권 확인된 추천 이력 조회
    */
   async findOwnedRecommendation(
     historyId: number,
-    entity: AuthenticatedEntity,
+    user: User,
   ): Promise<MenuRecommendation> {
-    const whereClause = isUser(entity)
-      ? { id: historyId, user: { id: entity.id } }
-      : { id: historyId, socialLogin: { id: entity.id } };
-
-    const relations = isUser(entity) ? ['user'] : ['socialLogin'];
-
     const recommendation = await this.recommendationRepository.findOne({
-      where: whereClause,
-      relations,
+      where: { id: historyId, user: { id: user.id } },
+      relations: ['user'],
     });
 
     if (!recommendation) {

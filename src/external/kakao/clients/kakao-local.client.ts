@@ -4,9 +4,9 @@ import axios, { AxiosInstance } from 'axios';
 import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
 import { KAKAO_LOCAL_CONFIG } from '../kakao.constants';
 import {
-    KakaoLocalAddressDocument,
-    KakaoLocalAddressResponse,
-    KakaoLocalMeta,
+  KakaoLocalAddressDocument,
+  KakaoLocalAddressResponse,
+  KakaoLocalMeta,
 } from '../kakao.types';
 
 /**
@@ -83,11 +83,17 @@ export class KakaoLocalClient {
       };
     } catch (error: any) {
       this.logger.error('❌ [Kakao 주소 검색 에러]', error);
-      throw new ExternalApiException('Kakao Local', error, '주소 검색에 실패했습니다.');
+      throw new ExternalApiException(
+        'Kakao Local',
+        error,
+        '주소 검색에 실패했습니다.',
+      );
     }
   }
 
-  private mapDocumentToResult(doc: KakaoLocalAddressDocument): AddressSearchResult {
+  private mapDocumentToResult(
+    doc: KakaoLocalAddressDocument,
+  ): AddressSearchResult {
     return {
       address: doc.address?.address_name || '',
       roadAddress: doc.road_address?.address_name || null,
@@ -97,4 +103,3 @@ export class KakaoLocalClient {
     };
   }
 }
-

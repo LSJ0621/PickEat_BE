@@ -21,5 +21,3 @@ import { BugReportSchedulerService } from './services/bug-report-scheduler.servi
   exports: [BugReportService, TypeOrmModule],
 })
 export class BugReportModule {}
-
-

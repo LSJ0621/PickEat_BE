@@ -17,4 +17,3 @@ export const NAVER_MAP_CONFIG = {
     REVERSE_GEOCODE: '/map-reversegeocode/v2/gc',
   },
 } as const;
-

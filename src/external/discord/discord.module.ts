@@ -8,4 +8,3 @@ import { DiscordWebhookClient } from './clients/discord-webhook.client';
   exports: [DiscordWebhookClient],
 })
 export class DiscordModule {}
-

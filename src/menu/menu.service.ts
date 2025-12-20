@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AuthenticatedEntity } from '../common/interfaces/authenticated-user.interface';
+import { User } from '../user/entities/user.entity';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
 import { MenuRecommendationService } from './services/menu-recommendation.service';
 import { MenuSelectionService } from './services/menu-selection.service';
@@ -20,75 +20,69 @@ export class MenuService {
   ) {}
 
   // ========== 통합 메서드 (신규) ==========
-  async recommend(
-    entity: AuthenticatedEntity,
-    prompt: string,
-  ) {
-    return this.menuRecommendationService.recommend(
-      entity,
-      prompt,
-    );
+  async recommend(user: User, prompt: string) {
+    return this.menuRecommendationService.recommend(user, prompt);
   }
 
   async getHistory(
-    entity: AuthenticatedEntity,
+    user: User,
     page: number = 1,
     limit: number = 10,
     date?: string,
   ) {
-    return this.menuRecommendationService.getHistory(entity, page, limit, date);
+    return this.menuRecommendationService.getHistory(user, page, limit, date);
   }
 
   async createSelection(
-    entity: AuthenticatedEntity,
+    user: User,
     menus: Array<{ slot: string; name: string }>,
     historyId?: number,
   ) {
-    return this.menuSelectionService.createSelection(entity, menus, historyId);
+    return this.menuSelectionService.createSelection(user, menus, historyId);
   }
 
   async updateSelection(
-    entity: AuthenticatedEntity,
+    user: User,
     selectionId: number,
     dto: UpdateMenuSelectionDto,
   ) {
-    return this.menuSelectionService.updateSelection(entity, selectionId, dto);
+    return this.menuSelectionService.updateSelection(user, selectionId, dto);
   }
 
-  async getSelections(entity: AuthenticatedEntity, selectedDate?: string) {
-    return this.menuSelectionService.getSelections(entity, selectedDate);
+  async getSelections(user: User, selectedDate?: string) {
+    return this.menuSelectionService.getSelections(user, selectedDate);
   }
 
   async recommendRestaurants(
-    entity: AuthenticatedEntity,
+    user: User,
     textQuery: string,
     menuName: string,
     menuRecommendationId: number,
   ) {
     return this.placeService.recommendRestaurants(
-      entity,
+      user,
       textQuery,
       menuName,
       menuRecommendationId,
     );
   }
 
-  async getRecommendationDetail(entity: AuthenticatedEntity, id: number) {
+  async getRecommendationDetail(user: User, id: number) {
     const recommendation = await this.menuRecommendationService.findById(
       id,
-      entity,
+      user,
     );
     return this.placeService.buildRecommendationDetailResponse(recommendation);
   }
 
   async recommendRestaurantsWithGooglePlacesAndLlm(
-    entity: AuthenticatedEntity,
+    user: User,
     textQuery: string,
     menuName: string,
     menuRecommendationId?: number,
   ) {
     return this.recommendRestaurants(
-      entity,
+      user,
       textQuery,
       menuName,
       menuRecommendationId!,

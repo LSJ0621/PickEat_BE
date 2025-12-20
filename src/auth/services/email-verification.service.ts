@@ -1,9 +1,9 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import {
-    BadRequestException,
-    Injectable,
-    InternalServerErrorException,
-    Logger,
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -68,7 +68,9 @@ export class EmailVerificationService {
 
     const code = this.generateCode();
     const codeHash = await bcrypt.hash(code, 10);
-    const expiresAt = new Date(now.getTime() + EMAIL_VERIFICATION.CODE_EXPIRES_MS);
+    const expiresAt = new Date(
+      now.getTime() + EMAIL_VERIFICATION.CODE_EXPIRES_MS,
+    );
     const nextSendCount = latest && isSamePurposeDay ? latest.sendCount + 1 : 1;
     if (nextSendCount > this.dailySendLimit) {
       throw new BadRequestException('하루 최대 발송 횟수를 초과했습니다');
@@ -221,7 +223,10 @@ export class EmailVerificationService {
 
   private ensureResendAllowed(record: EmailVerification, now: Date) {
     const baseDate = record.lastSentAt ?? record.createdAt;
-    if (baseDate && now.getTime() - baseDate.getTime() < EMAIL_VERIFICATION.RESEND_LIMIT_MS) {
+    if (
+      baseDate &&
+      now.getTime() - baseDate.getTime() < EMAIL_VERIFICATION.RESEND_LIMIT_MS
+    ) {
       throw new BadRequestException(
         '인증코드를 너무 자주 요청하고 있습니다. 잠시 후 다시 시도해주세요.',
       );

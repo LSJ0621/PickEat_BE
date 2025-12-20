@@ -6,15 +6,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import {
-  AuthenticatedEntity,
-  isSocialLogin,
-  isUser,
-} from '../common/interfaces/authenticated-user.interface';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
-import { SocialLogin } from './entities/social-login.entity';
 import { UserAddress } from './entities/user-address.entity';
 import { User } from './entities/user.entity';
 import { SocialType } from './enum/social-type.enum';
@@ -34,8 +28,6 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    @InjectRepository(SocialLogin)
-    private readonly socialLoginRepository: Repository<SocialLogin>,
     private readonly dataSource: DataSource,
     private readonly addressSearchService: AddressSearchService,
     private readonly userAddressService: UserAddressService,
@@ -72,7 +64,9 @@ export class UserService {
   async markEmailVerified(email: string): Promise<void> {
     const user = await this.findByEmail(email);
     if (!user) {
-      this.logger.warn(`User with email ${email} not found while marking email verified`);
+      this.logger.warn(
+        `User with email ${email} not found while marking email verified`,
+      );
       return;
     }
     if (user.emailVerified) {
@@ -80,10 +74,6 @@ export class UserService {
     }
     user.emailVerified = true;
     await this.userRepository.save(user);
-  }
-
-  async findSocialLoginByEmail(email: string): Promise<SocialLogin | null> {
-    return this.socialLoginRepository.findOne({ where: { email } });
   }
 
   async getOrFailByEmail(email: string): Promise<User> {
@@ -94,45 +84,12 @@ export class UserService {
     return user;
   }
 
-  async getOrFailSocialLoginByEmail(email: string): Promise<SocialLogin> {
-    const socialLogin = await this.findSocialLoginByEmail(email);
-    if (!socialLogin) {
-      throw new NotFoundException(`SocialLogin with email ${email} not found`);
-    }
-    return socialLogin;
+  async getAuthenticatedEntity(email: string): Promise<User> {
+    return this.getOrFailByEmail(email);
   }
 
-  async findUserOrSocialLoginByEmail(email: string): Promise<{
-    type: 'user' | 'social';
-    user?: User;
-    socialLogin?: SocialLogin;
-  }> {
-    const user = await this.findByEmail(email);
-    if (user) {
-      return { type: 'user', user };
-    }
-    const socialLogin = await this.findSocialLoginByEmail(email);
-    if (socialLogin) {
-      return { type: 'social', socialLogin };
-    }
-    throw new NotFoundException(`User or SocialLogin with email ${email} not found`);
-  }
-
-  /**
-   * 인증된 엔티티 조회 (통합 메서드용)
-   */
-  async getAuthenticatedEntity(email: string): Promise<User | SocialLogin> {
-    const user = await this.findByEmail(email);
-    if (user) return user;
-
-    const socialLogin = await this.findSocialLoginByEmail(email);
-    if (socialLogin) return socialLogin;
-
-    throw new NotFoundException(`User or SocialLogin with email ${email} not found`);
-  }
-
-  async getUserBySocialId(socialId: string | number): Promise<SocialLogin | null> {
-    return this.socialLoginRepository.findOne({
+  async getUserBySocialId(socialId: string | number): Promise<User | null> {
+    return this.userRepository.findOne({
       where: { socialId: socialId.toString() },
       withDeleted: true,
     });
@@ -142,18 +99,17 @@ export class UserService {
     socialId: string | number,
     email: string,
     socialType: SocialType,
-    profileImage?: string,
     name?: string,
-  ): Promise<SocialLogin> {
-    const socialLogin = this.socialLoginRepository.create({
+  ): Promise<User> {
+    const user = this.userRepository.create({
       email,
       socialId: socialId.toString(),
       socialType,
       role: 'USER',
-      profileImage,
       name,
+      password: null,
     });
-    return this.socialLoginRepository.save(socialLogin);
+    return this.userRepository.save(user);
   }
 
   async findOne(id: number) {
@@ -164,7 +120,6 @@ export class UserService {
     return user;
   }
 
-
   async deleteUser(email: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const user = await manager.findOne(User, {
@@ -172,116 +127,116 @@ export class UserService {
         withDeleted: true,
       });
 
-      const socialLogin = await manager.findOne(SocialLogin, {
-        where: { email },
-        withDeleted: true,
-      });
-
-      if (!user && !socialLogin) {
+      if (!user) {
         throw new NotFoundException('사용자를 찾을 수 없습니다.');
       }
 
-      if ((user && user.deletedAt) || (socialLogin && socialLogin.deletedAt)) {
+      if (user.deletedAt) {
         throw new BadRequestException('이미 탈퇴한 계정입니다.');
       }
 
-      if (user) {
-        user.refreshToken = null;
-        user.reRegisterEmailVerified = false;
-        await manager.save(user);
-        await manager.softRemove(user);
-      }
-
-      if (socialLogin) {
-        socialLogin.refreshToken = null;
-        await manager.save(socialLogin);
-        await manager.softRemove(socialLogin);
-      }
+      user.refreshToken = null;
+      user.reRegisterEmailVerified = false;
+      await manager.save(user);
+      await manager.softRemove(user);
     });
   }
 
   // ========== Preference 관련 (통합 메서드) ==========
 
-  async getEntityPreferences(entity: User | SocialLogin): Promise<UserPreferences> {
+  async getEntityPreferences(entity: User): Promise<UserPreferences> {
     return this.userPreferenceService.getPreferences(entity);
   }
 
   async updateEntityPreferences(
-    entity: User | SocialLogin,
+    entity: User,
     likes?: string[],
     dislikes?: string[],
   ): Promise<UserPreferences> {
-    return this.userPreferenceService.updatePreferences(entity, likes, dislikes);
+    return this.userPreferenceService.updatePreferences(
+      entity,
+      likes,
+      dislikes,
+    );
   }
 
   async updateEntityPreferencesAnalysis(
-    entity: User | SocialLogin,
+    entity: User,
     analysis: string,
   ): Promise<UserPreferences> {
-    return this.userPreferenceService.updatePreferencesAnalysis(entity, analysis);
+    return this.userPreferenceService.updatePreferencesAnalysis(
+      entity,
+      analysis,
+    );
   }
 
   // ========== Address Search (위임) ==========
 
-  async searchAddress(searchDto: SearchAddressDto): Promise<AddressSearchResponse> {
+  async searchAddress(
+    searchDto: SearchAddressDto,
+  ): Promise<AddressSearchResponse> {
     return this.addressSearchService.searchAddress(searchDto);
   }
 
   // ========== Single Address Update (위임) ==========
 
   async updateEntitySingleAddress(
-    entity: AuthenticatedEntity,
+    entity: User,
     selectedAddress: AddressSearchResult,
-  ): Promise<AuthenticatedEntity> {
+  ): Promise<UserAddress> {
     return this.userAddressService.updateSingleAddress(entity, selectedAddress);
   }
 
   // ========== Address List (통합 메서드) ==========
 
-  async getEntityAddresses(entity: User | SocialLogin): Promise<UserAddress[]> {
+  async getEntityAddresses(entity: User): Promise<UserAddress[]> {
     return this.userAddressService.getAddresses(entity);
   }
 
-  async createEntityAddress(entity: User | SocialLogin, dto: CreateUserAddressDto): Promise<UserAddress> {
+  async createEntityAddress(
+    entity: User,
+    dto: CreateUserAddressDto,
+  ): Promise<UserAddress> {
     return this.userAddressService.createAddress(entity, dto);
   }
 
   async updateEntityAddress(
-    entity: User | SocialLogin,
+    entity: User,
     addressId: number,
     dto: UpdateUserAddressDto,
   ): Promise<UserAddress> {
     return this.userAddressService.updateAddress(entity, addressId, dto);
   }
 
-  async deleteEntityAddresses(entity: User | SocialLogin, addressIds: number[]): Promise<void> {
+  async deleteEntityAddresses(
+    entity: User,
+    addressIds: number[],
+  ): Promise<void> {
     return this.userAddressService.deleteAddresses(entity, addressIds);
   }
 
-  async setEntityDefaultAddress(entity: User | SocialLogin, addressId: number): Promise<UserAddress> {
+  async setEntityDefaultAddress(
+    entity: User,
+    addressId: number,
+  ): Promise<UserAddress> {
     return this.userAddressService.setDefaultAddress(entity, addressId);
   }
 
-  async setEntitySearchAddress(entity: User | SocialLogin, addressId: number): Promise<UserAddress> {
+  async setEntitySearchAddress(
+    entity: User,
+    addressId: number,
+  ): Promise<UserAddress> {
     return this.userAddressService.setSearchAddress(entity, addressId);
   }
 
-  async getEntityDefaultAddress(entity: User | SocialLogin): Promise<UserAddress | null> {
+  async getEntityDefaultAddress(entity: User): Promise<UserAddress | null> {
     return this.userAddressService.getDefaultAddress(entity);
   }
 
   // ========== User Name Update (통합 메서드) ==========
 
-  async updateEntityName(
-    entity: User | SocialLogin,
-    name: string,
-  ): Promise<User | SocialLogin> {
+  async updateEntityName(entity: User, name: string): Promise<User> {
     entity.name = name;
-    if (isUser(entity)) {
-      return this.userRepository.save(entity);
-    } else if (isSocialLogin(entity)) {
-      return this.socialLoginRepository.save(entity);
-    }
-    throw new NotFoundException('Entity type not recognized');
+    return this.userRepository.save(entity);
   }
 }

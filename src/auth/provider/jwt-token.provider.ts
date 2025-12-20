@@ -10,9 +10,8 @@ export class JwtTokenProvider {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {
-    this.refreshTokenSecret = this.config.getOrThrow<string>(
-      'JWT_REFRESH_SECRET',
-    );
+    this.refreshTokenSecret =
+      this.config.getOrThrow<string>('JWT_REFRESH_SECRET');
   }
 
   createToken(email: string, role: string): string {

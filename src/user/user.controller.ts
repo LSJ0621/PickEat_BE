@@ -32,7 +32,9 @@ export class UserController {
 
   @Get('preferences')
   async getPreferences(@CurrentUser() authUser: AuthUserPayload) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const preferences = await this.userService.getEntityPreferences(entity);
     return { preferences };
   }
@@ -42,7 +44,9 @@ export class UserController {
     @Body() preferencesDto: UpdatePreferencesDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const preferences = await this.userService.updateEntityPreferences(
       entity,
       preferencesDto.likes,
@@ -61,12 +65,14 @@ export class UserController {
     @Body() updateDto: UpdateSingleAddressDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
-    const updatedEntity = await this.userService.updateEntitySingleAddress(
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+    const updatedAddress = await this.userService.updateEntitySingleAddress(
       entity,
       updateDto.selectedAddress,
     );
-    return { address: updatedEntity.address };
+    return this.toAddressResponseDto(updatedAddress);
   }
 
   @Patch()
@@ -74,8 +80,13 @@ export class UserController {
     @Body() updateDto: UpdateUserNameDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
-    const updated = await this.userService.updateEntityName(entity, updateDto.name);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+    const updated = await this.userService.updateEntityName(
+      entity,
+      updateDto.name,
+    );
     return { name: updated.name };
   }
 
@@ -89,14 +100,18 @@ export class UserController {
 
   @Get('address/default')
   async getDefaultAddress(@CurrentUser() authUser: AuthUserPayload) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const address = await this.userService.getEntityDefaultAddress(entity);
     return address ? this.toAddressResponseDto(address) : null;
   }
 
   @Get('addresses')
   async getUserAddresses(@CurrentUser() authUser: AuthUserPayload) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const addresses = await this.userService.getEntityAddresses(entity);
     return addresses.map((addr) => this.toAddressResponseDto(addr));
   }
@@ -106,7 +121,9 @@ export class UserController {
     @Body() dto: CreateUserAddressDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const address = await this.userService.createEntityAddress(entity, dto);
     return this.toAddressResponseDto(address);
   }
@@ -117,9 +134,15 @@ export class UserController {
     @Body() dto: UpdateUserAddressDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const addressId = parseInt(id, 10);
-    const address = await this.userService.updateEntityAddress(entity, addressId, dto);
+    const address = await this.userService.updateEntityAddress(
+      entity,
+      addressId,
+      dto,
+    );
     return this.toAddressResponseDto(address);
   }
 
@@ -128,7 +151,9 @@ export class UserController {
     @Body() dto: DeleteUserAddressesDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     await this.userService.deleteEntityAddresses(entity, dto.ids);
     return { message: '주소가 삭제되었습니다.' };
   }
@@ -138,9 +163,14 @@ export class UserController {
     @Param('id') id: string,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const addressId = parseInt(id, 10);
-    const address = await this.userService.setEntityDefaultAddress(entity, addressId);
+    const address = await this.userService.setEntityDefaultAddress(
+      entity,
+      addressId,
+    );
     return this.toAddressResponseDto(address);
   }
 
@@ -149,9 +179,14 @@ export class UserController {
     @Param('id') id: string,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(authUser.email);
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
     const addressId = parseInt(id, 10);
-    const address = await this.userService.setEntitySearchAddress(entity, addressId);
+    const address = await this.userService.setEntitySearchAddress(
+      entity,
+      addressId,
+    );
     return this.toAddressResponseDto(address);
   }
 
@@ -161,12 +196,14 @@ export class UserController {
       id: address.id,
       roadAddress: address.roadAddress,
       postalCode: address.postalCode,
-      latitude: typeof address.latitude === 'string' 
-        ? parseFloat(address.latitude) 
-        : address.latitude,
-      longitude: typeof address.longitude === 'string' 
-        ? parseFloat(address.longitude) 
-        : address.longitude,
+      latitude:
+        typeof address.latitude === 'string'
+          ? parseFloat(address.latitude)
+          : address.latitude,
+      longitude:
+        typeof address.longitude === 'string'
+          ? parseFloat(address.longitude)
+          : address.longitude,
       isDefault: address.isDefault,
       isSearchAddress: address.isSearchAddress,
       alias: address.alias,

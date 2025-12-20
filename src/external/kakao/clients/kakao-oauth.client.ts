@@ -54,7 +54,11 @@ export class KakaoOAuthClient {
       return response.data;
     } catch (error: any) {
       this.logOAuthError('토큰 발급', error);
-      throw new ExternalApiException('Kakao OAuth', error, 'Kakao 토큰 발급에 실패했습니다.');
+      throw new ExternalApiException(
+        'Kakao OAuth',
+        error,
+        'Kakao 토큰 발급에 실패했습니다.',
+      );
     }
   }
 
@@ -64,17 +68,24 @@ export class KakaoOAuthClient {
   async getUserProfile(accessToken: string): Promise<KakaoUserProfile> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get<KakaoUserProfile>(KAKAO_OAUTH_CONFIG.USER_INFO_URL, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
+        this.httpService.get<KakaoUserProfile>(
+          KAKAO_OAUTH_CONFIG.USER_INFO_URL,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           },
-        }),
+        ),
       );
 
       return response.data;
     } catch (error: any) {
       this.logOAuthError('프로필 조회', error);
-      throw new ExternalApiException('Kakao OAuth', error, 'Kakao 프로필 조회에 실패했습니다.');
+      throw new ExternalApiException(
+        'Kakao OAuth',
+        error,
+        'Kakao 프로필 조회에 실패했습니다.',
+      );
     }
   }
 
@@ -89,4 +100,3 @@ export class KakaoOAuthClient {
     }
   }
 }
-
