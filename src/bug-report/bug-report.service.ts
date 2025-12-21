@@ -61,6 +61,7 @@ export class BugReportService {
 
     const qb = this.bugReportRepository
       .createQueryBuilder('bugReport')
+      .leftJoinAndSelect('bugReport.user', 'user')
       .orderBy('bugReport.createdAt', 'DESC');
 
     if (status !== undefined) {
@@ -97,6 +98,7 @@ export class BugReportService {
   async findOne(id: number): Promise<BugReport> {
     const bugReport = await this.bugReportRepository.findOne({
       where: { id },
+      relations: ['user'],
     });
 
     if (!bugReport) {
@@ -112,6 +114,7 @@ export class BugReportService {
   async updateStatus(id: number, status: BugReportStatus): Promise<BugReport> {
     const bugReport = await this.bugReportRepository.findOne({
       where: { id },
+      relations: ['user'],
     });
 
     if (!bugReport) {
