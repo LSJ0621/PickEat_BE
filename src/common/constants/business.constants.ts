@@ -57,3 +57,15 @@ export const OPENAI_SETTINGS = {
   /** 취향 분석 max_completion_tokens */
   PREFERENCE_MAX_TOKENS: 500,
 } as const;
+
+/**
+ * 버그 리포트 알림 관련 상수
+ */
+export const BUG_REPORT_NOTIFICATION = {
+  /** 알림 임계값 배열 */
+  THRESHOLDS: [10, 20, 30, 50, 100] as const,
+  /** 스케줄러 알림에 포함할 최근 버그 개수 */
+  RECENT_BUGS_COUNT: 5,
+  /** 설명 미리보기 최대 길이 */
+  DESCRIPTION_PREVIEW_LENGTH: 100,
+} as const;
