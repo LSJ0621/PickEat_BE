@@ -1,0 +1,173 @@
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test, TestingModule } from '@nestjs/testing';
+import { RolesGuard } from './roles.guard';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+
+describe('RolesGuard', () => {
+  let guard: RolesGuard;
+  let mockReflector: jest.Mocked<Reflector>;
+
+  beforeEach(async () => {
+    mockReflector = {
+      getAllAndOverride: jest.fn(),
+    } as any;
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        RolesGuard,
+        {
+          provide: Reflector,
+          useValue: mockReflector,
+        },
+      ],
+    }).compile();
+
+    guard = module.get<RolesGuard>(RolesGuard);
+  });
+
+  const createMockExecutionContext = (user?: {
+    role: string;
+  }): ExecutionContext => {
+    return {
+      switchToHttp: jest.fn().mockReturnValue({
+        getRequest: jest.fn().mockReturnValue({ user }),
+      }),
+      getHandler: jest.fn(),
+      getClass: jest.fn(),
+    } as any;
+  };
+
+  describe('canActivate', () => {
+    it('should allow access when no roles are required', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(undefined);
+      const context = createMockExecutionContext({ role: 'USER' });
+
+      // Act
+      const result = guard.canActivate(context);
+
+      // Assert
+      expect(result).toBe(true);
+      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(ROLES_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+    });
+
+    it('should allow access when user has required role', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      const context = createMockExecutionContext({ role: 'ADMIN' });
+
+      // Act
+      const result = guard.canActivate(context);
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it('should allow access when user has one of the required roles', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN', 'MODERATOR']);
+      const context = createMockExecutionContext({ role: 'ADMIN' });
+
+      // Act
+      const result = guard.canActivate(context);
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it('should allow USER role when required', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['USER']);
+      const context = createMockExecutionContext({ role: 'USER' });
+
+      // Act
+      const result = guard.canActivate(context);
+
+      // Assert
+      expect(result).toBe(true);
+    });
+
+    it('should throw ForbiddenException when user does not have required role', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      const context = createMockExecutionContext({ role: 'USER' });
+
+      // Act & Assert
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow(
+        'Insufficient permissions',
+      );
+    });
+
+    it('should throw ForbiddenException when user does not have any of the required roles', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN', 'MODERATOR']);
+      const context = createMockExecutionContext({ role: 'USER' });
+
+      // Act & Assert
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow(
+        'Insufficient permissions',
+      );
+    });
+
+    it('should throw ForbiddenException when user is not in request', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      const context = createMockExecutionContext(undefined);
+
+      // Act & Assert
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('User role not found');
+    });
+
+    it('should throw ForbiddenException when user has no role property', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      const context = createMockExecutionContext({} as any);
+
+      // Act & Assert
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('User role not found');
+    });
+
+    it('should throw ForbiddenException when required roles array is empty but present', () => {
+      // Arrange - empty array means no role matches
+      mockReflector.getAllAndOverride.mockReturnValue([]);
+      const context = createMockExecutionContext({ role: 'USER' });
+
+      // Act & Assert
+      // Empty array [] is not the same as undefined/null
+      // [] means "require one of these roles: (none)" which will always fail
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+    });
+
+    it('should be case-sensitive for role comparison', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['admin']);
+      const context = createMockExecutionContext({ role: 'ADMIN' });
+
+      // Act & Assert
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+    });
+
+    it('should retrieve roles from both handler and class', () => {
+      // Arrange
+      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      const context = createMockExecutionContext({ role: 'ADMIN' });
+
+      // Act
+      guard.canActivate(context);
+
+      // Assert
+      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(ROLES_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+    });
+  });
+});

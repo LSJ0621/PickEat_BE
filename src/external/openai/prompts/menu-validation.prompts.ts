@@ -78,7 +78,8 @@ export const VALIDATION_JSON_SCHEMA = {
     },
     invalidReason: {
       type: 'string',
-      description: 'isValid=false일 때 거부 사유 (isValid=true일 경우 빈 문자열)',
+      description:
+        'isValid=false일 때 거부 사유 (isValid=true일 경우 빈 문자열)',
     },
     intent: {
       type: 'string',
@@ -114,6 +115,12 @@ export const VALIDATION_JSON_SCHEMA = {
       description: '제안 음식 카테고리 (최대 3개)',
     },
   },
-  required: ['isValid', 'invalidReason', 'intent', 'constraints', 'suggestedCategories'],
+  required: [
+    'isValid',
+    'invalidReason',
+    'intent',
+    'constraints',
+    'suggestedCategories',
+  ],
   additionalProperties: false,
 } as const;
