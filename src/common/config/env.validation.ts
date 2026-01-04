@@ -99,6 +99,10 @@ class EnvironmentVariables {
   @IsNotEmpty()
   OPENAI_PLACES_MODEL: string;
 
+  @IsString()
+  @IsNotEmpty()
+  OPENAI_VALIDATION_MODEL: string;
+
   // Kakao API
   @IsString()
   @IsNotEmpty()

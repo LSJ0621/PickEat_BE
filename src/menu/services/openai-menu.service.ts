@@ -1,19 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Gpt51MenuService } from '../gpt/gpt51-menu.service';
 import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
+import { TwoStageMenuService } from './two-stage-menu.service';
 
 /**
  * OpenAI 메뉴 추천 서비스
- * 현재는 GPT-5.1 기반 메뉴 서비스만 사용 (Gpt51MenuService)
+ * 2단계 추천 시스템 사용 (TwoStageMenuService)
+ * Stage 1: GPT-4o-mini 검증, Stage 2: GPT-5.1 심층 추천
  */
 @Injectable()
 export class OpenAiMenuService {
   private readonly logger = new Logger(OpenAiMenuService.name);
-  private readonly menuService: Gpt51MenuService;
 
-  constructor(private readonly gpt51MenuService: Gpt51MenuService) {
-    this.menuService = this.gpt51MenuService;
-    this.logger.log('✅ GPT-5.1 메뉴 추천 서비스 사용 (Gpt51MenuService)');
+  constructor(private readonly twoStageMenuService: TwoStageMenuService) {
+    this.logger.log(
+      'Two-stage menu recommendation service active (Stage 1: GPT-4o-mini, Stage 2: GPT-5.1)',
+    );
   }
 
   async generateMenuRecommendations(
@@ -22,7 +23,7 @@ export class OpenAiMenuService {
     dislikes: string[],
     analysis?: string,
   ): Promise<MenuRecommendationsResponse> {
-    return this.menuService.generateMenuRecommendations(
+    return this.twoStageMenuService.generateMenuRecommendations(
       prompt,
       likes,
       dislikes,
