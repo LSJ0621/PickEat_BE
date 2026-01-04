@@ -6,6 +6,7 @@ import { UserModule } from '../user/user.module';
 import { MenuRecommendation } from './entities/menu-recommendation.entity';
 import { MenuSelection } from './entities/menu-selection.entity';
 import { PlaceRecommendation } from './entities/place-recommendation.entity';
+import { Gpt4oMiniValidationService } from './gpt/gpt4o-mini-validation.service';
 import { Gpt51MenuService } from './gpt/gpt51-menu.service';
 import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
@@ -15,6 +16,7 @@ import { MenuSelectionService } from './services/menu-selection.service';
 import { OpenAiMenuService } from './services/openai-menu.service';
 import { OpenAiPlacesService } from './services/openai-places.service';
 import { PlaceService } from './services/place.service';
+import { TwoStageMenuService } from './services/two-stage-menu.service';
 
 @Module({
   imports: [
@@ -35,7 +37,9 @@ import { PlaceService } from './services/place.service';
     PlaceService,
     OpenAiMenuService,
     OpenAiPlacesService,
+    Gpt4oMiniValidationService,
     Gpt51MenuService,
+    TwoStageMenuService,
     PreferencesScheduler,
   ],
 })
