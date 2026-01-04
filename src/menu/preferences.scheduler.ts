@@ -23,7 +23,7 @@ export class PreferencesScheduler {
     private readonly preferenceUpdateAiService: PreferenceUpdateAiService,
   ) {}
 
-  @Cron('20 16 * * *')
+  @Cron('36 13 * * *')
   async processPendingSelections() {
     this.logger.log('🕐 [스케줄러 실행] PENDING 건 처리 시작');
     try {

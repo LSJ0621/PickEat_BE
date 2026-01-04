@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts';
-import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
-import { PrometheusService } from '../../prometheus/prometheus.service';
+import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
+import { OpenAIChatCompletionParams } from '@/external/openai/openai.types';
+import { PrometheusService } from '@/prometheus/prometheus.service';
 import { BaseMenuService } from './base-menu.service';
 
 /**
@@ -38,7 +39,7 @@ export class Gpt51MenuService extends BaseMenuService {
     systemPrompt: string,
     userPrompt: string,
     jsonSchema: typeof MENU_RECOMMENDATIONS_JSON_SCHEMA,
-  ): any {
+  ): OpenAIChatCompletionParams {
     return {
       model: this.model,
       messages: [
