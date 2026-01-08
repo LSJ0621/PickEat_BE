@@ -4,7 +4,14 @@ import {
   DeleteResult,
   UpdateResult,
   ObjectLiteral,
+  DeepPartial,
+  EntityManager,
+  EntityMetadata,
+  EntityTarget,
+  QueryRunner,
+  DataSource,
 } from 'typeorm';
+import { QueryExpressionMap } from 'typeorm/query-builder/QueryExpressionMap';
 
 /**
  * Creates a mock TypeORM Repository for testing
@@ -15,7 +22,7 @@ import {
  * mockRepository.findOne.mockResolvedValue(user);
  */
 export function createMockRepository<
-  T extends ObjectLiteral = any,
+  T extends ObjectLiteral = ObjectLiteral,
 >(): jest.Mocked<Repository<T>> {
   const mockQueryBuilder = createMockQueryBuilder<T>();
 
@@ -25,13 +32,16 @@ export function createMockRepository<
     findOne: jest.fn(),
     findOneBy: jest.fn(),
     findOneOrFail: jest.fn(),
+    findOneByOrFail: jest.fn(),
     findBy: jest.fn(),
     findAndCount: jest.fn(),
     findAndCountBy: jest.fn(),
     save: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateAll: jest.fn(),
     delete: jest.fn(),
+    deleteAll: jest.fn(),
     remove: jest.fn(),
     softRemove: jest.fn(),
     recover: jest.fn(),
@@ -41,15 +51,20 @@ export function createMockRepository<
     countBy: jest.fn(),
     increment: jest.fn(),
     decrement: jest.fn(),
+    exist: jest.fn(),
+    exists: jest.fn(),
+    existsBy: jest.fn(),
 
     // Query builder
-    createQueryBuilder: jest.fn(() => mockQueryBuilder),
+    createQueryBuilder: jest.fn(() => mockQueryBuilder) as jest.MockedFunction<
+      () => SelectQueryBuilder<T>
+    >,
 
-    // Manager and metadata
-    manager: {} as any,
-    metadata: {} as any,
-    target: {} as any,
-    queryRunner: undefined,
+    // Manager and metadata (unused in tests but required by Repository interface)
+    manager: {} as unknown as EntityManager,
+    metadata: {} as unknown as EntityMetadata,
+    target: {} as unknown as EntityTarget<T>,
+    queryRunner: undefined as unknown as QueryRunner | undefined,
 
     // Other methods
     extend: jest.fn(),
@@ -61,16 +76,34 @@ export function createMockRepository<
     merge: jest.fn(),
 
     // Less commonly used methods
-    findByIds: jest.fn(),
-    findOneById: jest.fn(),
-    query: jest.fn(),
+    findByIds: jest.fn() as jest.MockedFunction<
+      (ids: unknown[]) => Promise<T[]>
+    >,
+    findOneById: jest.fn() as jest.MockedFunction<
+      (id: unknown) => Promise<T | null>
+    >,
+    query: jest.fn() as jest.MockedFunction<
+      (query: string, parameters?: unknown[]) => Promise<unknown>
+    >,
     upsert: jest.fn(),
-    exists: jest.fn(),
-    existsBy: jest.fn(),
-    sum: jest.fn(),
-    average: jest.fn(),
-    minimum: jest.fn(),
-    maximum: jest.fn(),
+    sum: jest.fn() as jest.MockedFunction<
+      (columnName: string) => Promise<number>
+    >,
+    average: jest.fn() as jest.MockedFunction<
+      (columnName: string) => Promise<number>
+    >,
+    minimum: jest.fn() as jest.MockedFunction<
+      (columnName: string) => Promise<number | string | null>
+    >,
+    maximum: jest.fn() as jest.MockedFunction<
+      (columnName: string) => Promise<number | string | null>
+    >,
+    sql: jest.fn() as jest.MockedFunction<
+      <S = unknown>(
+        strings: TemplateStringsArray,
+        ...values: unknown[]
+      ) => Promise<S>
+    >,
   } as unknown as jest.Mocked<Repository<T>>;
 }
 
@@ -83,9 +116,9 @@ export function createMockRepository<
  * mockQueryBuilder.getOne.mockResolvedValue(user);
  */
 export function createMockQueryBuilder<
-  T extends ObjectLiteral = any,
+  T extends ObjectLiteral = ObjectLiteral,
 >(): jest.Mocked<SelectQueryBuilder<T>> {
-  const mockQueryBuilder: any = {
+  const mockQueryBuilder: Partial<jest.Mocked<SelectQueryBuilder<T>>> = {
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
@@ -145,9 +178,8 @@ export function createMockQueryBuilder<
     clone: jest.fn().mockReturnThis(),
 
     // Expression
-    expressionMap: {} as any,
-    connection: {} as any,
-    queryRunner: undefined,
+    expressionMap: {} as unknown as QueryExpressionMap,
+    connection: {} as unknown as DataSource,
   };
 
   return mockQueryBuilder as jest.Mocked<SelectQueryBuilder<T>>;

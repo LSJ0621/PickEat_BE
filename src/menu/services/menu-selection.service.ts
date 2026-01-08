@@ -105,7 +105,9 @@ export class MenuSelectionService {
    * 메뉴 선택 이력 조회
    */
   async getSelections(user: User, selectedDate?: string) {
-    const where: any = { user: { id: user.id } };
+    const where: { user: { id: number }; selectedDate?: string } = {
+      user: { id: user.id },
+    };
 
     if (selectedDate) {
       where.selectedDate = selectedDate;

@@ -7,7 +7,7 @@
  * mockService.findOne.mockResolvedValue(user);
  */
 export function createMockService<T>(methods: (keyof T)[]): jest.Mocked<T> {
-  const mock = {} as any;
+  const mock: Record<keyof T, jest.Mock> = {} as Record<keyof T, jest.Mock>;
   methods.forEach((method) => {
     mock[method] = jest.fn();
   });

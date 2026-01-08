@@ -19,6 +19,7 @@ module.exports = {
     '!**/main.ts',
     '!**/db-metrics.service.ts',
     '!prometheus/**',
+    '!**/__tests__/**',
   ],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',

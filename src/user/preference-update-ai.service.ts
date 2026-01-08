@@ -98,7 +98,17 @@ export class PreferenceUpdateAiService implements OnModuleInit {
         // GPT-5.1 계열: temperature 미사용, completion 토큰만 지정
         max_completion_tokens: OPENAI_SETTINGS.PREFERENCE_MAX_TOKENS,
       });
-      const usage: any = (response as any).usage;
+      const usage = (
+        response as {
+          usage?: {
+            prompt_tokens?: number;
+            input_tokens?: number;
+            completion_tokens?: number;
+            output_tokens?: number;
+            total_tokens?: number;
+          };
+        }
+      ).usage;
       const endpoint = 'preference';
 
       if (usage) {
@@ -129,7 +139,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       let parsed: PreferenceAnalysisResponse;
       try {
         parsed = JSON.parse(content) as PreferenceAnalysisResponse;
-      } catch (parseError) {
+      } catch {
         this.logger.error(`[JSON 파싱 실패] ${content}`);
         throw new OpenAIResponseException('JSON 파싱에 실패했습니다', content);
       }

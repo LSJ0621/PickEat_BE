@@ -1,3 +1,5 @@
+import { PlaceCandidate } from '../../../menu/interface/openai-places.interface';
+
 /**
  * Google Places 기반 식당 추천 프롬프트
  */
@@ -27,7 +29,7 @@ export const GOOGLE_PLACES_SYSTEM_PROMPT = [
  */
 export function buildGooglePlacesUserPrompt(
   query: string,
-  candidates: any[],
+  candidates: PlaceCandidate[],
 ): string {
   return [
     `검색어: ${query}`,

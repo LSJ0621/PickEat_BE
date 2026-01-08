@@ -206,6 +206,7 @@ export class AuthController {
 
   private handleAuthSuccess(res: Response, result: AuthResult) {
     this.setRefreshTokenCookie(res, result.refreshToken);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { refreshToken, ...payload } = result;
     return payload;
   }

@@ -1,5 +1,11 @@
 import { of, throwError } from 'rxjs';
-import { AxiosResponse, AxiosError } from 'axios';
+import {
+  AxiosResponse,
+  AxiosError,
+  InternalAxiosRequestConfig,
+  AxiosHeaders,
+  AxiosRequestHeaders,
+} from 'axios';
 
 /**
  * Mock HttpService from @nestjs/axios
@@ -14,7 +20,23 @@ export function createMockHttpService() {
     patch: jest.fn(),
     head: jest.fn(),
     request: jest.fn(),
-    axiosRef: {} as any,
+    axiosRef: {
+      defaults: {
+        headers: {
+          common: {},
+          delete: {},
+          get: {},
+          head: {},
+          patch: {},
+          post: {},
+          put: {},
+        },
+      },
+      interceptors: {
+        request: { use: jest.fn(), eject: jest.fn() },
+        response: { use: jest.fn(), eject: jest.fn() },
+      },
+    },
   };
 }
 
@@ -25,12 +47,24 @@ export function createAxiosResponse<T>(
   data: T,
   status: number = 200,
 ): AxiosResponse<T> {
+  const headers = new AxiosHeaders();
   return {
     data,
     status,
     statusText: 'OK',
-    headers: {},
-    config: {} as any,
+    headers,
+    config: {
+      url: '/',
+      method: 'get',
+      headers,
+      transformRequest: [],
+      transformResponse: [],
+      timeout: 0,
+      xsrfCookieName: 'XSRF-TOKEN',
+      xsrfHeaderName: 'X-XSRF-TOKEN',
+      maxContentLength: -1,
+      maxBodyLength: -1,
+    } as InternalAxiosRequestConfig<T>,
   };
 }
 
@@ -42,17 +76,31 @@ export function createAxiosError(
   message: string = 'Request failed',
   data?: any,
 ): AxiosError {
+  const headers = new AxiosHeaders();
+  const mockConfig: InternalAxiosRequestConfig = {
+    url: '/',
+    method: 'get',
+    headers,
+    transformRequest: [],
+    transformResponse: [],
+    timeout: 0,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+  };
+
   const error = new Error(message) as AxiosError;
   error.isAxiosError = true;
-  error.config = {} as any;
+  error.config = mockConfig;
   error.toJSON = () => ({});
   error.name = 'AxiosError';
   error.response = {
     data: data || { error: message },
     status,
     statusText: message,
-    headers: {},
-    config: {} as any,
+    headers,
+    config: mockConfig,
   };
   return error;
 }
@@ -156,9 +204,9 @@ export const mockKakaoOAuthResponses = {
     id: 123456789,
     kakao_account: {
       email: 'test@kakao.com',
-      profile: {
-        nickname: 'Test User',
-      },
+    },
+    properties: {
+      nickname: 'Test User',
     },
   },
 };
@@ -359,8 +407,19 @@ export function createMockGoogleOAuthClient() {
  */
 export function createMockGooglePlacesClient() {
   return {
-    searchPlaces: jest.fn(),
-    getPlaceDetails: jest.fn(),
+    searchByText: jest.fn(),
+    getDetails: jest.fn(),
+    getPhotoUri: jest.fn(),
+    resolvePhotoUris: jest.fn(),
+  };
+}
+
+/**
+ * Mock Google Search Client (CSE)
+ */
+export function createMockGoogleSearchClient() {
+  return {
+    searchBlogs: jest.fn(),
   };
 }
 

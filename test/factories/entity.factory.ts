@@ -234,8 +234,13 @@ export class BugReportFactory {
       overrides?.description ?? '메뉴 추천 버튼을 눌러도 반응이 없습니다.';
     bugReport.images = overrides?.images ?? null;
     bugReport.status = overrides?.status ?? BugReportStatus.UNCONFIRMED;
-    bugReport.createdAt = overrides?.createdAt ?? new Date();
-    bugReport.updatedAt = overrides?.updatedAt ?? new Date();
+    // Only set timestamps if explicitly provided (allows TypeORM to manage them)
+    if (overrides?.createdAt !== undefined) {
+      bugReport.createdAt = overrides.createdAt;
+    }
+    if (overrides?.updatedAt !== undefined) {
+      bugReport.updatedAt = overrides.updatedAt;
+    }
     return bugReport;
   }
 

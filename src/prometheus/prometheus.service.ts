@@ -182,7 +182,7 @@ export class PrometheusService {
     try {
       this.incrementAiRequest(endpoint, 'ok');
       this.incrementAiTokens(endpoint, tokens);
-    } catch (error) {
+    } catch {
       // 메트릭 수집 실패는 애플리케이션 동작에 영향을 주지 않도록 조용히 처리
     }
   }
@@ -194,7 +194,7 @@ export class PrometheusService {
   recordAiError(endpoint: string): void {
     try {
       this.incrementAiRequest(endpoint, 'error');
-    } catch (error) {
+    } catch {
       // 메트릭 수집 실패는 애플리케이션 동작에 영향을 주지 않도록 조용히 처리
     }
   }
@@ -210,7 +210,7 @@ export class PrometheusService {
         throw new Error('aiTokensCounter is not initialized');
       }
       this.incrementAiTokens(endpoint, tokens);
-    } catch (error) {
+    } catch {
       // 메트릭 수집 실패는 애플리케이션 동작에 영향을 주지 않도록 조용히 처리
     }
   }
@@ -223,7 +223,7 @@ export class PrometheusService {
   recordAiDuration(endpoint: string, seconds: number): void {
     try {
       this.aiRequestDuration.observe({ endpoint }, seconds);
-    } catch (error) {
+    } catch {
       // 메트릭 수집 실패는 애플리케이션 동작에 영향을 주지 않도록 조용히 처리
     }
   }
@@ -254,7 +254,7 @@ export class PrometheusService {
         },
         seconds,
       );
-    } catch (error) {
+    } catch {
       // 메트릭 수집 실패는 애플리케이션 동작에 영향을 주지 않도록 조용히 처리
     }
   }
@@ -265,7 +265,7 @@ export class PrometheusService {
   setDbUp(isUp: boolean): void {
     try {
       this.dbUpGauge.set(isUp ? 1 : 0);
-    } catch (error) {
+    } catch {
       // noop
     }
   }
@@ -276,7 +276,7 @@ export class PrometheusService {
   incrementDbQueryError(): void {
     try {
       this.dbQueryErrorCounter.inc();
-    } catch (error) {
+    } catch {
       // noop
     }
   }
@@ -301,7 +301,7 @@ export class PrometheusService {
         { service, status_group: statusGroup },
         seconds,
       );
-    } catch (error) {
+    } catch {
       // noop
     }
   }
