@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
@@ -25,6 +26,15 @@ export class AuthTokenService {
     this.refreshTokenSecret = this.config.get<string>('JWT_REFRESH_SECRET', '');
   }
 
+  /**
+   * SHA-256 pre-hash to ensure token fits within bcrypt's 72-byte limit.
+   * JWT tokens are 256+ bytes, but bcrypt only hashes first 72 bytes.
+   * SHA-256 output is 64 hex characters (256 bits), safely under the limit.
+   */
+  private hashTokenForStorage(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
   async issueTokens(
     entity: AuthEntity,
   ): Promise<{ token: string; refreshToken: string }> {
@@ -44,15 +54,28 @@ export class AuthTokenService {
     entity: AuthEntity,
     refreshToken: string | null,
   ): Promise<void> {
-    entity.refreshToken = refreshToken
-      ? await bcrypt.hash(refreshToken, 10)
+    const hashedToken = refreshToken
+      ? await bcrypt.hash(this.hashTokenForStorage(refreshToken), 10)
       : null;
-    await this.userRepository.save(entity);
+
+    // Use query builder with execute() to ensure immediate database update
+    await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ refreshToken: hashedToken })
+      .where('id = :id', { id: entity.id })
+      .execute();
   }
 
   async refreshAccessToken(
     refreshToken: string,
   ): Promise<{ token: string; refreshToken: string }> {
+    // Use a transaction to ensure atomicity and prevent race conditions
+    const queryRunner =
+      this.userRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.refreshTokenSecret,
@@ -62,7 +85,12 @@ export class AuthTokenService {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
 
-      const user = await this.userService.findByEmail(payload.email);
+      // Fetch user with SELECT FOR UPDATE to lock the row and ensure latest data
+      const user = await queryRunner.manager
+        .createQueryBuilder(User, 'user')
+        .setLock('pessimistic_write')
+        .where('user.email = :email', { email: payload.email })
+        .getOne();
 
       if (!user) {
         throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
@@ -73,9 +101,10 @@ export class AuthTokenService {
       }
 
       const isTokenValid = await bcrypt.compare(
-        refreshToken,
+        this.hashTokenForStorage(refreshToken),
         user.refreshToken,
       );
+
       if (!isTokenValid) {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
@@ -88,10 +117,30 @@ export class AuthTokenService {
         user.email,
         user.role.toString(),
       );
-      await this.persistRefreshToken(user, newRefreshToken);
+
+      // Invalidate the old refresh token immediately before issuing new one
+      // This ensures token rotation - old token becomes invalid
+      const hashedNewToken = await bcrypt.hash(
+        this.hashTokenForStorage(newRefreshToken),
+        10,
+      );
+
+      // Update using the transaction's query runner
+      await queryRunner.manager
+        .createQueryBuilder()
+        .update(User)
+        .set({ refreshToken: hashedNewToken })
+        .where('id = :id', { id: user.id })
+        .execute();
+
+      // Commit the transaction
+      await queryRunner.commitTransaction();
 
       return { token: newAccessToken, refreshToken: newRefreshToken };
     } catch (error) {
+      // Rollback transaction on error
+      await queryRunner.rollbackTransaction();
+
       if (error instanceof UnauthorizedException) {
         throw error;
       }
@@ -99,6 +148,9 @@ export class AuthTokenService {
         this.logger.warn('Refresh token 만료');
       }
       throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+    } finally {
+      // Release the query runner
+      await queryRunner.release();
     }
   }
 
@@ -113,7 +165,7 @@ export class AuthTokenService {
       const user = await this.userService.findByEmail(payload.email);
       if (user && user.refreshToken) {
         const isTokenValid = await bcrypt.compare(
-          refreshToken,
+          this.hashTokenForStorage(refreshToken),
           user.refreshToken,
         );
         if (isTokenValid) {

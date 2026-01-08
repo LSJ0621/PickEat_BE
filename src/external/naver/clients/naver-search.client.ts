@@ -63,10 +63,20 @@ export class NaverSearchClient {
       const items = response.data?.items ?? [];
       this.logger.log(`✅ [Naver 로컬 검색 완료] count=${items.length}`);
       return items;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'unknown error';
-      const statusCode = error?.response?.status;
-      const errorData = error?.response?.data;
+
+      let statusCode: number | undefined;
+      let errorData: unknown;
+
+      // Check if error has response property (axios error)
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: unknown };
+        };
+        statusCode = axiosError.response?.status;
+        errorData = axiosError.response?.data;
+      }
 
       this.logger.error(
         `❌ [Naver 로컬 검색 에러] query="${query}", status=${statusCode ?? 'unknown'}, error=${message}`,

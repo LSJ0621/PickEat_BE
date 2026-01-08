@@ -16,11 +16,28 @@ export function parseTokens(raw: unknown): number {
   return Number(raw);
 }
 
+interface ErrorWithStatus {
+  status?: number;
+  statusCode?: number;
+  response?: {
+    status?: number;
+  };
+}
+
+function isErrorWithStatus(error: unknown): error is ErrorWithStatus {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    ('status' in error || 'statusCode' in error || 'response' in error)
+  );
+}
+
 export function mapStatusGroupFromError(error: unknown): StatusGroup {
-  const status =
-    (error as any)?.status ??
-    (error as any)?.response?.status ??
-    (error as any)?.statusCode;
+  if (!isErrorWithStatus(error)) {
+    return 'timeout';
+  }
+
+  const status = error.status ?? error.response?.status ?? error.statusCode;
 
   if (status === 429) return '429';
   if (typeof status === 'number') {

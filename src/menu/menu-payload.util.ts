@@ -61,43 +61,45 @@ export function mergeMenuPayload(
 /**
  * 기존 데이터 구조를 새 구조({ breakfast, lunch, dinner, etc })로 변환
  */
-export function normalizeMenuPayload(payload: any): MenuSlotPayload {
-  if (!payload) {
+export function normalizeMenuPayload(payload: unknown): MenuSlotPayload {
+  if (!payload || typeof payload !== 'object') {
     return { breakfast: [], lunch: [], dinner: [], etc: [] };
   }
 
+  const payloadObj = payload as Record<string, unknown>;
+
   // 새 구조인 경우 (slot별)
   if (
-    Array.isArray(payload.breakfast) &&
-    Array.isArray(payload.lunch) &&
-    Array.isArray(payload.dinner) &&
-    Array.isArray(payload.etc)
+    Array.isArray(payloadObj.breakfast) &&
+    Array.isArray(payloadObj.lunch) &&
+    Array.isArray(payloadObj.dinner) &&
+    Array.isArray(payloadObj.etc)
   ) {
     return {
-      breakfast: payload.breakfast,
-      lunch: payload.lunch,
-      dinner: payload.dinner,
-      etc: payload.etc,
+      breakfast: payloadObj.breakfast,
+      lunch: payloadObj.lunch,
+      dinner: payloadObj.dinner,
+      etc: payloadObj.etc,
     };
   }
 
   // 기존 구조({ names: string[] })인 경우 - 모두 etc로 이동
-  if (Array.isArray(payload.names)) {
+  if (Array.isArray(payloadObj.names)) {
     return {
       breakfast: [],
       lunch: [],
       dinner: [],
-      etc: payload.names,
+      etc: payloadObj.names,
     };
   }
 
   // 기존 구조({ name: string })인 경우 - etc로 이동
-  if (typeof payload.name === 'string' && payload.name.trim()) {
+  if (typeof payloadObj.name === 'string' && payloadObj.name.trim()) {
     return {
       breakfast: [],
       lunch: [],
       dinner: [],
-      etc: [payload.name.trim()],
+      etc: [payloadObj.name.trim()],
     };
   }
 

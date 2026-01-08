@@ -7,7 +7,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { AddressSearchResult } from '../interfaces/address-search-result.interface';
+import { AddressSearchResult } from './address-search-result.dto';
 
 export class CreateUserAddressDto {
   @IsObject()

@@ -20,6 +20,23 @@ services:
       timeout: 3s
       retries: 10
 
+  postgres-test:
+    image: postgres:16
+    container_name: postgres-test
+    environment:
+      POSTGRES_USER: ${POSTGRES_TEST_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-pickeat_test}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -59,3 +76,6 @@ services:
       - prometheus
     networks:
       - default
+
+volumes:
+  postgres-test-data:

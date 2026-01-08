@@ -14,7 +14,7 @@ const EXCLUDED_PREFIXES = ['/metrics', '/health', '/ready', '/live'];
 export class HttpMetricsInterceptor implements NestInterceptor {
   constructor(private readonly prometheusService: PrometheusService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const httpCtx = context.switchToHttp();
     const req = httpCtx.getRequest<Request>();
     const res = httpCtx.getResponse<Response>();
@@ -68,7 +68,7 @@ export class HttpMetricsInterceptor implements NestInterceptor {
   private getRouteLabel(req: Request): string {
     // Prefer Express route template (already parameterized)
     const routePath = req.route?.path;
-    const baseUrl = (req.baseUrl as any) || '';
+    const baseUrl = req.baseUrl || '';
 
     if (routePath && typeof routePath === 'string') {
       return this.normalizeRoute(`${baseUrl}${routePath}`);

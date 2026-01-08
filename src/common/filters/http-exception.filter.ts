@@ -78,14 +78,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
           : (exceptionResponse as Record<string, unknown>).message ||
             exception.message;
 
+      const messageString = Array.isArray(message)
+        ? message.join(', ')
+        : typeof message === 'string'
+          ? message
+          : JSON.stringify(message);
+
       return {
         status,
         errorResponse: {
           statusCode: status,
           error: this.getErrorName(status),
-          message: Array.isArray(message)
-            ? message.join(', ')
-            : String(message),
+          message: messageString,
           timestamp,
           path,
         },
