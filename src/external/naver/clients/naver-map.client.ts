@@ -70,10 +70,20 @@ export class NaverMapClient {
       );
 
       return response.data?.results ?? [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'unknown error';
-      const statusCode = error?.response?.status;
-      const errorData = error?.response?.data;
+
+      let statusCode: number | undefined;
+      let errorData: unknown;
+
+      // Check if error has response property (axios error)
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: unknown };
+        };
+        statusCode = axiosError.response?.status;
+        errorData = axiosError.response?.data;
+      }
 
       this.logger.error(
         `❌ [Naver Reverse Geocode 에러] lat=${latitude}, lng=${longitude}, status=${statusCode ?? 'unknown'}, error=${message}`,

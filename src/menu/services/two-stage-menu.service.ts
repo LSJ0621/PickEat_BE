@@ -52,8 +52,12 @@ export class TwoStageMenuService {
     // Stage 1 성공: ValidationContext 구성
     const validationContext: ValidationContext = {
       intent: validationResult.intent,
-      constraints: validationResult.constraints,
-      suggestedCategories: validationResult.suggestedCategories,
+      constraints: validationResult.constraints || {
+        budget: 'medium' as const,
+        dietary: [],
+        urgency: 'normal' as const,
+      },
+      suggestedCategories: validationResult.suggestedCategories || [],
     };
 
     this.logger.log(

@@ -90,6 +90,10 @@ export class AuthService {
       EmailPurpose.SIGNUP,
     );
 
+    if (!isEmailVerified) {
+      throw new BadRequestException('이메일 인증이 완료되지 않았습니다.');
+    }
+
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
     await this.userService.createUser({
@@ -99,13 +103,11 @@ export class AuthService {
       name: registerDto.name,
     });
 
-    if (isEmailVerified) {
-      await this.userService.markEmailVerified(registerDto.email);
-      await this.emailVerificationService.expireVerification(
-        registerDto.email,
-        EmailPurpose.SIGNUP,
-      );
-    }
+    await this.userService.markEmailVerified(registerDto.email);
+    await this.emailVerificationService.expireVerification(
+      registerDto.email,
+      EmailPurpose.SIGNUP,
+    );
 
     return { message: '회원가입이 완료되었습니다.' };
   }

@@ -89,11 +89,21 @@ export class GoogleSearchClient {
       this.logger.log(`✅ [CSE 블로그 검색 완료] count=${blogs.length}`);
       this.recordExternal(statusGroup, startedAt);
       return blogs;
-    } catch (error: any) {
+    } catch (error: unknown) {
       statusGroup = mapStatusGroupFromError(error);
       const message = error instanceof Error ? error.message : 'unknown error';
-      const statusCode = error?.response?.status;
-      const errorData = error?.response?.data;
+
+      let statusCode: number | undefined;
+      let errorData: unknown;
+
+      // Check if error has response property (axios error)
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const axiosError = error as {
+          response?: { status?: number; data?: unknown };
+        };
+        statusCode = axiosError.response?.status;
+        errorData = axiosError.response?.data;
+      }
 
       this.logger.error(
         `❌ [CSE 블로그 검색 에러] query="${query}", status=${statusCode}, error=${message}`,

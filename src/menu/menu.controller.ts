@@ -171,7 +171,7 @@ export class MenuController {
 
   private buildSelectionResponse(selection: MenuSelection) {
     // menuPayload를 그대로 반환 (slot별 구조)
-    const payload = selection.menuPayload as any;
+    const payload = selection.menuPayload;
     const normalizedPayload = {
       breakfast: Array.isArray(payload?.breakfast) ? payload.breakfast : [],
       lunch: Array.isArray(payload?.lunch) ? payload.lunch : [],

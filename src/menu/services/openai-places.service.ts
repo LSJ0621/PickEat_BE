@@ -96,7 +96,17 @@ export class OpenAiPlacesService implements OnModuleInit {
       const duration = Date.now() - startedAt;
 
       // 토큰 사용량 로깅 (프롬프트/완료/전체)
-      const usage: any = (response as any).usage;
+      const usage = (
+        response as {
+          usage?: {
+            prompt_tokens?: number;
+            input_tokens?: number;
+            completion_tokens?: number;
+            output_tokens?: number;
+            total_tokens?: number;
+          };
+        }
+      ).usage;
       const endpoint = 'places';
 
       if (usage) {

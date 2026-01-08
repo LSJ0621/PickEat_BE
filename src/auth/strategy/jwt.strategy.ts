@@ -7,7 +7,7 @@ import { AuthUserPayload } from '../decorators/current-user.decorator';
 
 type JwtExtractor = (request: Request) => string | null;
 
-const bearerTokenExtractor: JwtExtractor = (request: Request) => {
+export const bearerTokenExtractor: JwtExtractor = (request: Request) => {
   const authorizationHeader = request.headers.authorization as
     | string
     | string[]

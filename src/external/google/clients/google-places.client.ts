@@ -53,7 +53,6 @@ export class GooglePlacesClient {
     this.logger.log(`🔍 [Places 검색] query="${query}"`);
 
     const startedAt = Date.now();
-    const service = 'places';
     let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
 
     try {
@@ -78,7 +77,7 @@ export class GooglePlacesClient {
       this.logger.log(`✅ [Places 검색 완료] count=${places.length}`);
       this.recordExternal(statusGroup, startedAt);
       return places;
-    } catch (error: any) {
+    } catch (error: unknown) {
       statusGroup = mapStatusGroupFromError(error);
       this.logError('Places 검색', query, error);
       this.recordExternal(statusGroup, startedAt);
@@ -109,7 +108,6 @@ export class GooglePlacesClient {
     this.logger.log(`🔍 [Places 상세 조회] placeId="${placeId}"`);
 
     const startedAt = Date.now();
-    const service = 'places';
     let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
 
     try {
@@ -126,7 +124,7 @@ export class GooglePlacesClient {
       const result = response.data ?? null;
       this.recordExternal(statusGroup, startedAt);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       statusGroup = mapStatusGroupFromError(error);
       this.logError('Places 상세 조회', placeId, error);
       this.recordExternal(statusGroup, startedAt);
@@ -152,7 +150,6 @@ export class GooglePlacesClient {
     const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.PHOTO(photoName)}`;
 
     const startedAt = Date.now();
-    const service = 'places';
     let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
 
     try {
@@ -173,10 +170,12 @@ export class GooglePlacesClient {
       const result = response.data?.photoUri ?? null;
       this.recordExternal(statusGroup, startedAt);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       statusGroup = mapStatusGroupFromError(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `❌ [Places 사진 URI 에러] name="${photoName}", error=${error.message}`,
+        `❌ [Places 사진 URI 에러] name="${photoName}", error=${errorMessage}`,
       );
       this.recordExternal(statusGroup, startedAt);
       return null;
@@ -212,10 +211,24 @@ export class GooglePlacesClient {
     };
   }
 
-  private logError(operation: string, identifier: string, error: any): void {
+  private logError(
+    operation: string,
+    identifier: string,
+    error: unknown,
+  ): void {
     const message = error instanceof Error ? error.message : 'unknown error';
-    const statusCode = error?.response?.status;
-    const errorData = error?.response?.data;
+
+    let statusCode: number | undefined;
+    let errorData: unknown;
+
+    // Check if error has response property (axios error)
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      const axiosError = error as {
+        response?: { status?: number; data?: unknown };
+      };
+      statusCode = axiosError.response?.status;
+      errorData = axiosError.response?.data;
+    }
 
     this.logger.error(
       `❌ [${operation} 에러] identifier="${identifier}", status=${statusCode}, error=${message}`,

@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import { GoogleOAuthClient } from '../../external/google/clients/google-oauth.client';
 import { KakaoOAuthClient } from '../../external/kakao/clients/kakao-oauth.client';
 import { User } from '../../user/entities/user.entity';
@@ -74,7 +74,7 @@ export class AuthSocialService {
     }
 
     const activeUser = await this.userRepository.findOne({
-      where: { email, password: Not(null as any) },
+      where: { email, password: Not(IsNull()) },
     });
     if (activeUser) {
       throw new BadRequestException(
@@ -142,7 +142,7 @@ export class AuthSocialService {
     }
 
     const activeUser = await this.userRepository.findOne({
-      where: { email, password: Not(null as any) },
+      where: { email, password: Not(IsNull()) },
     });
     if (activeUser) {
       throw new BadRequestException(
@@ -181,7 +181,7 @@ export class AuthSocialService {
     reRegisterSocialDto: ReRegisterSocialDto,
   ): Promise<{ message: string }> {
     const deletedUser = await this.userRepository.findOne({
-      where: { email: reRegisterSocialDto.email, socialId: Not(null as any) },
+      where: { email: reRegisterSocialDto.email, socialId: Not(IsNull()) },
       withDeleted: true,
     });
 
@@ -190,7 +190,7 @@ export class AuthSocialService {
     }
 
     const activeRegularUser = await this.userRepository.findOne({
-      where: { email: reRegisterSocialDto.email, password: Not(null as any) },
+      where: { email: reRegisterSocialDto.email, password: Not(IsNull()) },
     });
 
     if (activeRegularUser) {

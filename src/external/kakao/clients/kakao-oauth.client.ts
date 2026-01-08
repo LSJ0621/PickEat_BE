@@ -52,7 +52,7 @@ export class KakaoOAuthClient {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logOAuthError('토큰 발급', error);
       throw new ExternalApiException(
         'Kakao OAuth',
@@ -79,7 +79,7 @@ export class KakaoOAuthClient {
       );
 
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logOAuthError('프로필 조회', error);
       throw new ExternalApiException(
         'Kakao OAuth',
@@ -89,14 +89,27 @@ export class KakaoOAuthClient {
     }
   }
 
-  private logOAuthError(operation: string, error: any): void {
+  private logOAuthError(operation: string, error: unknown): void {
     this.logger.error(`=== Kakao OAuth ${operation} 에러 ===`);
-    this.logger.error(`에러 타입: ${error.name}`);
-    this.logger.error(`에러 메시지: ${error.message}`);
 
-    if (error.response) {
-      this.logger.error(`응답 상태 코드: ${error.response.status}`);
-      this.logger.error(`응답 데이터: ${JSON.stringify(error.response.data)}`);
+    if (error instanceof Error) {
+      this.logger.error(`에러 타입: ${error.name}`);
+      this.logger.error(`에러 메시지: ${error.message}`);
+    } else {
+      this.logger.error(`에러 메시지: ${String(error)}`);
+    }
+
+    // Check if error has response property (axios error)
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+      const axiosError = error as {
+        response?: { status?: number; data?: unknown };
+      };
+      if (axiosError.response) {
+        this.logger.error(`응답 상태 코드: ${axiosError.response.status}`);
+        this.logger.error(
+          `응답 데이터: ${JSON.stringify(axiosError.response.data)}`,
+        );
+      }
     }
   }
 }

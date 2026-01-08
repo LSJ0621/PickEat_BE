@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Query,
   UseGuards,
@@ -33,8 +34,8 @@ export class AdminBugReportController {
    * 버그 제보 상세 조회
    */
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const bugReport = await this.bugReportService.findOne(parseInt(id, 10));
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const bugReport = await this.bugReportService.findOne(id);
     return bugReport;
   }
 
@@ -43,13 +44,10 @@ export class AdminBugReportController {
    */
   @Patch(':id/status')
   async updateStatus(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateBugReportStatusDto,
   ) {
-    const bugReport = await this.bugReportService.updateStatus(
-      parseInt(id, 10),
-      dto.status,
-    );
+    const bugReport = await this.bugReportService.updateStatus(id, dto.status);
     return bugReport;
   }
 }

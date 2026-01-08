@@ -20,7 +20,10 @@ export class JwtTokenProvider {
   }
 
   createRefreshToken(email: string, role: string): string {
-    const payload = { email, role, type: 'refresh' };
+    // Add jti (JWT ID) with millisecond timestamp to ensure uniqueness
+    // Even if called multiple times per second, each token will be unique
+    const jti = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    const payload = { email, role, type: 'refresh', jti };
     return this.jwtService.sign(payload, {
       expiresIn: '7d',
       secret: this.refreshTokenSecret,
