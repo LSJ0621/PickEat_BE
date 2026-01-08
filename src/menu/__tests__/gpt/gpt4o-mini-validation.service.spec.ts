@@ -10,7 +10,12 @@ describe('Gpt4oMiniValidationService', () => {
   let service: Gpt4oMiniValidationService;
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockOpenAI: jest.Mocked<OpenAI>;
-  let mockPrometheusService: any;
+  let mockPrometheusService: {
+    recordAiSuccess: jest.Mock;
+    recordAiError: jest.Mock;
+    recordAiDuration: jest.Mock;
+    recordExternalApi: jest.Mock;
+  };
 
   beforeEach(async () => {
     mockConfigService = createMockConfigService({
@@ -20,7 +25,6 @@ describe('Gpt4oMiniValidationService', () => {
 
     mockPrometheusService = {
       recordAiSuccess: jest.fn(),
-      recordAiFailure: jest.fn(),
       recordAiError: jest.fn(),
       recordAiDuration: jest.fn(),
       recordExternalApi: jest.fn(),
@@ -35,7 +39,7 @@ describe('Gpt4oMiniValidationService', () => {
         },
         {
           provide: PrometheusService,
-          useValue: mockPrometheusService,
+          useValue: mockPrometheusService as unknown as PrometheusService,
         },
       ],
     }).compile();
@@ -72,11 +76,10 @@ describe('Gpt4oMiniValidationService', () => {
 
       const mockPrometheusService = {
         recordAiSuccess: jest.fn(),
-        recordAiFailure: jest.fn(),
         recordAiError: jest.fn(),
         recordAiDuration: jest.fn(),
         recordExternalApi: jest.fn(),
-      } as any;
+      } as unknown as PrometheusService;
 
       const defaultService = new Gpt4oMiniValidationService(
         defaultConfig,
@@ -91,11 +94,10 @@ describe('Gpt4oMiniValidationService', () => {
     it('should initialize OpenAI client when API key is configured', () => {
       const mockPrometheusService = {
         recordAiSuccess: jest.fn(),
-        recordAiFailure: jest.fn(),
         recordAiError: jest.fn(),
         recordAiDuration: jest.fn(),
         recordExternalApi: jest.fn(),
-      } as any;
+      } as unknown as PrometheusService;
 
       const freshService = new Gpt4oMiniValidationService(
         mockConfigService,
@@ -114,14 +116,15 @@ describe('Gpt4oMiniValidationService', () => {
     });
 
     it('should log error when API key is not configured', () => {
-      const noKeyConfig = createMockConfigService({}) as any;
+      const noKeyConfig = createMockConfigService(
+        {},
+      ) as unknown as jest.Mocked<ConfigService>;
       const mockPrometheusService = {
         recordAiSuccess: jest.fn(),
-        recordAiFailure: jest.fn(),
         recordAiError: jest.fn(),
         recordAiDuration: jest.fn(),
         recordExternalApi: jest.fn(),
-      } as any;
+      } as unknown as PrometheusService;
 
       const freshService = new Gpt4oMiniValidationService(
         noKeyConfig,
@@ -145,7 +148,7 @@ describe('Gpt4oMiniValidationService', () => {
     const dislikes = ['일식'];
 
     it('should throw ExternalApiException when OpenAI is not initialized', async () => {
-      service['openai'] = null as any;
+      service['openai'] = null as unknown as OpenAI;
 
       await expect(
         service.validateMenuRequest(userPrompt, likes, dislikes),
@@ -692,7 +695,7 @@ describe('Gpt4oMiniValidationService', () => {
 
       const nullPrometheusService = new Gpt4oMiniValidationService(
         mockConfigService,
-        null as any,
+        null as unknown as PrometheusService,
       );
       nullPrometheusService['openai'] = mockOpenAI;
       mockOpenAI.chat.completions.create = jest
@@ -711,7 +714,7 @@ describe('Gpt4oMiniValidationService', () => {
     it('should handle null PrometheusService on failure', async () => {
       const nullPrometheusService = new Gpt4oMiniValidationService(
         mockConfigService,
-        null as any,
+        null as unknown as PrometheusService,
       );
       nullPrometheusService['openai'] = mockOpenAI;
       mockOpenAI.chat.completions.create = jest

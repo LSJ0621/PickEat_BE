@@ -19,6 +19,7 @@ import {
   closeTestingApp,
   createAllMockClients,
 } from '../../e2e/setup/testing-app.module';
+import { DiscordEmbedField } from '@/external/discord/discord.types';
 
 /**
  * Bug Report Flow Integration Tests
@@ -84,14 +85,13 @@ describe('Bug Report Flow Integration', () => {
   });
 
   beforeEach(async () => {
-    // Clear all repositories in correct order (dependent tables first)
-    // Use query builder to avoid empty criteria error
-    await bugReportNotificationRepository
-      .createQueryBuilder()
-      .delete()
-      .execute();
-    await bugReportRepository.createQueryBuilder().delete().execute();
-    await userRepository.createQueryBuilder().delete().execute();
+    // Clear all repositories in correct FK dependency order (child tables first)
+    // Use raw queries to ensure complete cleanup
+    await userRepository.manager.query('DELETE FROM "bug_report_notification"');
+    await userRepository.manager.query('DELETE FROM "bug_report"');
+    await userRepository.manager.query('DELETE FROM "user_address"');
+    await userRepository.manager.query('DELETE FROM "email_verifications"');
+    await userRepository.manager.query('DELETE FROM "user"');
 
     // Reset all mocks
     jest.clearAllMocks();
@@ -727,7 +727,7 @@ describe('Bug Report Flow Integration', () => {
       const embed = callArgs.embeds[0];
 
       // Verify embed contains recent bugs field
-      const recentBugsField = embed.fields?.find((f: any) =>
+      const recentBugsField = embed.fields?.find((f: DiscordEmbedField) =>
         f.name.includes('최근 제보'),
       );
       expect(recentBugsField).toBeDefined();

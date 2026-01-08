@@ -9,7 +9,11 @@ import * as request from 'supertest';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { createTestingApp, closeTestingApp } from '../setup/testing-app.module';
+import {
+  createTestingApp,
+  closeTestingApp,
+  createAllMockClients,
+} from '../setup/testing-app.module';
 import { AuthTestHelper } from '../setup/auth-test.helper';
 import { User } from '@/user/entities/user.entity';
 import { UserAddress } from '@/user/entities/user-address.entity';
@@ -32,7 +36,7 @@ import { MenuSlot } from '@/menu/dto/create-menu-selection.dto';
 
 describe('Menu (e2e)', () => {
   let app: INestApplication;
-  let mocks: any;
+  let mocks: ReturnType<typeof createAllMockClients>;
   let authHelper: AuthTestHelper;
   let userRepository: Repository<User>;
   let userAddressRepository: Repository<UserAddress>;

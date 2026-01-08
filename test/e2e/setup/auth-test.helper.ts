@@ -131,7 +131,7 @@ export function createAuthTestHelper(app: INestApplication): AuthTestHelper {
  */
 export const TEST_ENV_CONFIG = {
   // Application
-  NODE_ENV: 'development',
+  NODE_ENV: 'test',
   PORT: '3000',
   CORS_ORIGIN: 'http://localhost:3001',
   APP_URL: 'http://localhost:3000',

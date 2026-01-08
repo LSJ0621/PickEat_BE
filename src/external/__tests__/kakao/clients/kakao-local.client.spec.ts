@@ -7,7 +7,11 @@ import {
 } from '../../../../../test/mocks/external-clients.mock';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { KAKAO_LOCAL_CONFIG } from '../../../kakao/kakao.constants';
-import axios, { AxiosError } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -15,7 +19,7 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 describe('KakaoLocalClient', () => {
   let client: KakaoLocalClient;
   let configService: ReturnType<typeof createMockConfigService>;
-  let mockAxiosInstance: any;
+  let mockAxiosInstance: jest.Mocked<Pick<AxiosInstance, 'get' | 'post'>>;
 
   beforeEach(async () => {
     configService = createMockConfigService({
@@ -26,7 +30,9 @@ describe('KakaoLocalClient', () => {
       post: jest.fn(),
     };
 
-    mockedAxios.create.mockReturnValue(mockAxiosInstance);
+    mockedAxios.create.mockReturnValue(
+      mockAxiosInstance as unknown as AxiosInstance,
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -312,7 +318,7 @@ describe('KakaoLocalClient', () => {
       } catch (e) {
         expect(e).toBeInstanceOf(ExternalApiException);
         const exception = e as ExternalApiException;
-        const response = exception.getResponse() as any;
+        const response = exception.getResponse() as { message: string };
         expect(response.message).toBe('주소 검색에 실패했습니다.');
       }
     });
@@ -410,7 +416,7 @@ describe('KakaoLocalClient', () => {
 function createAxiosError(status: number, message: string): AxiosError {
   const error = new Error(message) as AxiosError;
   error.isAxiosError = true;
-  error.config = {} as any;
+  error.config = {} as InternalAxiosRequestConfig;
   error.toJSON = () => ({});
   error.name = 'AxiosError';
   error.response = {
@@ -418,7 +424,7 @@ function createAxiosError(status: number, message: string): AxiosError {
     status,
     statusText: message,
     headers: {},
-    config: {} as any,
+    config: {} as InternalAxiosRequestConfig,
   };
   return error;
 }

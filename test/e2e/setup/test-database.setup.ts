@@ -77,12 +77,14 @@ export async function resetDatabaseBeforeAppInit(): Promise<void> {
     password: process.env.POSTGRES_PASSWORD || 'postgres',
     database: process.env.POSTGRES_DB || 'pick-eat_test',
     entities: ALL_ENTITIES,
-    synchronize: false,
+    synchronize: true, // Enable synchronize to ensure schema exists
+    dropSchema: false, // Don't drop schema here - just clean data
     logging: false,
   });
 
   try {
     await tempDataSource.initialize();
+    // Schema is now guaranteed to exist
     await cleanDatabase(tempDataSource);
   } finally {
     if (tempDataSource.isInitialized) {
@@ -144,38 +146,6 @@ export async function destroyTestDataSource(
 ): Promise<void> {
   if (dataSource.isInitialized) {
     await dataSource.destroy();
-  }
-}
-
-/**
- * Test database setup hook for Jest
- * Use in setupFilesAfterEnv or beforeAll/afterAll hooks
- */
-export class TestDatabaseSetup {
-  private static dataSource: DataSource | null = null;
-
-  static async initialize(): Promise<DataSource> {
-    if (!this.dataSource) {
-      this.dataSource = await createTestDataSource();
-    }
-    return this.dataSource;
-  }
-
-  static async cleanup(): Promise<void> {
-    if (this.dataSource) {
-      await cleanDatabase(this.dataSource);
-    }
-  }
-
-  static async destroy(): Promise<void> {
-    if (this.dataSource) {
-      await destroyTestDataSource(this.dataSource);
-      this.dataSource = null;
-    }
-  }
-
-  static getDataSource(): DataSource | null {
-    return this.dataSource;
   }
 }
 
