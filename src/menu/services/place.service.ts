@@ -236,10 +236,12 @@ export class PlaceService {
       }>;
       recommendations: Awaited<
         ReturnType<typeof this.openAiPlacesService.recommendFromGooglePlaces>
-      > | null;
+      >;
     } = {
       places: [],
-      recommendations: null,
+      recommendations: null as unknown as Awaited<
+        ReturnType<typeof this.openAiPlacesService.recommendFromGooglePlaces>
+      >,
     };
 
     await runPipeline(

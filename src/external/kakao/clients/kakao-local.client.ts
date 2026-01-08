@@ -81,7 +81,7 @@ export class KakaoLocalClient {
         meta: response.data.meta,
         addresses,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('❌ [Kakao 주소 검색 에러]', error);
       throw new ExternalApiException(
         'Kakao Local',

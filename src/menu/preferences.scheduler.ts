@@ -61,7 +61,7 @@ export class PreferencesScheduler {
         };
 
         group.selections.forEach((s) => {
-          const payload = normalizeMenuPayload(s.menuPayload as any);
+          const payload = normalizeMenuPayload(s.menuPayload);
           slotMenus.breakfast.push(
             ...payload.breakfast
               .map((n) => normalizeMenuName(n))
@@ -170,7 +170,7 @@ export class PreferencesScheduler {
         };
 
         group.selections.forEach((s) => {
-          const payload = normalizeMenuPayload(s.menuPayload as any);
+          const payload = normalizeMenuPayload(s.menuPayload);
           slotMenus.breakfast.push(
             ...payload.breakfast
               .map((n) => normalizeMenuName(n))
