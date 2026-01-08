@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { DeepPartial, Repository } from 'typeorm';
 import { PlaceService } from '../../services/place.service';
 import { MenuRecommendationService } from '../../services/menu-recommendation.service';
 import { OpenAiPlacesService } from '../../services/openai-places.service';
@@ -16,7 +17,9 @@ import {
 
 describe('PlaceService', () => {
   let service: PlaceService;
-  let mockPlaceRecommendationRepository: jest.Mocked<any>;
+  let mockPlaceRecommendationRepository: jest.Mocked<
+    Repository<PlaceRecommendation>
+  >;
   let mockMenuRecommendationService: jest.Mocked<MenuRecommendationService>;
   let mockOpenAiPlacesService: jest.Mocked<OpenAiPlacesService>;
   let mockGooglePlacesClient: jest.Mocked<GooglePlacesClient>;
@@ -338,10 +341,11 @@ describe('PlaceService', () => {
       ];
 
       mockPlaceRecommendationRepository.create.mockImplementation(
-        (data: any) => data,
+        (data: DeepPartial<PlaceRecommendation>) => data as PlaceRecommendation,
       );
       mockPlaceRecommendationRepository.save.mockResolvedValue(
-        savedPlaceRecommendations,
+        savedPlaceRecommendations as PlaceRecommendation[] &
+          PlaceRecommendation,
       );
 
       const result = await service.recommendRestaurants(
@@ -400,7 +404,7 @@ describe('PlaceService', () => {
           'query',
           '김치찌개',
 
-          undefined as any,
+          undefined as unknown as number,
         ),
       ).rejects.toThrow(BadRequestException);
       await expect(
@@ -409,7 +413,7 @@ describe('PlaceService', () => {
           'query',
           '김치찌개',
 
-          undefined as any,
+          undefined as unknown as number,
         ),
       ).rejects.toThrow('menuRecommendationId가 필요합니다');
     });
@@ -1190,8 +1194,12 @@ describe('PlaceService', () => {
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
       mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
       mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue({
-        recommendations: null,
-      } as any);
+        recommendations: null as unknown as Array<{
+          placeId: string;
+          name: string;
+          reason: string;
+        }>,
+      });
 
       await expect(
         service.recommendRestaurants(user, 'query', '김치찌개', 1),
@@ -1220,8 +1228,12 @@ describe('PlaceService', () => {
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
       mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
       mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue({
-        recommendations: undefined,
-      } as any);
+        recommendations: undefined as unknown as Array<{
+          placeId: string;
+          name: string;
+          reason: string;
+        }>,
+      });
 
       await expect(
         service.recommendRestaurants(user, 'query', '김치찌개', 1),

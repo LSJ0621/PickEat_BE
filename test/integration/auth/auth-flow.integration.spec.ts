@@ -61,8 +61,8 @@ describe('Auth Flow Integration', () => {
 
   // Mocks
   let mockMailerService: jest.Mocked<MailerService>;
-  let mockGoogleOAuthClient: any;
-  let mockKakaoOAuthClient: any;
+  let mockGoogleOAuthClient: jest.Mocked<GoogleOAuthClient>;
+  let mockKakaoOAuthClient: jest.Mocked<KakaoOAuthClient>;
 
   beforeAll(async () => {
     // Create testing module using the helper
@@ -82,8 +82,10 @@ describe('Auth Flow Integration', () => {
     );
 
     // Get mocked clients
-    mockGoogleOAuthClient = module.get<GoogleOAuthClient>(GoogleOAuthClient);
-    mockKakaoOAuthClient = module.get<KakaoOAuthClient>(KakaoOAuthClient);
+    mockGoogleOAuthClient =
+      module.get<jest.Mocked<GoogleOAuthClient>>(GoogleOAuthClient);
+    mockKakaoOAuthClient =
+      module.get<jest.Mocked<KakaoOAuthClient>>(KakaoOAuthClient);
 
     // Override MailerService
     mockMailerService = {
@@ -102,9 +104,11 @@ describe('Auth Flow Integration', () => {
   });
 
   beforeEach(async () => {
-    // Clean up database before each test - use query builder to avoid empty criteria error
-    await emailVerificationRepository.createQueryBuilder().delete().execute();
-    await userRepository.createQueryBuilder().delete().execute();
+    // Clean up database before each test - FK dependency order (child tables first)
+    await userRepository.manager.query('DELETE FROM "user_address"');
+    await userRepository.manager.query('DELETE FROM "bug_report"');
+    await userRepository.manager.query('DELETE FROM "email_verifications"');
+    await userRepository.manager.query('DELETE FROM "user"');
     jest.clearAllMocks();
   });
 
@@ -302,9 +306,10 @@ describe('Auth Flow Integration', () => {
       });
 
       // Step 3: Verify refresh token is stored in database
-      const user = await userRepository.findOne({
-        where: { email: testEmail },
-      });
+      const user = await userRepository
+        .createQueryBuilder('user')
+        .where('user.email = :email', { email: testEmail })
+        .getOne();
       expect(user?.refreshToken).toBeDefined();
 
       // Verify refresh token is hashed (with SHA-256 pre-hashing)
@@ -410,9 +415,10 @@ describe('Auth Flow Integration', () => {
       await authService.logout(loginResult.refreshToken);
 
       // Verify refresh token is removed from database
-      const user = await userRepository.findOne({
-        where: { email: testEmail },
-      });
+      const user = await userRepository
+        .createQueryBuilder('user')
+        .where('user.email = :email', { email: testEmail })
+        .getOne();
       expect(user?.refreshToken).toBeNull();
 
       // Attempt to refresh with old token should fail
@@ -489,9 +495,10 @@ describe('Auth Flow Integration', () => {
       });
 
       // Verify only one user exists
-      const users = await userRepository.find({
-        where: { email: googleEmail },
-      });
+      const users = await userRepository
+        .createQueryBuilder('user')
+        .where('user.email = :email', { email: googleEmail })
+        .getMany();
       expect(users).toHaveLength(1);
     });
 
@@ -521,9 +528,9 @@ describe('Auth Flow Integration', () => {
 
     // Helper function to setup Kakao OAuth mocks
     function setupKakaoOAuthMocks() {
-      mockKakaoOAuthClient.getAccessToken.mockResolvedValue({
-        access_token: mockKakaoOAuthResponses.tokenSuccess.access_token,
-      });
+      mockKakaoOAuthClient.getAccessToken.mockResolvedValue(
+        mockKakaoOAuthResponses.tokenSuccess,
+      );
       mockKakaoOAuthClient.getUserProfile.mockResolvedValue(
         mockKakaoOAuthResponses.userInfoSuccess,
       );
@@ -573,9 +580,10 @@ describe('Auth Flow Integration', () => {
       });
 
       // Verify only one user exists
-      const users = await userRepository.find({
-        where: { email: kakaoEmail },
-      });
+      const users = await userRepository
+        .createQueryBuilder('user')
+        .where('user.email = :email', { email: kakaoEmail })
+        .getMany();
       expect(users).toHaveLength(1);
     });
 

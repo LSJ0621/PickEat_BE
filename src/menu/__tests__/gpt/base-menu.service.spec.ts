@@ -5,6 +5,8 @@ import { BaseMenuService } from '../../gpt/base-menu.service';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { PrometheusService } from '@/prometheus/prometheus.service';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
+import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts/menu-recommendation.prompts';
+import { OpenAIChatCompletionParams } from '@/external/openai/openai.types';
 
 // Test implementation of abstract BaseMenuService
 class TestMenuService extends BaseMenuService {
@@ -20,8 +22,8 @@ class TestMenuService extends BaseMenuService {
     systemPrompt: string,
     userPrompt: string,
 
-    jsonSchema: any,
-  ): any {
+    jsonSchema: typeof MENU_RECOMMENDATIONS_JSON_SCHEMA,
+  ): OpenAIChatCompletionParams {
     return {
       model: this.getModel(),
       messages: [
@@ -55,7 +57,11 @@ describe('BaseMenuService', () => {
       providers: [
         {
           provide: TestMenuService,
-          useFactory: () => new TestMenuService(mockConfigService, null as any),
+          useFactory: () =>
+            new TestMenuService(
+              mockConfigService,
+              null as unknown as PrometheusService,
+            ),
         },
         {
           provide: ConfigService,
@@ -84,7 +90,10 @@ describe('BaseMenuService', () => {
 
   describe('onModuleInit', () => {
     it('should initialize OpenAI client when API key is configured', () => {
-      const freshService = new TestMenuService(mockConfigService, null as any);
+      const freshService = new TestMenuService(
+        mockConfigService,
+        null as unknown as PrometheusService,
+      );
 
       freshService.onModuleInit();
 
@@ -93,8 +102,13 @@ describe('BaseMenuService', () => {
     });
 
     it('should log error when API key is not configured', () => {
-      const noKeyConfig = createMockConfigService({}) as any;
-      const freshService = new TestMenuService(noKeyConfig, null as any);
+      const noKeyConfig = createMockConfigService(
+        {},
+      ) as unknown as jest.Mocked<ConfigService>;
+      const freshService = new TestMenuService(
+        noKeyConfig,
+        null as unknown as PrometheusService,
+      );
 
       const loggerSpy = jest.spyOn(freshService['logger'], 'error');
 
@@ -114,7 +128,7 @@ describe('BaseMenuService', () => {
     const analysis = '사용자는 매운 음식을 좋아합니다';
 
     it('should throw ExternalApiException when OpenAI is not initialized', async () => {
-      service['openai'] = null as any;
+      service['openai'] = null as unknown as OpenAI;
 
       await expect(
         service.generateMenuRecommendations(prompt, likes, dislikes),
@@ -710,7 +724,7 @@ describe('BaseMenuService', () => {
 
       const nullPrometheusService = new TestMenuService(
         mockConfigService,
-        null as any,
+        null as unknown as PrometheusService,
       );
       nullPrometheusService['openai'] = mockOpenAI;
       mockOpenAI.chat.completions.create = jest

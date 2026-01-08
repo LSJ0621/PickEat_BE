@@ -1,7 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 
-import { createTestingApp, closeTestingApp } from '../setup/testing-app.module';
+import {
+  createTestingApp,
+  closeTestingApp,
+  createAllMockClients,
+} from '../setup/testing-app.module';
 import { AuthTestHelper } from '../setup/auth-test.helper';
 import {
   mockNaverSearchResponses,
@@ -11,7 +15,7 @@ import { TEST_COORDINATES } from '../../constants/test.constants';
 
 describe('Search (e2e)', () => {
   let app: INestApplication;
-  let mocks: any;
+  let mocks: ReturnType<typeof createAllMockClients>;
   let authHelper: AuthTestHelper;
 
   beforeAll(async () => {

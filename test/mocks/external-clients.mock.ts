@@ -1,10 +1,8 @@
-import { of, throwError } from 'rxjs';
 import {
   AxiosResponse,
   AxiosError,
   InternalAxiosRequestConfig,
   AxiosHeaders,
-  AxiosRequestHeaders,
 } from 'axios';
 
 /**
@@ -74,7 +72,7 @@ export function createAxiosResponse<T>(
 export function createAxiosError(
   status: number,
   message: string = 'Request failed',
-  data?: any,
+  data?: unknown,
 ): AxiosError {
   const headers = new AxiosHeaders();
   const mockConfig: InternalAxiosRequestConfig = {
@@ -502,9 +500,9 @@ export function createMockPrometheusService() {
 /**
  * Mock ConfigService
  */
-export function createMockConfigService(config: Record<string, any> = {}) {
+export function createMockConfigService(config: Record<string, unknown> = {}) {
   return {
-    get: jest.fn((key: string, defaultValue?: any) => {
+    get: jest.fn((key: string, defaultValue?: unknown) => {
       return config[key] ?? defaultValue;
     }),
     getOrThrow: jest.fn((key: string) => {

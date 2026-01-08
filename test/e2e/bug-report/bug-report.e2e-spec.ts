@@ -298,7 +298,7 @@ describe('BugReport (e2e)', () => {
       expect(response.body.items.length).toBe(2);
       expect(
         response.body.items.every(
-          (report: any) => report.status === BugReportStatus.UNCONFIRMED,
+          (report: BugReport) => report.status === BugReportStatus.UNCONFIRMED,
         ),
       ).toBe(true);
     });

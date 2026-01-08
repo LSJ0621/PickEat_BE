@@ -1,4 +1,10 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  Type,
+  DynamicModule,
+  ForwardReference,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,6 +30,7 @@ import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook
 import {
   createMockGoogleOAuthClient,
   createMockGooglePlacesClient,
+  createMockGoogleSearchClient,
   createMockKakaoOAuthClient,
   createMockKakaoLocalClient,
   createMockNaverSearchClient,
@@ -73,12 +80,11 @@ export function createAllMockClients() {
   );
   mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([]);
 
-  // Google Search (CSE) - create mock manually as it's not in the factory
-  const mockGoogleSearchClient = {
-    searchBlogs: jest
-      .fn()
-      .mockResolvedValue(mockGoogleCseResponses.searchSuccess.items),
-  };
+  // Google Search (CSE)
+  const mockGoogleSearchClient = createMockGoogleSearchClient();
+  mockGoogleSearchClient.searchBlogs.mockResolvedValue(
+    mockGoogleCseResponses.searchSuccess.items,
+  );
 
   // Kakao OAuth
   const mockKakaoOAuthClient = createMockKakaoOAuthClient();
@@ -145,7 +151,7 @@ export function createAllMockClients() {
  */
 export function createTestConfigService(): Partial<ConfigService> {
   return {
-    get: jest.fn((key: string, defaultValue?: any) => {
+    get: jest.fn((key: string, defaultValue?: unknown) => {
       return (TEST_ENV_CONFIG as Record<string, string>)[key] ?? defaultValue;
     }),
     getOrThrow: jest.fn((key: string) => {
@@ -233,7 +239,9 @@ export async function createTestingApp(): Promise<{
  * Uses SQLite in-memory database
  */
 export async function createIntegrationTestingModule(
-  moduleImports: any[],
+  moduleImports: Array<
+    Type<unknown> | DynamicModule | Promise<DynamicModule> | ForwardReference
+  >,
 ): Promise<TestingModule> {
   // Reset database before module initialization
   await resetDatabaseBeforeAppInit();
