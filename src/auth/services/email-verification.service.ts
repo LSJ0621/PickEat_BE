@@ -11,6 +11,8 @@ import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import { Repository } from 'typeorm';
 import { EMAIL_VERIFICATION } from '../../common/constants/business.constants';
+import { TEST_MODE } from '../../common/constants/test-mode.constants';
+import { isTestMode } from '../../common/utils/test-mode.util';
 import { EmailPurpose } from '../dto/send-email-code.dto';
 import { EmailVerification } from '../entities/email-verification.entity';
 
@@ -119,6 +121,21 @@ export class EmailVerificationService {
     code: string,
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
   ): Promise<boolean> {
+    // 테스트 모드에서 테스트 코드 사용 시 바이패스
+    if (isTestMode() && code === TEST_MODE.EMAIL_VERIFICATION_CODE) {
+      this.logger.debug(`[TEST MODE] Email verification bypass for ${email}`);
+      const normalizedPurpose = this.normalizePurpose(purpose);
+      const latest = await this.getLatest(email, normalizedPurpose);
+      if (latest) {
+        const now = new Date();
+        latest.used = true;
+        latest.usedAt = now;
+        latest.status = 'USED';
+        await this.emailVerificationRepository.save(latest);
+      }
+      return true;
+    }
+
     const normalizedPurpose = this.normalizePurpose(purpose);
     const now = new Date();
     const latest = await this.getLatest(email, normalizedPurpose);

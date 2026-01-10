@@ -15,6 +15,11 @@ import { EmailVerificationFactory } from '../../../../test/factories/entity.fact
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 import { EMAIL_VERIFICATION } from '@/common/constants/business.constants';
 
+// 유닛 테스트에서는 테스트 모드 바이패스 비활성화
+jest.mock('../../../common/utils/test-mode.util', () => ({
+  isTestMode: jest.fn(() => false),
+}));
+
 describe('EmailVerificationService', () => {
   let service: EmailVerificationService;
   let mockRepository: ReturnType<

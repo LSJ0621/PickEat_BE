@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ExternalModule } from '@/external/external.module';
 import { AdminInitializerService } from './services/admin-initializer.service';
+import { TestUserSeederService } from './services/test-user-seeder.service';
 import { UserAddress } from './entities/user-address.entity';
 import { User } from './entities/user.entity';
 import { PreferenceUpdateAiService } from './preference-update-ai.service';
@@ -21,6 +22,7 @@ import { UserService } from './user.service';
     AddressSearchService,
     PreferenceUpdateAiService,
     AdminInitializerService,
+    TestUserSeederService,
   ],
   exports: [
     UserService,

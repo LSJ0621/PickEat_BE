@@ -77,31 +77,40 @@ src/
 
 ## Agent Workflow Guidelines
 
-### Main Agent Role
-- Minimize direct work, delegate to Custom Subagents
-- Focus on judgment and coordination based on Subagent results
-- Only handle: user communication, final decisions, planning
+### Unified Agents (Root Folder)
 
-### Custom Subagent Execution
-- **Model**: Always use `sonnet` for `.claude/agents/*.md` subagents
-- **Available Subagents**:
-  | Agent | Purpose |
-  |-------|---------|
-  | code-reviewer | Code quality review, architecture compliance |
-  | test-code-writer | Unit/integration/E2E test writing |
-  | code-quality-manager | Build/runtime/test error diagnosis and fixes |
-  | prompt-engineer | AI prompt optimization |
-  | api-documentation-manager | API documentation |
+All agents are now unified in the **root folder** (`PickEat/.claude/agents/`).
+This project's agents have been merged with frontend agents for consistent cross-project workflows.
 
-### Parallel Execution Strategy
-- Same file modifications → Cannot be in same group
-- Dependent tasks → Sequential execution
-- Independent tasks → Parallel execution allowed
+### Available Agents
 
-### Error Reporting
-When Subagent work takes too long or errors persist:
-1. Subagent → Report to Main Agent
-2. Main Agent → Report to User with: issue, attempted solutions, recommended actions
+| Agent | Purpose | Target |
+|-------|---------|--------|
+| code-reviewer | Code quality, architecture compliance | Both |
+| code-quality-manager | Error diagnosis and fixes | Both |
+| error-resolver | Build/runtime error diagnosis | Both |
+| error-log-analyzer | Error log analysis | Both |
+| refactor-executor | Systematic refactoring | Both |
+| parallel-task-executor | Parallel task execution | Both |
+| test-code-writer | Unit/integration/E2E tests | Backend |
+| prompt-engineer | AI prompt optimization | Backend |
+| api-documentation-manager | API documentation | Backend |
+| api-sync-analyzer | API synchronization analysis | Both |
+
+### Agent Invocation
+
+Agents automatically detect project from file paths:
+- Files containing `pick-eat_be/` → Backend rules applied
+- Files containing `pickeat_web/` → Frontend rules applied
+
+### When to Use Agents
+
+- Error occurred → error-resolver or code-quality-manager
+- Code written → code-reviewer immediately
+- Tests needed → test-code-writer
+- AI prompts → prompt-engineer
+- API docs → api-documentation-manager
+- API sync check → api-sync-analyzer
 
 ## External API Integration
 
