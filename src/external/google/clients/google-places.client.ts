@@ -5,10 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
 import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
 import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import {
-  elapsedSeconds,
-  mapStatusGroupFromError,
-} from '../../../common/utils/metrics.util';
 import { GOOGLE_PLACES_CONFIG } from '../google.constants';
 import {
   GooglePlaceDetails,
@@ -16,7 +12,6 @@ import {
   GooglePlaceSearchResult,
   GooglePlacesSearchResponse,
 } from '../google.types';
-import { PrometheusService } from '../../../prometheus/prometheus.service';
 
 @Injectable()
 export class GooglePlacesClient {
@@ -28,7 +23,6 @@ export class GooglePlacesClient {
   constructor(
     private readonly httpService: HttpService,
     private readonly config: ConfigService,
-    private readonly prometheusService: PrometheusService,
   ) {
     this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
     this.appUrl = this.config.getOrThrow<string>('APP_URL');
@@ -52,9 +46,6 @@ export class GooglePlacesClient {
 
     this.logger.log(`🔍 [Places 검색] query="${query}"`);
 
-    const startedAt = Date.now();
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
     try {
       const response = await firstValueFrom(
         this.httpService.post<GooglePlacesSearchResponse>(
@@ -75,12 +66,9 @@ export class GooglePlacesClient {
 
       const places = response.data?.places ?? [];
       this.logger.log(`✅ [Places 검색 완료] count=${places.length}`);
-      this.recordExternal(statusGroup, startedAt);
       return places;
     } catch (error: unknown) {
-      statusGroup = mapStatusGroupFromError(error);
       this.logError('Places 검색', query, error);
-      this.recordExternal(statusGroup, startedAt);
       throw new ExternalApiException(
         'Google Places',
         error,
@@ -107,9 +95,6 @@ export class GooglePlacesClient {
 
     this.logger.log(`🔍 [Places 상세 조회] placeId="${placeId}"`);
 
-    const startedAt = Date.now();
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
     try {
       const response = await firstValueFrom(
         this.httpService.get<GooglePlaceDetails>(url, {
@@ -122,12 +107,9 @@ export class GooglePlacesClient {
       );
 
       const result = response.data ?? null;
-      this.recordExternal(statusGroup, startedAt);
       return result;
     } catch (error: unknown) {
-      statusGroup = mapStatusGroupFromError(error);
       this.logError('Places 상세 조회', placeId, error);
-      this.recordExternal(statusGroup, startedAt);
       throw new ExternalApiException(
         'Google Places',
         error,
@@ -149,9 +131,6 @@ export class GooglePlacesClient {
 
     const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.PHOTO(photoName)}`;
 
-    const startedAt = Date.now();
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
     try {
       const response = await firstValueFrom(
         this.httpService.get<GooglePlacePhotoUriResponse>(url, {
@@ -168,16 +147,13 @@ export class GooglePlacesClient {
       );
 
       const result = response.data?.photoUri ?? null;
-      this.recordExternal(statusGroup, startedAt);
       return result;
     } catch (error: unknown) {
-      statusGroup = mapStatusGroupFromError(error);
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error(
         `❌ [Places 사진 URI 에러] name="${photoName}", error=${errorMessage}`,
       );
-      this.recordExternal(statusGroup, startedAt);
       return null;
     }
   }
@@ -236,17 +212,5 @@ export class GooglePlacesClient {
     if (errorData) {
       this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
     }
-  }
-
-  private recordExternal(
-    statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout',
-    startedAt: number,
-  ) {
-    const durationSeconds = elapsedSeconds(startedAt);
-    this.prometheusService.recordExternalApi(
-      'places',
-      statusGroup,
-      durationSeconds,
-    );
   }
 }

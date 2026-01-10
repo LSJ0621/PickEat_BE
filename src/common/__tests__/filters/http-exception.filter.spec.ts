@@ -7,31 +7,20 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { Request, Response } from 'express';
 import { ExecutionContext } from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
-import { createMockPrometheusService } from '../../../../test/mocks/external-clients.mock';
-import { PrometheusService } from '../../../prometheus/prometheus.service';
 import { ExternalApiException } from '../../exceptions/external-api.exception';
 import { HttpExceptionFilter } from '../../filters/http-exception.filter';
 
 describe('HttpExceptionFilter', () => {
   let filter: HttpExceptionFilter;
-  let prometheusService: ReturnType<typeof createMockPrometheusService>;
   let mockArgumentsHost: ArgumentsHost;
   let mockResponse: Partial<Response>;
   let mockRequest: Partial<Request>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    prometheusService = createMockPrometheusService();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        HttpExceptionFilter,
-        {
-          provide: PrometheusService,
-          useValue: prometheusService,
-        },
-      ],
+      providers: [HttpExceptionFilter],
     }).compile();
 
     filter = module.get<HttpExceptionFilter>(HttpExceptionFilter);
@@ -201,20 +190,6 @@ describe('HttpExceptionFilter', () => {
           message: '서버 내부 오류가 발생했습니다.',
         }),
       );
-    });
-
-    it('should record database query errors in Prometheus', () => {
-      // Arrange
-      const exception = new QueryFailedError('SELECT * FROM users', [], {
-        message: 'Database error',
-        name: 'QueryFailedError',
-      } as Error);
-
-      // Act
-      filter.catch(exception, mockArgumentsHost);
-
-      // Assert
-      expect(prometheusService.incrementDbQueryError).toHaveBeenCalled();
     });
 
     it('should log 4xx errors as warnings', () => {
