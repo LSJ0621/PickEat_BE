@@ -3,15 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { BaseMenuService } from '../../gpt/base-menu.service';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
-import { PrometheusService } from '@/prometheus/prometheus.service';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts/menu-recommendation.prompts';
 import { OpenAIChatCompletionParams } from '@/external/openai/openai.types';
 
 // Test implementation of abstract BaseMenuService
 class TestMenuService extends BaseMenuService {
-  constructor(config: ConfigService, prometheusService: PrometheusService) {
-    super('TestMenuService', config, prometheusService);
+  constructor(config: ConfigService) {
+    super('TestMenuService', config);
   }
 
   protected getModel(): string {
@@ -57,11 +56,7 @@ describe('BaseMenuService', () => {
       providers: [
         {
           provide: TestMenuService,
-          useFactory: () =>
-            new TestMenuService(
-              mockConfigService,
-              null as unknown as PrometheusService,
-            ),
+          useFactory: () => new TestMenuService(mockConfigService),
         },
         {
           provide: ConfigService,
@@ -90,10 +85,7 @@ describe('BaseMenuService', () => {
 
   describe('onModuleInit', () => {
     it('should initialize OpenAI client when API key is configured', () => {
-      const freshService = new TestMenuService(
-        mockConfigService,
-        null as unknown as PrometheusService,
-      );
+      const freshService = new TestMenuService(mockConfigService);
 
       freshService.onModuleInit();
 
@@ -105,10 +97,7 @@ describe('BaseMenuService', () => {
       const noKeyConfig = createMockConfigService(
         {},
       ) as unknown as jest.Mocked<ConfigService>;
-      const freshService = new TestMenuService(
-        noKeyConfig,
-        null as unknown as PrometheusService,
-      );
+      const freshService = new TestMenuService(noKeyConfig);
 
       const loggerSpy = jest.spyOn(freshService['logger'], 'error');
 
@@ -722,10 +711,7 @@ describe('BaseMenuService', () => {
         },
       };
 
-      const nullPrometheusService = new TestMenuService(
-        mockConfigService,
-        null as unknown as PrometheusService,
-      );
+      const nullPrometheusService = new TestMenuService(mockConfigService);
       nullPrometheusService['openai'] = mockOpenAI;
       mockOpenAI.chat.completions.create = jest
         .fn()

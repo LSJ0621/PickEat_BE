@@ -37,7 +37,6 @@ import {
   createMockNaverMapClient,
   createMockS3Client,
   createMockDiscordWebhookClient,
-  createMockPrometheusService,
   mockGoogleOAuthResponses,
   mockGooglePlacesResponses,
   mockGoogleCseResponses,
@@ -55,7 +54,6 @@ import {
   resetDatabaseBeforeAppInit,
 } from './test-database.setup';
 import { TEST_ENV_CONFIG } from './auth-test.helper';
-import { PrometheusService } from '@/prometheus/prometheus.service';
 
 /**
  * Creates all mock external clients with default success responses
@@ -123,9 +121,6 @@ export function createAllMockClients() {
   const mockDiscordWebhookClientInstance = createMockDiscordWebhookClient();
   mockDiscordWebhookClientInstance.sendMessage.mockResolvedValue(undefined);
 
-  // Prometheus Service
-  const mockPrometheusServiceInstance = createMockPrometheusService();
-
   // MailerService - Mock to prevent SMTP connection attempts
   const mockMailerServiceInstance = {
     sendMail: jest.fn().mockResolvedValue({ messageId: 'test-message-id' }),
@@ -141,7 +136,6 @@ export function createAllMockClients() {
     mockNaverMapClient,
     mockS3Client: mockS3ClientInstance,
     mockDiscordWebhookClient: mockDiscordWebhookClientInstance,
-    mockPrometheusService: mockPrometheusServiceInstance,
     mockMailerService: mockMailerServiceInstance,
   };
 }
@@ -203,8 +197,6 @@ export async function createTestingApp(): Promise<{
     .useValue(mocks.mockS3Client)
     .overrideProvider(DiscordWebhookClient)
     .useValue(mocks.mockDiscordWebhookClient)
-    .overrideProvider(PrometheusService)
-    .useValue(mocks.mockPrometheusService)
     .overrideProvider(MailerService)
     .useValue(mocks.mockMailerService)
     .compile();
@@ -219,14 +211,7 @@ export async function createTestingApp(): Promise<{
       transform: true,
     }),
   );
-  // Cast mock PrometheusService to actual type for HttpExceptionFilter
-  // Mock object implements only the methods used by HttpExceptionFilter
-  // so we need unknown as intermediate for safety and clarity of intent
-  app.useGlobalFilters(
-    new HttpExceptionFilter(
-      mocks.mockPrometheusService as unknown as PrometheusService,
-    ),
-  );
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.use(cookieParser());
 
   await app.init();
@@ -248,23 +233,6 @@ export async function createIntegrationTestingModule(
 
   const mocks = createAllMockClients();
 
-  // Create a PrometheusModule mock that provides PrometheusService globally
-  const PrometheusModuleMock = class {
-    static forRoot() {
-      return {
-        module: PrometheusModuleMock,
-        providers: [
-          {
-            provide: PrometheusService,
-            useValue: mocks.mockPrometheusService,
-          },
-        ],
-        exports: [PrometheusService],
-        global: true,
-      };
-    }
-  };
-
   return Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({
@@ -274,16 +242,8 @@ export async function createIntegrationTestingModule(
       }),
       TypeOrmModule.forRoot(testDatabaseConfig),
       TypeOrmModule.forFeature(ALL_ENTITIES),
-      PrometheusModuleMock.forRoot(),
       ...moduleImports,
     ],
-    providers: [
-      {
-        provide: PrometheusService,
-        useValue: mocks.mockPrometheusService,
-      },
-    ],
-    exports: [PrometheusService],
   })
     .overrideProvider(GoogleOAuthClient)
     .useValue(mocks.mockGoogleOAuthClient)
@@ -303,8 +263,6 @@ export async function createIntegrationTestingModule(
     .useValue(mocks.mockS3Client)
     .overrideProvider(DiscordWebhookClient)
     .useValue(mocks.mockDiscordWebhookClient)
-    .overrideProvider(PrometheusService)
-    .useValue(mocks.mockPrometheusService)
     .overrideProvider(MailerService)
     .useValue(mocks.mockMailerService)
     .compile();
