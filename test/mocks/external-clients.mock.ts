@@ -479,25 +479,6 @@ export function createMockDiscordWebhookClient() {
 }
 
 /**
- * Mock PrometheusService
- */
-export function createMockPrometheusService() {
-  return {
-    getRegistry: jest.fn(),
-    incrementAiRequest: jest.fn(),
-    incrementAiTokens: jest.fn(),
-    recordAiSuccess: jest.fn(),
-    recordAiError: jest.fn(),
-    recordAiTokensOnly: jest.fn(),
-    recordAiDuration: jest.fn(),
-    recordHttpMetrics: jest.fn(),
-    setDbUp: jest.fn(),
-    incrementDbQueryError: jest.fn(),
-    recordExternalApi: jest.fn(),
-  };
-}
-
-/**
  * Mock ConfigService
  */
 export function createMockConfigService(config: Record<string, unknown> = {}) {

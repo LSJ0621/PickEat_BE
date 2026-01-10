@@ -5,11 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
 import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
 import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
-import {
-  elapsedSeconds,
-  mapStatusGroupFromError,
-} from '../../../common/utils/metrics.util';
-import { PrometheusService } from '../../../prometheus/prometheus.service';
 import { GOOGLE_CSE_CONFIG } from '../google.constants';
 import { GoogleCseItem, GoogleCseResponse } from '../google.types';
 
@@ -34,7 +29,6 @@ export class GoogleSearchClient {
   constructor(
     private readonly httpService: HttpService,
     private readonly config: ConfigService,
-    private readonly prometheusService: PrometheusService,
   ) {
     this.apiKey = this.config.get<string>('GOOGLE_API_KEY', '');
     this.cseCx = this.config.get<string>('GOOGLE_CSE_CX', '');
@@ -63,9 +57,6 @@ export class GoogleSearchClient {
       `🔍 [CSE 블로그 검색] query="${query}", exactTerms="${exactTerms}"`,
     );
 
-    const startedAt = Date.now();
-    let statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout' = '2xx';
-
     try {
       const response = await firstValueFrom(
         this.httpService.get<GoogleCseResponse>(GOOGLE_CSE_CONFIG.BASE_URL, {
@@ -87,10 +78,8 @@ export class GoogleSearchClient {
       const blogs = items.map((item) => this.mapCseItemToBlogResult(item));
 
       this.logger.log(`✅ [CSE 블로그 검색 완료] count=${blogs.length}`);
-      this.recordExternal(statusGroup, startedAt);
       return blogs;
     } catch (error: unknown) {
-      statusGroup = mapStatusGroupFromError(error);
       const message = error instanceof Error ? error.message : 'unknown error';
 
       let statusCode: number | undefined;
@@ -111,7 +100,6 @@ export class GoogleSearchClient {
       if (errorData) {
         this.logger.error(`에러 상세: ${JSON.stringify(errorData)}`);
       }
-      this.recordExternal(statusGroup, startedAt);
       throw new ExternalApiException(
         'Google CSE',
         error,
@@ -136,17 +124,5 @@ export class GoogleSearchClient {
       thumbnailUrl: thumbnail,
       source,
     };
-  }
-
-  private recordExternal(
-    statusGroup: '2xx' | '4xx' | '5xx' | '429' | 'timeout',
-    startedAt: number,
-  ) {
-    const durationSeconds = elapsedSeconds(startedAt);
-    this.prometheusService.recordExternalApi(
-      'cse',
-      statusGroup,
-      durationSeconds,
-    );
   }
 }

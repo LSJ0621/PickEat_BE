@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { OpenAIChatCompletionParams } from '@/external/openai/openai.types';
-import { PrometheusService } from '@/prometheus/prometheus.service';
 import { BaseMenuService } from './base-menu.service';
 
 /**
@@ -23,8 +22,8 @@ export class Gpt51MenuService extends BaseMenuService {
    */
   private readonly model: string;
 
-  constructor(config: ConfigService, prometheusService: PrometheusService) {
-    super('Gpt51MenuService', config, prometheusService);
+  constructor(config: ConfigService) {
+    super('Gpt51MenuService', config);
     this.model =
       this.config.get<string>('OPENAI_MENU_MODEL') ||
       this.config.get<string>('OPENAI_MODEL') ||
