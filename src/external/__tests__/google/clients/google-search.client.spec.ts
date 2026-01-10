@@ -9,17 +9,14 @@ import {
   createAxiosError,
   mockGoogleCseResponses,
   createMockConfigService,
-  createMockPrometheusService,
 } from '../../../../../test/mocks/external-clients.mock';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
-import { PrometheusService } from '@/prometheus/prometheus.service';
 
 describe('GoogleSearchClient', () => {
   let client: GoogleSearchClient;
   let httpService: ReturnType<typeof createMockHttpService>;
   let configService: ReturnType<typeof createMockConfigService>;
-  let prometheusService: ReturnType<typeof createMockPrometheusService>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -29,14 +26,12 @@ describe('GoogleSearchClient', () => {
       GOOGLE_CSE_CX: 'test-cse-cx',
       APP_URL: 'http://localhost:3000',
     });
-    prometheusService = createMockPrometheusService();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GoogleSearchClient,
         { provide: HttpService, useValue: httpService },
         { provide: ConfigService, useValue: configService },
-        { provide: PrometheusService, useValue: prometheusService },
       ],
     }).compile();
 
@@ -102,7 +97,6 @@ describe('GoogleSearchClient', () => {
           GoogleSearchClient,
           { provide: HttpService, useValue: httpService },
           { provide: ConfigService, useValue: emptyConfigService },
-          { provide: PrometheusService, useValue: prometheusService },
         ],
       }).compile();
 
@@ -123,7 +117,6 @@ describe('GoogleSearchClient', () => {
           GoogleSearchClient,
           { provide: HttpService, useValue: httpService },
           { provide: ConfigService, useValue: emptyConfigService },
-          { provide: PrometheusService, useValue: prometheusService },
         ],
       }).compile();
 

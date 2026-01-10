@@ -3,16 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { Gpt51MenuService } from '../../gpt/gpt51-menu.service';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts';
-import { PrometheusService } from '@/prometheus/prometheus.service';
-import {
-  createMockConfigService,
-  createMockPrometheusService,
-} from '../../../../test/mocks/external-clients.mock';
+import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 
 describe('Gpt51MenuService', () => {
   let service: Gpt51MenuService;
   let mockConfigService: jest.Mocked<ConfigService>;
-  let mockPrometheusService: jest.Mocked<PrometheusService>;
 
   beforeEach(async () => {
     mockConfigService = createMockConfigService({
@@ -20,19 +15,12 @@ describe('Gpt51MenuService', () => {
       OPENAI_MENU_MODEL: 'gpt-5.1-custom',
     }) as unknown as jest.Mocked<ConfigService>;
 
-    mockPrometheusService =
-      createMockPrometheusService() as unknown as jest.Mocked<PrometheusService>;
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         Gpt51MenuService,
         {
           provide: ConfigService,
           useValue: mockConfigService,
-        },
-        {
-          provide: PrometheusService,
-          useValue: mockPrometheusService,
         },
       ],
     }).compile();
@@ -55,13 +43,7 @@ describe('Gpt51MenuService', () => {
         OPENAI_MODEL: 'gpt-fallback',
       }) as unknown as jest.Mocked<ConfigService>;
 
-      const fallbackPrometheus =
-        createMockPrometheusService() as unknown as jest.Mocked<PrometheusService>;
-
-      const fallbackService = new Gpt51MenuService(
-        fallbackConfig,
-        fallbackPrometheus,
-      );
+      const fallbackService = new Gpt51MenuService(fallbackConfig);
 
       expect(fallbackService['model']).toBe('gpt-fallback');
     });
@@ -71,13 +53,7 @@ describe('Gpt51MenuService', () => {
         OPENAI_API_KEY: 'test-api-key',
       }) as unknown as jest.Mocked<ConfigService>;
 
-      const defaultPrometheus =
-        createMockPrometheusService() as unknown as jest.Mocked<PrometheusService>;
-
-      const defaultService = new Gpt51MenuService(
-        defaultConfig,
-        defaultPrometheus,
-      );
+      const defaultService = new Gpt51MenuService(defaultConfig);
 
       expect(defaultService['model']).toBe(OPENAI_CONFIG.DEFAULT_MODEL);
     });

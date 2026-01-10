@@ -8,12 +8,7 @@ import {
   GOOGLE_PLACES_SYSTEM_PROMPT,
 } from '@/external/openai/prompts';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
-import {
-  mapStatusGroupFromError,
-  parseTokens,
-} from '../../common/utils/metrics.util';
 import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
-import { PrometheusService } from '../../prometheus/prometheus.service';
 import {
   PlaceCandidate,
   PlaceRecommendationsResponse,
@@ -25,10 +20,7 @@ export class OpenAiPlacesService implements OnModuleInit {
   private openai: OpenAI | null = null;
   private readonly model: string;
 
-  constructor(
-    private readonly config: ConfigService,
-    private readonly prometheusService: PrometheusService,
-  ) {
+  constructor(private readonly config: ConfigService) {
     this.model =
       this.config.get<string>('OPENAI_PLACES_MODEL') ||
       this.config.get<string>('OPENAI_MODEL') ||
@@ -67,9 +59,6 @@ export class OpenAiPlacesService implements OnModuleInit {
     const userPrompt = buildGooglePlacesUserPrompt(query, candidates);
     const jsonSchema = GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA;
 
-    const startedAt = Date.now();
-    const extService = 'openai';
-
     this.logger.log(
       `📤 [OpenAI 장소 추천 요청 시작] model=${this.model}, candidates=${candidates.length}`,
     );
@@ -93,8 +82,6 @@ export class OpenAiPlacesService implements OnModuleInit {
         max_completion_tokens: 800,
       });
 
-      const duration = Date.now() - startedAt;
-
       // 토큰 사용량 로깅 (프롬프트/완료/전체)
       const usage = (
         response as {
@@ -107,7 +94,6 @@ export class OpenAiPlacesService implements OnModuleInit {
           };
         }
       ).usage;
-      const endpoint = 'places';
 
       if (usage) {
         const promptTokens =
@@ -116,25 +102,9 @@ export class OpenAiPlacesService implements OnModuleInit {
           usage.completion_tokens ?? usage.output_tokens ?? 0;
         const totalTokensRaw =
           usage.total_tokens ?? promptTokens + completionTokens;
-        const totalTokens = parseTokens(totalTokensRaw);
 
         this.logger.log(
           `🧮 [OpenAI 토큰 사용량] prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
-        );
-
-        // Prometheus 메트릭 기록 (요청 수 + 토큰 사용량)
-        if (this.prometheusService && Number.isFinite(totalTokens)) {
-          this.prometheusService.recordAiSuccess(endpoint, totalTokens);
-        }
-      }
-
-      // Prometheus 메트릭 기록 (요청 지연 + 외부 API)
-      if (this.prometheusService) {
-        this.prometheusService.recordAiDuration(endpoint, duration / 1000);
-        this.prometheusService.recordExternalApi(
-          extService,
-          '2xx',
-          duration / 1000,
         );
       }
 
@@ -157,24 +127,11 @@ export class OpenAiPlacesService implements OnModuleInit {
         recommendations: parsed.recommendations,
       };
     } catch (error) {
-      const duration = Date.now() - startedAt;
       const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(
-        `❌ [OpenAI 장소 추천 에러] 소요 시간=${duration}ms, error=${message}`,
+        `❌ [OpenAI 장소 추천 에러] error=${message}`,
         error instanceof Error ? error.stack : undefined,
       );
-
-      // Prometheus 실패 메트릭 기록 (요청 수만 기록)
-      if (this.prometheusService) {
-        this.prometheusService.recordAiError('places');
-        this.prometheusService.recordAiDuration('places', duration / 1000);
-        const statusGroup = mapStatusGroupFromError(error);
-        this.prometheusService.recordExternalApi(
-          extService,
-          statusGroup,
-          duration / 1000,
-        );
-      }
 
       throw new ExternalApiException(
         'OpenAI',

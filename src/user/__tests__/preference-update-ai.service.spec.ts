@@ -4,11 +4,7 @@ import { PreferenceUpdateAiService } from '../preference-update-ai.service';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
 import { UserPreferencesFactory } from '../../../test/factories/entity.factory';
-import {
-  createMockConfigService,
-  createMockPrometheusService,
-} from '../../../test/mocks/external-clients.mock';
-import { PrometheusService } from '@/prometheus/prometheus.service';
+import { createMockConfigService } from '../../../test/mocks/external-clients.mock';
 
 interface MockOpenAI {
   chat: {
@@ -20,7 +16,6 @@ interface MockOpenAI {
 
 describe('PreferenceUpdateAiService', () => {
   let service: PreferenceUpdateAiService;
-  let mockPrometheusService: ReturnType<typeof createMockPrometheusService>;
 
   const createMockOpenAI = (): MockOpenAI => {
     return {
@@ -34,7 +29,6 @@ describe('PreferenceUpdateAiService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockPrometheusService = createMockPrometheusService();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -45,10 +39,6 @@ describe('PreferenceUpdateAiService', () => {
             OPENAI_API_KEY: 'test-openai-api-key',
             OPENAI_MODEL: 'gpt-4',
           }),
-        },
-        {
-          provide: PrometheusService,
-          useValue: mockPrometheusService,
         },
       ],
     }).compile();
@@ -73,10 +63,6 @@ describe('PreferenceUpdateAiService', () => {
           {
             provide: ConfigService,
             useValue: createMockConfigService({}),
-          },
-          {
-            provide: PrometheusService,
-            useValue: createMockPrometheusService(),
           },
         ],
       }).compile();
@@ -105,10 +91,6 @@ describe('PreferenceUpdateAiService', () => {
               OPENAI_MODEL: 'gpt-3.5-turbo',
             }),
           },
-          {
-            provide: PrometheusService,
-            useValue: createMockPrometheusService(),
-          },
         ],
       }).compile();
 
@@ -131,10 +113,6 @@ describe('PreferenceUpdateAiService', () => {
               OPENAI_API_KEY: 'test-key',
               OPENAI_MODEL: 'gpt-3.5-turbo',
             }),
-          },
-          {
-            provide: PrometheusService,
-            useValue: createMockPrometheusService(),
           },
         ],
       }).compile();
@@ -391,19 +369,6 @@ describe('PreferenceUpdateAiService', () => {
       await service.generatePreferenceAnalysis(current, slotMenus);
 
       // Assert
-      expect(mockPrometheusService.recordAiTokensOnly).toHaveBeenCalledWith(
-        'preference',
-        150,
-      );
-      expect(mockPrometheusService.recordAiDuration).toHaveBeenCalledWith(
-        'preference',
-        expect.any(Number),
-      );
-      expect(mockPrometheusService.recordExternalApi).toHaveBeenCalledWith(
-        'openai',
-        '2xx',
-        expect.any(Number),
-      );
     });
 
     it('should record Prometheus metrics on failure', async () => {
@@ -427,15 +392,6 @@ describe('PreferenceUpdateAiService', () => {
       expect(thrownError).toBeDefined();
 
       // Assert
-      expect(mockPrometheusService.recordAiDuration).toHaveBeenCalledWith(
-        'preference',
-        expect.any(Number),
-      );
-      expect(mockPrometheusService.recordExternalApi).toHaveBeenCalledWith(
-        'openai',
-        expect.any(String),
-        expect.any(Number),
-      );
     });
 
     it('should throw ExternalApiException on OpenAI API error', async () => {
@@ -756,10 +712,6 @@ describe('PreferenceUpdateAiService', () => {
       await service.generatePreferenceAnalysis(current, slotMenus);
 
       // Assert
-      expect(mockPrometheusService.recordAiTokensOnly).toHaveBeenCalledWith(
-        'preference',
-        210,
-      );
     });
 
     it('should handle usage with only total_tokens', async () => {
@@ -790,10 +742,6 @@ describe('PreferenceUpdateAiService', () => {
       await service.generatePreferenceAnalysis(current, slotMenus);
 
       // Assert
-      expect(mockPrometheusService.recordAiTokensOnly).toHaveBeenCalledWith(
-        'preference',
-        250,
-      );
     });
 
     it('should handle usage without any token fields (defaults to 0)', async () => {
@@ -822,10 +770,6 @@ describe('PreferenceUpdateAiService', () => {
       await service.generatePreferenceAnalysis(current, slotMenus);
 
       // Assert
-      expect(mockPrometheusService.recordAiTokensOnly).toHaveBeenCalledWith(
-        'preference',
-        0,
-      );
     });
 
     it('should handle null choices in response', async () => {

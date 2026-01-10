@@ -7,9 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { QueryFailedError } from 'typeorm';
 import { ExternalApiException } from '../exceptions/external-api.exception';
-import { PrometheusService } from '../../prometheus/prometheus.service';
 
 interface ErrorResponse {
   statusCode: number;
@@ -23,7 +21,6 @@ interface ErrorResponse {
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
-  constructor(private readonly prometheusService: PrometheusService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -37,7 +34,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // 에러 로깅
     this.logError(exception, request, status);
-    this.recordDbErrorIfNeeded(exception);
 
     response.status(status).json(errorResponse);
   }
@@ -154,11 +150,5 @@ export class HttpExceptionFilter implements ExceptionFilter {
       503: 'Service Unavailable',
     };
     return errorNames[status] || 'Error';
-  }
-
-  private recordDbErrorIfNeeded(exception: unknown): void {
-    if (exception instanceof QueryFailedError) {
-      this.prometheusService.incrementDbQueryError();
-    }
   }
 }

@@ -3,12 +3,6 @@ import { ExternalApiException } from '@/common/exceptions/external-api.exception
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
-import {
-  elapsedSeconds,
-  mapStatusGroupFromError,
-  parseTokens,
-} from '../../common/utils/metrics.util';
-import { PrometheusService } from '../../prometheus/prometheus.service';
 import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 import { ValidationContext } from '../interfaces/menu-validation.interface';
 import {
@@ -21,10 +15,6 @@ import {
   OpenAIChatCompletionParams,
   OpenAIResponse,
 } from '@/external/openai/openai.types';
-import {
-  EXTERNAL_SERVICES,
-  PROMETHEUS_ENDPOINTS,
-} from '@/common/constants/prometheus.constants';
 
 /**
  * 공통 메뉴 추천 서비스 베이스 클래스
@@ -37,7 +27,6 @@ export abstract class BaseMenuService implements OnModuleInit {
   constructor(
     loggerName: string,
     protected readonly config: ConfigService,
-    protected readonly prometheusService: PrometheusService,
   ) {
     this.logger = new Logger(loggerName);
   }
@@ -81,8 +70,6 @@ export abstract class BaseMenuService implements OnModuleInit {
       : buildUserPrompt(prompt, likes, dislikes, analysis);
     const jsonSchema = MENU_RECOMMENDATIONS_JSON_SCHEMA;
 
-    const startedAt = Date.now();
-
     try {
       const requestParams = this.buildRequestParams(
         systemPrompt,
@@ -102,18 +89,9 @@ export abstract class BaseMenuService implements OnModuleInit {
           usage.completion_tokens ?? usage.output_tokens ?? 0;
         const totalTokensRaw =
           usage.total_tokens ?? promptTokens + completionTokens;
-        const totalTokens = parseTokens(totalTokensRaw);
         this.logger.log(
           `[Menu recommendation LLM token usage] model=${this.getModel()}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
         );
-
-        // Prometheus 메트릭 기록 (요청 수 + 토큰 사용량)
-        if (this.prometheusService && Number.isFinite(totalTokens)) {
-          this.prometheusService.recordAiSuccess(
-            PROMETHEUS_ENDPOINTS.MENU,
-            totalTokens,
-          );
-        }
       }
 
       const choice = response.choices[0];
@@ -146,38 +124,8 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       this.logger.log(`[Menu recommendation] Count: ${normalized.length}`);
 
-      // Prometheus 메트릭 기록 (요청 지연 + 외부 API)
-      if (this.prometheusService) {
-        const durationSeconds = elapsedSeconds(startedAt);
-        this.prometheusService.recordAiDuration(
-          PROMETHEUS_ENDPOINTS.MENU,
-          durationSeconds,
-        );
-        this.prometheusService.recordExternalApi(
-          EXTERNAL_SERVICES.OPENAI,
-          '2xx',
-          durationSeconds,
-        );
-      }
-
       return { recommendations: normalized, reason };
     } catch (error) {
-      // Prometheus 실패 메트릭 기록 (요청 수만 기록)
-      if (this.prometheusService) {
-        this.prometheusService.recordAiError(PROMETHEUS_ENDPOINTS.MENU);
-        const durationSeconds = elapsedSeconds(startedAt);
-        this.prometheusService.recordAiDuration(
-          PROMETHEUS_ENDPOINTS.MENU,
-          durationSeconds,
-        );
-        const statusGroup = mapStatusGroupFromError(error);
-        this.prometheusService.recordExternalApi(
-          EXTERNAL_SERVICES.OPENAI,
-          statusGroup,
-          durationSeconds,
-        );
-      }
-
       throw new ExternalApiException(
         'OpenAI',
         error instanceof Error ? error : undefined,

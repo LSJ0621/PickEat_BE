@@ -3,14 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { OpenAiPlacesService } from '../../services/openai-places.service';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
-import { PrometheusService } from '@/prometheus/prometheus.service';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 
 describe('OpenAiPlacesService', () => {
   let service: OpenAiPlacesService;
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockOpenAI: jest.Mocked<OpenAI>;
-  let mockPrometheusService: jest.Mocked<PrometheusService>;
 
   beforeEach(async () => {
     mockConfigService = createMockConfigService({
@@ -18,23 +16,12 @@ describe('OpenAiPlacesService', () => {
       OPENAI_PLACES_MODEL: 'gpt-5.1-places',
     }) as unknown as jest.Mocked<ConfigService>;
 
-    mockPrometheusService = {
-      recordAiSuccess: jest.fn(),
-      recordAiError: jest.fn(),
-      recordAiDuration: jest.fn(),
-      recordExternalApi: jest.fn(),
-    } as unknown as jest.Mocked<PrometheusService>;
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OpenAiPlacesService,
         {
           provide: ConfigService,
           useValue: mockConfigService,
-        },
-        {
-          provide: PrometheusService,
-          useValue: mockPrometheusService,
         },
       ],
     }).compile();
@@ -68,17 +55,7 @@ describe('OpenAiPlacesService', () => {
         OPENAI_MODEL: 'gpt-fallback',
       }) as unknown as jest.Mocked<ConfigService>;
 
-      const fallbackPrometheus = {
-        recordAiSuccess: jest.fn(),
-        recordAiError: jest.fn(),
-        recordAiDuration: jest.fn(),
-        recordExternalApi: jest.fn(),
-      } as unknown as jest.Mocked<PrometheusService>;
-
-      const fallbackService = new OpenAiPlacesService(
-        fallbackConfig,
-        fallbackPrometheus,
-      );
+      const fallbackService = new OpenAiPlacesService(fallbackConfig);
 
       expect(fallbackService['model']).toBe('gpt-fallback');
     });
@@ -86,10 +63,7 @@ describe('OpenAiPlacesService', () => {
 
   describe('onModuleInit', () => {
     it('should initialize OpenAI client when API key is configured', () => {
-      const freshService = new OpenAiPlacesService(
-        mockConfigService,
-        mockPrometheusService,
-      );
+      const freshService = new OpenAiPlacesService(mockConfigService);
 
       freshService.onModuleInit();
 
@@ -101,16 +75,7 @@ describe('OpenAiPlacesService', () => {
       const noKeyConfig = createMockConfigService(
         {},
       ) as unknown as jest.Mocked<ConfigService>;
-      const noKeyPrometheus = {
-        recordAiSuccess: jest.fn(),
-        recordAiError: jest.fn(),
-        recordAiDuration: jest.fn(),
-        recordExternalApi: jest.fn(),
-      } as unknown as jest.Mocked<PrometheusService>;
-      const freshService = new OpenAiPlacesService(
-        noKeyConfig,
-        noKeyPrometheus,
-      );
+      const freshService = new OpenAiPlacesService(noKeyConfig);
 
       const loggerSpy = jest.spyOn(freshService['logger'], 'error');
 
@@ -217,11 +182,6 @@ describe('OpenAiPlacesService', () => {
           },
         ],
       });
-
-      expect(mockPrometheusService.recordAiSuccess).toHaveBeenCalledWith(
-        'places',
-        300,
-      );
     });
 
     it('should throw ExternalApiException when content is empty', async () => {
@@ -287,10 +247,6 @@ describe('OpenAiPlacesService', () => {
       await expect(
         service.recommendFromGooglePlaces(query, candidates),
       ).rejects.toThrow(ExternalApiException);
-
-      expect(mockPrometheusService.recordAiError).toHaveBeenCalledWith(
-        'places',
-      );
     });
 
     it('should log request start and completion', async () => {
@@ -434,11 +390,6 @@ describe('OpenAiPlacesService', () => {
         .mockResolvedValue(mockResponse);
 
       await service.recommendFromGooglePlaces(query, candidates);
-
-      expect(mockPrometheusService.recordAiSuccess).toHaveBeenCalledWith(
-        'places',
-        325,
-      );
     });
 
     it('should handle usage with only total_tokens', async () => {
@@ -469,11 +420,6 @@ describe('OpenAiPlacesService', () => {
         .mockResolvedValue(mockResponse);
 
       await service.recommendFromGooglePlaces(query, candidates);
-
-      expect(mockPrometheusService.recordAiSuccess).toHaveBeenCalledWith(
-        'places',
-        400,
-      );
     });
 
     it('should handle usage without any token fields (defaults to 0)', async () => {
@@ -502,11 +448,6 @@ describe('OpenAiPlacesService', () => {
         .mockResolvedValue(mockResponse);
 
       await service.recommendFromGooglePlaces(query, candidates);
-
-      expect(mockPrometheusService.recordAiSuccess).toHaveBeenCalledWith(
-        'places',
-        0,
-      );
     });
 
     it('should handle response without usage metrics', async () => {
@@ -570,7 +511,6 @@ describe('OpenAiPlacesService', () => {
       const result = await service.recommendFromGooglePlaces(query, candidates);
 
       expect(result).toEqual({ recommendations: [] });
-      expect(mockPrometheusService.recordAiSuccess).not.toHaveBeenCalled();
     });
 
     it('should handle non-Error thrown objects in catch block', async () => {

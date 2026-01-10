@@ -50,11 +50,7 @@ import { GoogleSearchClient } from '@/external/google/clients/google-search.clie
 // User Module Dependencies
 import { UserAddressService } from '@/user/services/user-address.service';
 
-// Prometheus
-import { PrometheusService } from '@/prometheus/prometheus.service';
-
 // Mocks
-import { createMockPrometheusService } from '../../mocks/external-clients.mock';
 
 // Factories
 import {
@@ -96,7 +92,6 @@ describe('Menu Recommendation Integration', () => {
   // Mocks
   let mockGooglePlacesClient: jest.Mocked<GooglePlacesClient>;
   let mockGoogleSearchClient: jest.Mocked<GoogleSearchClient>;
-  let mockPrometheusService: ReturnType<typeof createMockPrometheusService>;
 
   // Test Data
   let testUser: User;
@@ -114,8 +109,6 @@ describe('Menu Recommendation Integration', () => {
     mockGoogleSearchClient = {
       searchBlogs: jest.fn(),
     } as unknown as jest.Mocked<GoogleSearchClient>;
-
-    mockPrometheusService = createMockPrometheusService();
 
     // Build test module
     module = await Test.createTestingModule({
@@ -145,10 +138,6 @@ describe('Menu Recommendation Integration', () => {
         Gpt4oMiniValidationService,
         Gpt51MenuService,
         UserAddressService,
-        {
-          provide: PrometheusService,
-          useValue: mockPrometheusService,
-        },
         {
           provide: GooglePlacesClient,
           useValue: mockGooglePlacesClient,
