@@ -24,7 +24,7 @@ import { UserModule } from './user/user.module';
     TypeOrmModule.forRootAsync(databaseConfig),
     ScheduleModule.forRoot(),
     LoggerModule.forRoot(loggerConfig),
-    ExternalModule,
+    ExternalModule.forRoot(),
     BugReportModule,
     AuthModule,
     UserModule,

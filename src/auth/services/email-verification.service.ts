@@ -98,6 +98,17 @@ export class EmailVerificationService {
       );
     }
 
+    // 테스트 모드에서는 실제 이메일 발송 건너뛰기
+    if (isTestMode()) {
+      this.logger.debug(
+        `[TEST MODE] Skipping email send to ${email}, code: ${code}`,
+      );
+      return {
+        remainCount,
+        message: `[TEST MODE] 인증번호가 발송되었습니다. 남은 재발송 횟수는 ${remainCount}회입니다.`,
+      };
+    }
+
     await this.mailerService.sendMail({
       to: email,
       subject,
@@ -203,6 +214,12 @@ export class EmailVerificationService {
   }
 
   private ensureMailConfig() {
+    // 테스트 모드에서는 이메일 설정 검증 건너뛰기
+    if (isTestMode()) {
+      this.logger.debug('[TEST MODE] Skipping email config validation');
+      return;
+    }
+
     const emailHost = this.config.get<string>('EMAIL_HOST');
     const emailPort = this.config.get<number>('EMAIL_PORT');
     const emailSecure = this.config.get<string>('EMAIL_SECURE');
