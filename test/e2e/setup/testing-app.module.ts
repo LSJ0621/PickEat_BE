@@ -26,6 +26,10 @@ import { NaverMapClient } from '@/external/naver/clients/naver-map.client';
 import { S3Client } from '@/external/aws/clients/s3.client';
 import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook.client';
 
+// OpenAI services to mock
+import { TwoStageMenuService } from '@/menu/services/two-stage-menu.service';
+import { OpenAiPlacesService } from '@/menu/services/openai-places.service';
+
 // Mock factories
 import {
   createMockGoogleOAuthClient,
@@ -126,6 +130,29 @@ export function createAllMockClients() {
     sendMail: jest.fn().mockResolvedValue({ messageId: 'test-message-id' }),
   } as jest.Mocked<Pick<MailerService, 'sendMail'>>;
 
+  // TwoStageMenuService - Mock to prevent OpenAI API calls
+  const mockTwoStageMenuServiceInstance = {
+    generateMenuRecommendations: jest.fn().mockResolvedValue({
+      recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
+      reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+    }),
+  };
+
+  // OpenAiPlacesService - Mock to prevent OpenAI API calls
+  const mockOpenAiPlacesServiceInstance = {
+    recommendFromGooglePlaces: jest.fn().mockResolvedValue({
+      recommendations: [
+        {
+          placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+          name: '맛있는 식당',
+          reason: '근처에서 가장 인기 있는 한식당입니다.',
+          matchScore: 95,
+        },
+      ],
+      totalRecommended: 1,
+    }),
+  };
+
   return {
     mockGoogleOAuthClient,
     mockGooglePlacesClient,
@@ -137,6 +164,8 @@ export function createAllMockClients() {
     mockS3Client: mockS3ClientInstance,
     mockDiscordWebhookClient: mockDiscordWebhookClientInstance,
     mockMailerService: mockMailerServiceInstance,
+    mockTwoStageMenuService: mockTwoStageMenuServiceInstance,
+    mockOpenAiPlacesService: mockOpenAiPlacesServiceInstance,
   };
 }
 
@@ -199,6 +228,10 @@ export async function createTestingApp(): Promise<{
     .useValue(mocks.mockDiscordWebhookClient)
     .overrideProvider(MailerService)
     .useValue(mocks.mockMailerService)
+    .overrideProvider(TwoStageMenuService)
+    .useValue(mocks.mockTwoStageMenuService)
+    .overrideProvider(OpenAiPlacesService)
+    .useValue(mocks.mockOpenAiPlacesService)
     .compile();
 
   const app = module.createNestApplication();
@@ -265,6 +298,10 @@ export async function createIntegrationTestingModule(
     .useValue(mocks.mockDiscordWebhookClient)
     .overrideProvider(MailerService)
     .useValue(mocks.mockMailerService)
+    .overrideProvider(TwoStageMenuService)
+    .useValue(mocks.mockTwoStageMenuService)
+    .overrideProvider(OpenAiPlacesService)
+    .useValue(mocks.mockOpenAiPlacesService)
     .compile();
 }
 

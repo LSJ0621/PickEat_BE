@@ -148,10 +148,10 @@ export class KakaoOAuthClient {
         return {
           id: SOCIAL_IDS.KAKAO.VALID,
           kakao_account: {
-            email: USERS.REGULAR.email,
-            profile: { nickname: USERS.REGULAR.name },
+            email: USERS.OAUTH_KAKAO.email,
+            profile: { nickname: USERS.OAUTH_KAKAO.name },
           },
-          properties: { nickname: USERS.REGULAR.name },
+          properties: { nickname: USERS.OAUTH_KAKAO.name },
         };
       case 'test-kakao-no-name-token':
         return {

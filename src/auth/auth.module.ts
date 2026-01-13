@@ -7,7 +7,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
-import { ExternalModule } from '@/external/external.module';
 import { User } from '@/user/entities/user.entity';
 import { UserModule } from '@/user/user.module';
 import { AuthController } from './auth.controller';
@@ -23,7 +22,6 @@ import { LocalStrategy } from './strategy/local.strategy';
 @Module({
   imports: [
     HttpModule,
-    ExternalModule,
     TypeOrmModule.forFeature([User, EmailVerification]),
     PassportModule,
     UserModule,

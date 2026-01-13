@@ -20,6 +20,7 @@ export const TEST_MODE = {
 
   /** 테스트 사용자 정보 */
   USERS: {
+    /** 일반 로그인용 테스트 사용자 */
     REGULAR: {
       email: 'test@example.com',
       password: 'password123',
@@ -37,6 +38,17 @@ export const TEST_MODE = {
       password: 'deletedpassword',
       role: 'USER',
       name: '탈퇴유저',
+    },
+    /** OAuth 전용 테스트 사용자 - 일반 로그인과 이메일 충돌 방지 */
+    OAUTH_KAKAO: {
+      email: 'oauth-kakao@test-oauth.example.com',
+      name: '카카오테스트',
+      role: 'USER',
+    },
+    OAUTH_GOOGLE: {
+      email: 'oauth-google@test-oauth.example.com',
+      name: '구글테스트',
+      role: 'USER',
     },
   },
 

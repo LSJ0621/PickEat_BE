@@ -177,9 +177,9 @@ export class GoogleOAuthClient {
       case 'test-google-valid-token':
         return {
           sub: SOCIAL_IDS.GOOGLE.VALID,
-          email: USERS.REGULAR.email,
+          email: USERS.OAUTH_GOOGLE.email,
           email_verified: true,
-          name: USERS.REGULAR.name,
+          name: USERS.OAUTH_GOOGLE.name,
         };
       case 'test-google-no-name-token':
         return {
