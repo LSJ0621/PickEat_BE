@@ -116,12 +116,12 @@ export const mockGoogleOAuthResponses = {
   },
   userProfileSuccess: {
     sub: '123456789',
-    email: 'test@gmail.com',
+    email: 'oauth-google@test-oauth.example.com',
     email_verified: true,
-    name: 'Test User',
+    name: '구글테스트',
     picture: 'https://example.com/photo.jpg',
-    given_name: 'Test',
-    family_name: 'User',
+    given_name: '구글',
+    family_name: '테스트',
   },
 };
 
@@ -201,10 +201,10 @@ export const mockKakaoOAuthResponses = {
   userInfoSuccess: {
     id: 123456789,
     kakao_account: {
-      email: 'test@kakao.com',
+      email: 'oauth-kakao@test-oauth.example.com',
     },
     properties: {
-      nickname: 'Test User',
+      nickname: '카카오테스트',
     },
   },
 };

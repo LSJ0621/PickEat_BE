@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { TEST_MODE } from '../../common/constants/test-mode.constants';
 import { isTestMode } from '../../common/utils/test-mode.util';
 import { User } from '../entities/user.entity';
+import { UserAddress } from '../entities/user-address.entity';
 import { SocialType } from '../enum/social-type.enum';
 
 @Injectable()
@@ -14,6 +15,8 @@ export class TestUserSeederService implements OnModuleInit {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(UserAddress)
+    private readonly userAddressRepository: Repository<UserAddress>,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -40,6 +43,8 @@ export class TestUserSeederService implements OnModuleInit {
       this.logger.log(
         `[TEST MODE] Regular test user already exists: ${REGULAR.email}`,
       );
+      // 주소가 없으면 추가
+      await this.ensureUserHasAddress(existing);
       return;
     }
     const hashedPassword = await bcrypt.hash(REGULAR.password, 10);
@@ -50,8 +55,39 @@ export class TestUserSeederService implements OnModuleInit {
       name: REGULAR.name,
       emailVerified: true,
     });
-    await this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
     this.logger.log(`[TEST MODE] Regular test user created: ${REGULAR.email}`);
+
+    // 테스트 유저 주소 추가
+    await this.seedUserAddress(savedUser);
+  }
+
+  private async ensureUserHasAddress(user: User): Promise<void> {
+    const existingAddress = await this.userAddressRepository.findOne({
+      where: { user: { id: user.id } },
+    });
+    if (existingAddress) {
+      this.logger.log(
+        `[TEST MODE] Test user already has address: ${user.email}`,
+      );
+      return;
+    }
+    await this.seedUserAddress(user);
+  }
+
+  private async seedUserAddress(user: User): Promise<void> {
+    const address = this.userAddressRepository.create({
+      user,
+      roadAddress: '서울특별시 강남구 테헤란로 123',
+      postalCode: '06234',
+      latitude: 37.4979,
+      longitude: 127.0276,
+      isDefault: true,
+      isSearchAddress: true,
+      alias: '테스트 주소',
+    });
+    await this.userAddressRepository.save(address);
+    this.logger.log(`[TEST MODE] Test user address created for: ${user.email}`);
   }
 
   private async seedAdminUser(): Promise<void> {

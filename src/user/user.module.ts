@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ExternalModule } from '@/external/external.module';
 import { AdminInitializerService } from './services/admin-initializer.service';
 import { TestUserSeederService } from './services/test-user-seeder.service';
 import { UserAddress } from './entities/user-address.entity';
@@ -13,7 +12,7 @@ import { UserController } from './user.controller';
 import { UserService } from './user.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserAddress]), ExternalModule],
+  imports: [TypeOrmModule.forFeature([User, UserAddress])],
   controllers: [UserController],
   providers: [
     UserService,

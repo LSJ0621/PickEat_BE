@@ -119,7 +119,8 @@ describe('Menu (e2e)', () => {
       expect(response.body).toHaveProperty('recommendedAt');
       expect(response.body).toHaveProperty('requestAddress');
       expect(Array.isArray(response.body.recommendations)).toBe(true);
-      expect(mockChatCompletionsCreate).toHaveBeenCalled();
+      // Note: mockChatCompletionsCreate is not called because TwoStageMenuService
+      // is mocked at service level in testing-app.module.ts
 
       // Verify database record was created
       const savedRecommendation = await menuRecommendationRepository.findOne({
@@ -385,7 +386,8 @@ describe('Menu (e2e)', () => {
       expect(mocks.mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
         query,
       );
-      expect(mockChatCompletionsCreate).toHaveBeenCalled();
+      // Note: mockChatCompletionsCreate is not called because OpenAiPlacesService
+      // is mocked at service level in testing-app.module.ts
     });
 
     it('should work with historyId parameter', async () => {
