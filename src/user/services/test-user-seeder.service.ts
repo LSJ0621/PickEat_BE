@@ -20,11 +20,23 @@ export class TestUserSeederService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    this.logger.log('=== TestUserSeederService.onModuleInit() START ===');
+    this.logger.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+    this.logger.log(`isTestMode(): ${isTestMode()}`);
+
     if (!isTestMode()) {
+      this.logger.log('Not in test mode, skipping...');
       return;
     }
-    this.logger.log('[TEST MODE] Initializing test users...');
-    await this.seedTestUsers();
+
+    try {
+      this.logger.log('[TEST MODE] Initializing test users...');
+      await this.seedTestUsers();
+      this.logger.log('[TEST MODE] Test users seeding completed successfully');
+    } catch (error) {
+      this.logger.error('[TEST MODE] Failed to seed test users:', error);
+      throw error;
+    }
   }
 
   private async seedTestUsers(): Promise<void> {
