@@ -51,6 +51,18 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   lastPasswordChangedAt: Date | null;
 
+  @Column({ default: false, name: 'is_deactivated' })
+  isDeactivated: boolean;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'deactivated_at' })
+  deactivatedAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'last_active_at' })
+  lastActiveAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'last_login_at' })
+  lastLoginAt: Date | null;
+
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt: Date | null;
 

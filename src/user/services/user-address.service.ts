@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +15,8 @@ import { AddressSearchResult } from '../interfaces/address-search-result.interfa
 
 @Injectable()
 export class UserAddressService {
+  private readonly logger = new Logger(UserAddressService.name);
+
   constructor(
     @InjectRepository(UserAddress)
     private readonly userAddressRepository: Repository<UserAddress>,
