@@ -25,7 +25,7 @@ export class MockGooglePlacesClient {
 
   async getDetails(
     placeId: string,
-    options?: { includeBusinessStatus?: boolean },
+    _options?: { includeBusinessStatus?: boolean },
   ): Promise<GooglePlaceDetails | null> {
     this.logger.log(`[MOCK] Places getDetails: placeId="${placeId}"`);
     return {
@@ -36,7 +36,7 @@ export class MockGooglePlacesClient {
 
   async getPhotoUri(
     photoName: string,
-    options?: { maxWidth?: number; maxHeight?: number },
+    _options?: { maxWidth?: number; maxHeight?: number },
   ): Promise<string | null> {
     this.logger.log(`[MOCK] Places getPhotoUri: photoName="${photoName}"`);
     return mockGooglePlacesResponses.photoUri;
@@ -44,7 +44,7 @@ export class MockGooglePlacesClient {
 
   async resolvePhotoUris(
     photos: Array<{ name?: string }> | null | undefined,
-    options?: { maxWidth?: number; maxHeight?: number },
+    _options?: { maxWidth?: number; maxHeight?: number },
   ): Promise<string[]> {
     if (!photos || photos.length === 0) {
       return [];

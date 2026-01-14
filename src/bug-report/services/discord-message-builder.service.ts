@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { BUG_REPORT_NOTIFICATION } from '@/common/constants/business.constants';
 import { DISCORD_WEBHOOK_CONFIG } from '@/external/discord/discord.constants';
 import { DiscordEmbed } from '@/external/discord/discord.types';
@@ -26,6 +26,7 @@ export interface ThresholdAlertParams {
  */
 @Injectable()
 export class DiscordMessageBuilderService {
+  private readonly logger = new Logger(DiscordMessageBuilderService.name);
   /**
    * 임계값 도달 알림용 Embed를 생성합니다.
    * @param params 알림 파라미터

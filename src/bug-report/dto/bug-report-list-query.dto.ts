@@ -1,4 +1,12 @@
-import { IsOptional, IsInt, Min, Max, IsEnum, Matches } from 'class-validator';
+import {
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+  IsEnum,
+  Matches,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { BugReportStatus } from '../enum/bug-report-status.enum';
 
@@ -27,4 +35,12 @@ export class BugReportListQueryDto {
     message: '날짜는 YYYY-MM-DD 형식이어야 합니다.',
   })
   date?: string; // 특정 날짜 필터 (YYYY-MM-DD)
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

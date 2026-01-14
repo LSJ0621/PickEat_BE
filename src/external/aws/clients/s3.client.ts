@@ -2,6 +2,7 @@ import {
   S3Client as AwsS3Client,
   GetObjectCommand,
   PutObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, Logger } from '@nestjs/common';
@@ -89,6 +90,67 @@ export class S3Client {
         'S3',
         error as Error,
         'Failed to upload image',
+      );
+    }
+  }
+
+  /**
+   * 버킷의 모든 파일 정보를 조회하여 통계를 반환
+   * @returns 버킷 통계 정보 (총 크기, 파일 수, 파일 목록)
+   */
+  async getBucketStats(): Promise<{
+    totalSizeBytes: number;
+    fileCount: number;
+    files: Array<{ key: string; size: number; lastModified: Date }>;
+  }> {
+    try {
+      const files: Array<{ key: string; size: number; lastModified: Date }> =
+        [];
+      let continuationToken: string | undefined;
+      let totalSizeBytes = 0;
+
+      do {
+        const command = new ListObjectsV2Command({
+          Bucket: this.bucketName,
+          ContinuationToken: continuationToken,
+        });
+
+        const response = await this.s3Client.send(command);
+
+        if (response.Contents) {
+          for (const object of response.Contents) {
+            if (object.Key && object.Size !== undefined) {
+              totalSizeBytes += object.Size;
+              files.push({
+                key: object.Key,
+                size: object.Size,
+                lastModified: object.LastModified ?? new Date(),
+              });
+            }
+          }
+        }
+
+        continuationToken = response.NextContinuationToken;
+      } while (continuationToken);
+
+      this.logger.debug(
+        `Bucket stats retrieved: fileCount=${files.length}, totalSizeBytes=${totalSizeBytes}`,
+      );
+
+      return {
+        totalSizeBytes,
+        fileCount: files.length,
+        files,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get bucket stats from S3: ${error.message}`,
+        error.stack,
+      );
+      throw new ExternalApiException(
+        'S3',
+        error as Error,
+        'Failed to get bucket stats',
       );
     }
   }
