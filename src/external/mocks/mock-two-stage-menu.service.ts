@@ -11,9 +11,9 @@ export class MockTwoStageMenuService {
 
   async generateMenuRecommendations(
     prompt: string,
-    likes: string[],
-    dislikes: string[],
-    analysis?: string,
+    _likes: string[],
+    _dislikes: string[],
+    _analysis?: string,
   ): Promise<MenuRecommendationsResponse> {
     this.logger.log(
       `[MOCK] TwoStageMenuService.generateMenuRecommendations: prompt="${prompt}"`,

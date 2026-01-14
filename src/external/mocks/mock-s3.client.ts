@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { mockS3Responses } from './fixtures';
 
 /**
  * AWS S3 Mock 클라이언트

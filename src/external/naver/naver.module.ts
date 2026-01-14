@@ -18,7 +18,9 @@ const logger = new Logger('NaverModule');
 export class NaverModule {
   static forRoot(): DynamicModule {
     const isMockMode = process.env.E2E_MOCK === 'true';
-    logger.warn(`[NaverModule.forRoot] E2E_MOCK="${process.env.E2E_MOCK}", isMockMode=${isMockMode}`);
+    logger.warn(
+      `[NaverModule.forRoot] E2E_MOCK="${process.env.E2E_MOCK}", isMockMode=${isMockMode}`,
+    );
 
     if (isMockMode) {
       logger.warn('[NaverModule] E2E_MOCK=true - Using Mock clients');

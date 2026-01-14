@@ -68,7 +68,7 @@ const logger = new Logger('MockExternalModule');
               token_type: 'bearer',
             };
           },
-          getUserProfile: async (accessToken: string) => {
+          getUserProfile: async (_accessToken: string) => {
             logger.log(`[MOCK] GoogleOAuth getUserProfile`);
             return {
               sub: 'google-test-valid-id',
@@ -94,7 +94,7 @@ const logger = new Logger('MockExternalModule');
               expires_in: 3600,
             };
           },
-          getUserProfile: async (accessToken: string) => {
+          getUserProfile: async (_accessToken: string) => {
             logger.log(`[MOCK] KakaoOAuth getUserProfile`);
             return {
               id: 123456789,

@@ -22,6 +22,7 @@ pnpm run test:e2e       # E2E tests
 
 ```
 src/{module}/__tests__/          # Unit tests (co-located)
+src/external/mocks/              # Mock implementations for external APIs (used in tests)
 test/
 ├── e2e/                         # E2E tests (*.e2e-spec.ts)
 ├── integration/                 # Integration tests (*.integration.spec.ts)
@@ -29,7 +30,8 @@ test/
 ├── factories/entity.factory.ts  # Entity factories
 ├── mocks/                       # Mock implementations
 │   ├── repository.mock.ts       # TypeORM mocking
-│   └── external-clients.mock.ts # External API mocking
+│   ├── external-clients.mock.ts # External API mocking
+│   └── openai.mock.ts           # OpenAI mocking
 ├── constants/                   # Test constants
 └── utils/                       # Test utilities
 ```
@@ -56,7 +58,7 @@ test/
 src/
 ├── {feature}/
 │   ├── __tests__/           # Unit tests (*.spec.ts)
-│   ├── controllers/         # Admin or specialized controllers
+│   ├── controllers/         # Admin or specialized controllers (e.g., admin-bug-report.controller.ts)
 │   ├── dto/                 # {operation}-{feature}.dto.ts
 │   ├── entities/            # {feature}.entity.ts
 │   ├── interfaces/          # Response types (*.interface.ts)
@@ -75,42 +77,41 @@ src/
     ├── filters/, interceptors/, interfaces/, utils/
 ```
 
-## Agent Workflow Guidelines
+### Menu Module Structure (Complex Example)
 
-### Unified Agents (Root Folder)
+The menu module has a multi-layered service architecture:
 
-All agents are now unified in the **root folder** (`PickEat/.claude/agents/`).
-This project's agents have been merged with frontend agents for consistent cross-project workflows.
+```
+menu/
+├── services/                      # Core business logic
+│   ├── menu-recommendation.service.ts
+│   ├── menu-selection.service.ts
+│   ├── openai-menu.service.ts     # OpenAI integration
+│   ├── openai-places.service.ts   # Place recommendations via OpenAI
+│   ├── place.service.ts           # Place data handling
+│   └── two-stage-menu.service.ts  # Orchestration service
+├── gpt/                           # GPT model-specific services
+│   ├── base-menu.service.ts
+│   ├── gpt4o-mini-validation.service.ts
+│   └── gpt51-menu.service.ts
+├── utilities/                     # Helper utilities
+│   ├── menu-payload.util.ts
+│   └── place-id.util.ts
+└── preferences.scheduler.ts       # Cron-based scheduler
+```
 
-### Available Agents
+## Plan Mode Guide
 
-| Agent | Purpose | Target |
-|-------|---------|--------|
-| code-reviewer | Code quality, architecture compliance | Both |
-| code-quality-manager | Error diagnosis and fixes | Both |
-| error-resolver | Build/runtime error diagnosis | Both |
-| error-log-analyzer | Error log analysis | Both |
-| refactor-executor | Systematic refactoring | Both |
-| parallel-task-executor | Parallel task execution | Both |
-| test-code-writer | Unit/integration/E2E tests | Backend |
-| prompt-engineer | AI prompt optimization | Backend |
-| api-documentation-manager | API documentation | Backend |
-| api-sync-analyzer | API synchronization analysis | Both |
+### Use Plan Mode (EnterPlanMode)
+- New feature implementation (2+ files expected)
+- Architecture decisions needed
+- Large-scale refactoring
+- Multiple valid approaches to choose from
 
-### Agent Invocation
-
-Agents automatically detect project from file paths:
-- Files containing `pick-eat_be/` → Backend rules applied
-- Files containing `pickeat_web/` → Frontend rules applied
-
-### When to Use Agents
-
-- Error occurred → error-resolver or code-quality-manager
-- Code written → code-reviewer immediately
-- Tests needed → test-code-writer
-- AI prompts → prompt-engineer
-- API docs → api-documentation-manager
-- API sync check → api-sync-analyzer
+### Proceed Directly
+- Simple bug fixes (1-2 files)
+- Small additions following existing patterns
+- Documentation updates
 
 ## External API Integration
 
@@ -142,6 +143,7 @@ Each provider has: `{provider}.constants.ts` (URLs, versions), `{provider}.types
 - **PlaceRecommendation**: Google Places results
 - **EmailVerification**: Time-limited codes (SIGNUP, RE_REGISTER, PASSWORD_RESET)
 - **BugReport**: Bug reports with file uploads (UNCONFIRMED/CONFIRMED/FIXED/CLOSED)
+- **BugReportNotification**: Bug report notification tracking for Discord webhooks
 
 ## Path Aliases
 
@@ -150,8 +152,51 @@ TypeScript path alias `@/*` → `src/*`:
 import { AuthUserPayload } from '@/auth/interfaces/auth-user-payload.interface';
 ```
 
+## Quality Checklist & Workflow
+
+### Before Writing Code
+
+- Check existing utilities in `src/common/`
+- Check existing services in related modules
+- Check existing external clients in `src/external/`
+- Reuse existing code when possible
+
+### While Writing Code
+
+- Follow layer separation (Controller → Service → Repository/Client)
+- Use TypeScript properly (no `any`, explicit types)
+- Keep services under 500 lines (split if larger)
+- Use NestJS Logger (never `console.log`)
+- Use constants from `src/common/constants/`
+
+### After Writing Code (Every Phase)
+
+- `pnpm run build` must succeed
+- Zero TypeScript/ESLint errors
+- Remove ALL unused imports/variables/functions
+- Run relevant tests
+- Verify documentation matches implementation
+
+**NEVER** proceed to next phase if any item fails. Fix and re-verify first.
+
+### Refactoring Priority
+
+1. Remove duplicate code (extract common functions, delete originals completely)
+2. Split services over 500 lines
+3. Remove unused code
+4. Replace `any` types
+5. Move hardcoded values to constants
+
+**Refactoring Rules:**
+- One module/feature at a time
+- NEVER refactor while adding features
+- When moving code, delete original OR update to call new location
+- Original code must be completely deleted when extracted
+
 ## Additional Notes
 
 - **AI Prompts**: Located in `src/external/openai/prompts/` (menu-recommendation, menu-validation, preference-update, google-places-recommendation)
-- **Scheduled Tasks**: Uses `@nestjs/schedule` with `@Cron()` decorators (e.g., `PreferencesScheduler`)
+- **Scheduled Tasks**: Uses `@nestjs/schedule` with `@Cron()` decorators
+  - `PreferencesScheduler` (menu module) - User preference updates
+  - `BugReportSchedulerService` (bug-report module) - Bug report processing
 - **Email**: NestJS Mailer with Handlebars templates in `src/auth/templates/`
