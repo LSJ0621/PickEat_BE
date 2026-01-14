@@ -4,7 +4,6 @@ import {
   DeleteResult,
   UpdateResult,
   ObjectLiteral,
-  DeepPartial,
   EntityManager,
   EntityMetadata,
   EntityTarget,

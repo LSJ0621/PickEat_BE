@@ -13,7 +13,7 @@ export class MockNaverMapClient {
   async reverseGeocode(
     latitude: number,
     longitude: number,
-    options?: { includeRoadAddress?: boolean },
+    _options?: { includeRoadAddress?: boolean },
   ): Promise<NaverReverseGeocodeResult[]> {
     this.logger.log(
       `[MOCK] Naver reverseGeocode: lat=${latitude}, lng=${longitude}`,
