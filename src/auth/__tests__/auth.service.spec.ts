@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthService } from '../auth.service';
@@ -30,7 +31,11 @@ describe('AuthService', () => {
     refreshToken: null,
     socialId: null,
     socialType: null,
+    isDeactivated: false,
+    deactivatedAt: null,
     lastPasswordChangedAt: null,
+    lastActiveAt: null,
+    lastLoginAt: null,
     deletedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -355,12 +360,51 @@ describe('AuthService', () => {
         password: 'wrongpassword',
       };
 
-      userRepository.findOne.mockResolvedValue(mockUser);
+      // First call is validateUser (returns null due to wrong password)
+      userRepository.findOne.mockResolvedValueOnce(mockUser);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
+      // Second call is to check for deactivated user (returns active user)
+      userRepository.findOne.mockResolvedValueOnce(mockUser);
 
       await expect(service.login(loginDto)).rejects.toThrow(
         '이메일 또는 비밀번호가 올바르지 않습니다.',
       );
+    });
+
+    it('should throw HttpException with FORBIDDEN status when user is deactivated', async () => {
+      const loginDto = {
+        email: 'test@example.com',
+        password: 'password123',
+      };
+      const deactivatedUser = {
+        ...mockUser,
+        isDeactivated: true,
+        deactivatedAt: new Date(),
+      };
+
+      // First call is validateUser (returns null because user is deactivated)
+      userRepository.findOne.mockResolvedValueOnce(deactivatedUser);
+      // Second call is to check if user is deactivated
+      userRepository.findOne.mockResolvedValueOnce(deactivatedUser);
+
+      try {
+        await service.login(loginDto);
+        fail('Should have thrown HttpException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(HttpException);
+        const httpError = error as HttpException;
+        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
+        const response = httpError.getResponse() as {
+          statusCode: number;
+          message: string;
+          error: string;
+        };
+        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
+        expect(response.message).toBe(
+          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+        );
+        expect(response.error).toBe('USER_DEACTIVATED');
+      }
     });
   });
 
@@ -599,6 +643,22 @@ describe('AuthService', () => {
     it('should return null when social login user has no password', async () => {
       const socialUser = { ...mockUser, password: null };
       userRepository.findOne.mockResolvedValue(socialUser);
+
+      const result = await service.validateUser(
+        'test@example.com',
+        'password123',
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when user is deactivated', async () => {
+      const deactivatedUser = {
+        ...mockUser,
+        isDeactivated: true,
+        deactivatedAt: new Date(),
+      };
+      userRepository.findOne.mockResolvedValue(deactivatedUser);
 
       const result = await service.validateUser(
         'test@example.com',
