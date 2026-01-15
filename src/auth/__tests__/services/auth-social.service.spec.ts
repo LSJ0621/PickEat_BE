@@ -278,6 +278,60 @@ describe('AuthSocialService', () => {
         expect(response.email).toBe(email);
       }
     });
+
+    it('should throw FORBIDDEN exception when user is deactivated', async () => {
+      // Arrange
+      const code = 'kakao-auth-code';
+      const kakaoId = '123456789';
+      const email = 'deactivated@kakao.com';
+      const deactivatedUser = UserFactory.createWithSocial(
+        email,
+        kakaoId,
+        SocialType.KAKAO,
+      );
+      deactivatedUser.isDeactivated = true;
+      deactivatedUser.deactivatedAt = new Date();
+
+      mockKakaoOAuthClient.getAccessToken.mockResolvedValue({
+        access_token: 'kakao-access-token',
+        token_type: 'bearer',
+        refresh_token: 'kakao-refresh-token',
+        expires_in: 21599,
+        scope: 'account_email',
+        refresh_token_expires_in: 5183999,
+      });
+
+      mockKakaoOAuthClient.getUserProfile.mockResolvedValue({
+        id: kakaoId,
+        kakao_account: {
+          email,
+          profile: { nickname: 'Deactivated User' },
+        },
+      });
+
+      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.getUserBySocialId.mockResolvedValue(deactivatedUser);
+
+      // Act & Assert
+      try {
+        await service.kakaoLogin(code, mockBuildAuthResult);
+        fail('Should have thrown HttpException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(HttpException);
+        const httpError = error as HttpException;
+        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
+        const response = httpError.getResponse() as {
+          statusCode: number;
+          message: string;
+          error: string;
+        };
+        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
+        expect(response.message).toBe(
+          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+        );
+        expect(response.error).toBe('USER_DEACTIVATED');
+      }
+    });
   });
 
   describe('kakaoLoginWithToken', () => {
@@ -517,6 +571,58 @@ describe('AuthSocialService', () => {
         };
         expect(response.error).toBe('RE_REGISTER_REQUIRED');
         expect(response.email).toBe(email);
+      }
+    });
+
+    it('should throw FORBIDDEN exception when Google user is deactivated', async () => {
+      // Arrange
+      const code = 'google-auth-code';
+      const googleId = 'google-sub-123';
+      const email = 'deactivated@gmail.com';
+      const deactivatedUser = UserFactory.createWithSocial(
+        email,
+        googleId,
+        SocialType.GOOGLE,
+      );
+      deactivatedUser.isDeactivated = true;
+      deactivatedUser.deactivatedAt = new Date();
+
+      mockGoogleOAuthClient.getAccessToken.mockResolvedValue({
+        access_token: 'google-access-token',
+        expires_in: 3599,
+        token_type: 'Bearer',
+        scope: 'openid email profile',
+        id_token: 'google-id-token',
+      });
+
+      mockGoogleOAuthClient.getUserProfile.mockResolvedValue({
+        sub: googleId,
+        email,
+        email_verified: true,
+        name: 'Deactivated User',
+      });
+
+      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.getUserBySocialId.mockResolvedValue(deactivatedUser);
+
+      // Act & Assert
+      try {
+        await service.googleLogin(code, mockBuildAuthResult);
+        fail('Should have thrown HttpException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(HttpException);
+        const httpError = error as HttpException;
+        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
+        const response = httpError.getResponse() as {
+          statusCode: number;
+          message: string;
+          error: string;
+        };
+        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
+        expect(response.message).toBe(
+          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+        );
+        expect(response.error).toBe('USER_DEACTIVATED');
       }
     });
   });

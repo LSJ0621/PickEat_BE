@@ -4,7 +4,6 @@ import { AwsModule } from '../external/aws/aws.module';
 import { DiscordModule } from '../external/discord/discord.module';
 import { UserModule } from '../user/user.module';
 import { BugReport } from './entities/bug-report.entity';
-import { BugReportAdminNote } from './entities/bug-report-admin-note.entity';
 import { BugReportNotification } from './entities/bug-report-notification.entity';
 import { BugReportStatusHistory } from './entities/bug-report-status-history.entity';
 import { BugReportController } from './bug-report.controller';
@@ -18,7 +17,6 @@ import { DiscordMessageBuilderService } from './services/discord-message-builder
   imports: [
     TypeOrmModule.forFeature([
       BugReport,
-      BugReportAdminNote,
       BugReportNotification,
       BugReportStatusHistory,
     ]),

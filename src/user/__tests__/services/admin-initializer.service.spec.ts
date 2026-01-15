@@ -174,7 +174,7 @@ describe('AdminInitializerService', () => {
       // Assert
       expect(mockUserService.createUser).toHaveBeenCalledWith(
         expect.objectContaining({
-          role: 'ADMIN', // default role
+          role: 'SUPER_ADMIN', // default role
         }),
       );
     });

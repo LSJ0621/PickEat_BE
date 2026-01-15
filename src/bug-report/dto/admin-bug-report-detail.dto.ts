@@ -23,13 +23,4 @@ export class AdminBugReportDetailDto {
       email: string;
     };
   }>;
-  adminNotes: Array<{
-    id: string;
-    content: string;
-    createdAt: Date;
-    createdBy: {
-      id: number;
-      email: string;
-    };
-  }>;
 }

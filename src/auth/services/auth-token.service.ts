@@ -1,4 +1,10 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -96,6 +102,17 @@ export class AuthTokenService {
         throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
       }
 
+      if (user.isDeactivated) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.FORBIDDEN,
+            message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+            error: 'USER_DEACTIVATED',
+          },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
       if (!user.refreshToken) {
         throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
       }
@@ -141,7 +158,10 @@ export class AuthTokenService {
       // Rollback transaction on error
       await queryRunner.rollbackTransaction();
 
-      if (error instanceof UnauthorizedException) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof HttpException
+      ) {
         throw error;
       }
       if (error instanceof Error && error.message === 'jwt expired') {
