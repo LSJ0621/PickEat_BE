@@ -153,7 +153,7 @@ export class AdminUserService {
   async deactivate(id: number): Promise<void> {
     const result = await this.userRepository.update(
       { id, isDeactivated: false },
-      { isDeactivated: true, deactivatedAt: new Date() },
+      { isDeactivated: true, deactivatedAt: new Date(), refreshToken: null },
     );
 
     if (result.affected === 0) {

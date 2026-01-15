@@ -11,9 +11,7 @@ import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { AdminBugReportDetailDto } from './dto/admin-bug-report-detail.dto';
 import { BugReportListQueryDto } from './dto/bug-report-list-query.dto';
-import { BugReportStatisticsDto } from './dto/bug-report-statistics.dto';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
-import { BugReportAdminNote } from './entities/bug-report-admin-note.entity';
 import { BugReportStatusHistory } from './entities/bug-report-status-history.entity';
 import { BugReport } from './entities/bug-report.entity';
 import { BugReportStatus } from './enum/bug-report-status.enum';
@@ -27,8 +25,6 @@ export class BugReportService {
     private readonly bugReportRepository: Repository<BugReport>,
     @InjectRepository(BugReportStatusHistory)
     private readonly statusHistoryRepo: Repository<BugReportStatusHistory>,
-    @InjectRepository(BugReportAdminNote)
-    private readonly adminNoteRepo: Repository<BugReportAdminNote>,
     private readonly userService: UserService,
     private readonly s3Client: S3Client,
     private readonly dataSource: DataSource,
@@ -222,7 +218,7 @@ export class BugReportService {
   }
 
   /**
-   * 관리자용 버그 제보 상세 조회 (이력, 메모 포함)
+   * 관리자용 버그 제보 상세 조회 (이력 포함)
    */
   async findOneWithDetails(id: number): Promise<AdminBugReportDetailDto> {
     const bugReport = await this.bugReportRepository.findOne({
@@ -234,18 +230,11 @@ export class BugReportService {
       throw new NotFoundException('버그 리포트를 찾을 수 없습니다.');
     }
 
-    const [statusHistory, adminNotes] = await Promise.all([
-      this.statusHistoryRepo.find({
-        where: { bugReport: { id } },
-        relations: ['changedBy'],
-        order: { changedAt: 'DESC' },
-      }),
-      this.adminNoteRepo.find({
-        where: { bugReport: { id } },
-        relations: ['createdBy'],
-        order: { createdAt: 'DESC' },
-      }),
-    ]);
+    const statusHistory = await this.statusHistoryRepo.find({
+      where: { bugReport: { id } },
+      relations: ['changedBy'],
+      order: { changedAt: 'DESC' },
+    });
 
     return {
       id: bugReport.id,
@@ -269,109 +258,6 @@ export class BugReportService {
         changedAt: h.changedAt,
         changedBy: { id: h.changedBy.id, email: h.changedBy.email },
       })),
-      adminNotes: adminNotes.map((n) => ({
-        id: n.id,
-        content: n.content,
-        createdAt: n.createdAt,
-        createdBy: { id: n.createdBy.id, email: n.createdBy.email },
-      })),
-    };
-  }
-
-  /**
-   * 관리자 메모 추가
-   */
-  async addAdminNote(
-    bugReportId: number,
-    content: string,
-    createdBy: User,
-  ): Promise<BugReportAdminNote> {
-    const bugReport = await this.findOne(bugReportId);
-    return this.adminNoteRepo.save({ bugReport, content, createdBy });
-  }
-
-  /**
-   * 일괄 상태 변경 (트랜잭션 적용)
-   */
-  async batchUpdateStatus(
-    ids: number[],
-    status: BugReportStatus,
-    changedBy: User,
-  ): Promise<{ updatedCount: number; failedIds: number[] }> {
-    const failedIds: number[] = [];
-
-    return await this.dataSource.transaction(async (manager) => {
-      let updatedCount = 0;
-
-      for (const id of ids) {
-        try {
-          await this.updateStatusWithHistoryInTransaction(
-            manager,
-            id,
-            status,
-            changedBy,
-          );
-          updatedCount++;
-        } catch (error) {
-          this.logger.warn(
-            `Failed to update bug report ${id}: ${(error as Error).message}`,
-          );
-          failedIds.push(id);
-        }
-      }
-
-      return { updatedCount, failedIds };
-    });
-  }
-
-  /**
-   * 통계 조회
-   */
-  async getStatistics(): Promise<BugReportStatisticsDto> {
-    const qb = this.bugReportRepository.createQueryBuilder('br');
-
-    // 상태별 집계
-    const byStatusRaw: Array<{ status: string; count: string }> = await qb
-      .select('br.status', 'status')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('br.status')
-      .getRawMany();
-
-    const byStatus = {
-      UNCONFIRMED: 0,
-      CONFIRMED: 0,
-      FIXED: 0,
-      CLOSED: 0,
-    };
-    byStatusRaw.forEach((r) => {
-      if (r.status in byStatus) {
-        byStatus[r.status as keyof typeof byStatus] = parseInt(r.count, 10);
-      }
-    });
-
-    // 카테고리별 집계
-    const byCategoryRaw: Array<{ category: string; count: string }> =
-      await this.bugReportRepository
-        .createQueryBuilder('br')
-        .select('br.category', 'category')
-        .addSelect('COUNT(*)', 'count')
-        .groupBy('br.category')
-        .getRawMany();
-
-    const byCategory = { BUG: 0, INQUIRY: 0, OTHER: 0 };
-    byCategoryRaw.forEach((r) => {
-      if (r.category in byCategory) {
-        byCategory[r.category as keyof typeof byCategory] = parseInt(
-          r.count,
-          10,
-        );
-      }
-    });
-
-    return {
-      byStatus,
-      byCategory,
-      processingTime: { averageHours: 0, pendingAverageHours: 0 },
     };
   }
 }

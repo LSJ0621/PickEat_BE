@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { ROLES } from '@/common/constants/roles.constants';
 import { UserService } from '../user.service';
 
 @Injectable()
@@ -20,7 +21,8 @@ export class AdminInitializerService implements OnModuleInit {
     const adminEmail = this.configService.get<string>('ADMIN_EMAIL');
     const adminPassword = this.configService.get<string>('ADMIN_PASSWORD');
     const adminName = this.configService.get<string>('ADMIN_NAME') ?? '관리자';
-    const adminRole = this.configService.get<string>('ADMIN_ROLE') ?? 'ADMIN';
+    const adminRole =
+      this.configService.get<string>('ADMIN_ROLE') ?? ROLES.SUPER_ADMIN;
 
     if (!adminEmail || !adminPassword) {
       this.logger.warn(

@@ -90,7 +90,11 @@ describe('AdminUserService', () => {
       // Assert
       expect(userRepository.update).toHaveBeenCalledWith(
         { id: userId, isDeactivated: false },
-        { isDeactivated: true, deactivatedAt: expect.any(Date) },
+        {
+          isDeactivated: true,
+          deactivatedAt: expect.any(Date),
+          refreshToken: null,
+        },
       );
       expect(userRepository.update).toHaveBeenCalledTimes(1);
       expect(userRepository.findOneBy).not.toHaveBeenCalled();
@@ -194,6 +198,26 @@ describe('AdminUserService', () => {
 
       // Act & Assert
       await expect(service.deactivate(userId)).rejects.toThrow(dbError);
+    });
+
+    it('should set refreshToken to null when deactivating user', async () => {
+      // Arrange
+      const userId = 1;
+      const updateResult = { affected: 1, raw: [], generatedMaps: [] };
+      userRepository.update.mockResolvedValue(updateResult);
+
+      // Act
+      await service.deactivate(userId);
+
+      // Assert
+      expect(userRepository.update).toHaveBeenCalledWith(
+        { id: userId, isDeactivated: false },
+        expect.objectContaining({
+          isDeactivated: true,
+          deactivatedAt: expect.any(Date),
+          refreshToken: null, // Critical: ensures user is logged out
+        }),
+      );
     });
   });
 

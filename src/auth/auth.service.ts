@@ -126,6 +126,10 @@ export class AuthService {
       return null;
     }
 
+    if (user.isDeactivated) {
+      return null;
+    }
+
     if (!user.password) {
       return null;
     }
@@ -140,11 +144,30 @@ export class AuthService {
 
   async login(loginDto: LoginDto): Promise<AuthResult> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
+
     if (!user) {
+      // 비활성화된 유저인지 확인하여 적절한 에러 메시지 제공
+      const existingUser = await this.userRepository.findOne({
+        where: { email: loginDto.email },
+        withDeleted: true,
+      });
+
+      if (existingUser?.isDeactivated) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.FORBIDDEN,
+            message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+            error: 'USER_DEACTIVATED',
+          },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
       throw new UnauthorizedException(
         '이메일 또는 비밀번호가 올바르지 않습니다.',
       );
     }
+
     return this.buildAuthResult(user);
   }
 

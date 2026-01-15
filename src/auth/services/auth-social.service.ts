@@ -100,6 +100,15 @@ export class AuthSocialService {
         },
         HttpStatus.BAD_REQUEST,
       );
+    } else if (user.isDeactivated) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.FORBIDDEN,
+          message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+          error: 'USER_DEACTIVATED',
+        },
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     return buildAuthResult(user);
@@ -169,6 +178,15 @@ export class AuthSocialService {
           email: email,
         },
         HttpStatus.BAD_REQUEST,
+      );
+    } else if (user.isDeactivated) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.FORBIDDEN,
+          message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+          error: 'USER_DEACTIVATED',
+        },
+        HttpStatus.FORBIDDEN,
       );
     }
 

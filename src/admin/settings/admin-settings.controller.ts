@@ -3,38 +3,35 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseIntPipe,
-  Patch,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
+import {
+  AuthUserPayload,
+  CurrentUser,
+} from '@/auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
 import { RolesGuard } from '@/auth/guard/roles.guard';
-import { Roles } from '@/auth/decorators/roles.decorator';
 import { SuperAdminOnly } from '@/auth/decorators/super-admin.decorator';
-import { User } from '@/user/entities/user.entity';
-import { ROLES } from '@/common/constants/roles.constants';
+import { UserService } from '@/user/user.service';
 import { AdminSettingsService } from './admin-settings.service';
 import { AdminListItemDto } from './dto/admin-list-item.dto';
 import { PromoteAdminDto } from './dto/promote-admin.dto';
-import { WebhookSettingsDto } from './dto/webhook-settings.dto';
-import { UpdateWebhookSettingsDto } from './dto/update-webhook-settings.dto';
-import { SystemSettingsDto } from './dto/system-settings.dto';
-import { UpdateSystemSettingsDto } from './dto/update-system-settings.dto';
-
-interface RequestWithUser extends Request {
-  user: User;
-}
 
 @Controller('admin/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 export class AdminSettingsController {
-  constructor(private readonly adminSettingsService: AdminSettingsService) {}
+  constructor(
+    private readonly adminSettingsService: AdminSettingsService,
+    private readonly userService: UserService,
+  ) {}
 
   /**
    * Get list of all admin users
@@ -54,13 +51,20 @@ export class AdminSettingsController {
   @SuperAdminOnly()
   async promoteToAdmin(
     @Body() dto: PromoteAdminDto,
-    @Req() req: RequestWithUser,
+    @CurrentUser() user: AuthUserPayload,
+    @Req() req: Request,
   ): Promise<{ message: string }> {
+    const adminUser = await this.userService.findByEmail(user.email);
+    if (!adminUser) {
+      throw new NotFoundException('Admin user not found');
+    }
+
     const ipAddress = this.getClientIp(req);
     await this.adminSettingsService.promoteToAdmin(
       dto.userId,
+      dto.email,
       dto.role,
-      req.user,
+      adminUser,
       ipAddress,
     );
     return { message: `User promoted to ${dto.role} successfully` };
@@ -74,77 +78,17 @@ export class AdminSettingsController {
   @SuperAdminOnly()
   async demoteAdmin(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: RequestWithUser,
+    @CurrentUser() user: AuthUserPayload,
+    @Req() req: Request,
   ): Promise<{ message: string }> {
+    const adminUser = await this.userService.findByEmail(user.email);
+    if (!adminUser) {
+      throw new NotFoundException('Admin user not found');
+    }
+
     const ipAddress = this.getClientIp(req);
-    await this.adminSettingsService.demoteAdmin(id, req.user, ipAddress);
+    await this.adminSettingsService.demoteAdmin(id, adminUser, ipAddress);
     return { message: 'Admin role removed successfully' };
-  }
-
-  /**
-   * Get webhook settings
-   * Both ADMIN and SUPER_ADMIN can access
-   */
-  @Get('webhook')
-  @Roles(ROLES.ADMIN, ROLES.SUPER_ADMIN)
-  async getWebhookSettings(): Promise<WebhookSettingsDto> {
-    return this.adminSettingsService.getWebhookSettings();
-  }
-
-  /**
-   * Update webhook settings
-   * Both ADMIN and SUPER_ADMIN can access
-   */
-  @Patch('webhook')
-  @Roles(ROLES.ADMIN, ROLES.SUPER_ADMIN)
-  async updateWebhookSettings(
-    @Body() dto: UpdateWebhookSettingsDto,
-    @Req() req: RequestWithUser,
-  ): Promise<WebhookSettingsDto> {
-    const ipAddress = this.getClientIp(req);
-    return this.adminSettingsService.updateWebhookSettings(
-      dto,
-      req.user,
-      ipAddress,
-    );
-  }
-
-  /**
-   * Test webhook by sending a test message
-   * Both ADMIN and SUPER_ADMIN can access
-   */
-  @Post('webhook/test')
-  @Roles(ROLES.ADMIN, ROLES.SUPER_ADMIN)
-  async testWebhook(): Promise<{ success: boolean; message: string }> {
-    return this.adminSettingsService.testWebhook();
-  }
-
-  /**
-   * Get system settings
-   * Both ADMIN and SUPER_ADMIN can access
-   */
-  @Get('system')
-  @Roles(ROLES.ADMIN, ROLES.SUPER_ADMIN)
-  async getSystemSettings(): Promise<SystemSettingsDto> {
-    return this.adminSettingsService.getSystemSettings();
-  }
-
-  /**
-   * Update system settings
-   * Both ADMIN and SUPER_ADMIN can access
-   */
-  @Patch('system')
-  @Roles(ROLES.ADMIN, ROLES.SUPER_ADMIN)
-  async updateSystemSettings(
-    @Body() dto: UpdateSystemSettingsDto,
-    @Req() req: RequestWithUser,
-  ): Promise<SystemSettingsDto> {
-    const ipAddress = this.getClientIp(req);
-    return this.adminSettingsService.updateSystemSettings(
-      dto,
-      req.user,
-      ipAddress,
-    );
   }
 
   /**

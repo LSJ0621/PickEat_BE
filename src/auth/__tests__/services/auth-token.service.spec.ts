@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AuthTokenService } from '../../services/auth-token.service';
@@ -383,6 +387,47 @@ describe('AuthTokenService', () => {
       await expect(service.refreshAccessToken('expired-token')).rejects.toThrow(
         UnauthorizedException,
       );
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.release).toHaveBeenCalled();
+    });
+
+    it('should throw HttpException with FORBIDDEN status when user is deactivated', async () => {
+      // Arrange
+      const user = UserFactory.create({
+        email: 'test@example.com',
+        refreshToken: 'hashed-refresh-token',
+      });
+      // Set isDeactivated and deactivatedAt directly on the user object
+      (user as any).isDeactivated = true;
+      (user as any).deactivatedAt = new Date();
+
+      const payload = {
+        email: 'test@example.com',
+        role: 'USER',
+        type: 'refresh',
+      };
+      mockJwtService.verify.mockReturnValue(payload);
+      mockQueryBuilder.getOne.mockResolvedValue(user);
+
+      // Act & Assert
+      try {
+        await service.refreshAccessToken('valid-token');
+        fail('Should have thrown HttpException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(HttpException);
+        const httpError = error as HttpException;
+        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
+        const response = httpError.getResponse() as {
+          statusCode: number;
+          message: string;
+          error: string;
+        };
+        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
+        expect(response.message).toBe(
+          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
+        );
+        expect(response.error).toBe('USER_DEACTIVATED');
+      }
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
     });
