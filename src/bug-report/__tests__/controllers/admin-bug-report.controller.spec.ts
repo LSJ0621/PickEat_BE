@@ -1,16 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminBugReportController } from '../../controllers/admin-bug-report.controller';
 import { BugReportService } from '../../bug-report.service';
+import { UserService } from '../../../user/user.service';
 import { createMockService } from '../../../../test/utils/test-helpers';
 import { BugReportFactory } from '../../../../test/factories/entity.factory';
 import { BugReportListQueryDto } from '../../dto/bug-report-list-query.dto';
 import { UpdateBugReportStatusDto } from '../../dto/update-bug-report-status.dto';
 import { BugReportStatus } from '../../enum/bug-report-status.enum';
 import { User } from '../../../user/entities/user.entity';
+import { AuthUserPayload } from '../../../auth/decorators/current-user.decorator';
 
 describe('AdminBugReportController', () => {
   let controller: AdminBugReportController;
   let bugReportService: jest.Mocked<BugReportService>;
+  let userService: jest.Mocked<UserService>;
+
+  const mockUser: AuthUserPayload = {
+    email: 'admin@test.com',
+    role: 'ADMIN',
+  };
+
+  const mockAdminUser = {
+    id: 1,
+    email: 'admin@test.com',
+    name: 'Admin User',
+    role: 'ADMIN',
+  } as User;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -18,7 +33,13 @@ describe('AdminBugReportController', () => {
       'findAll',
       'findOne',
       'updateStatus',
+      'findOneWithDetails',
+      'updateStatusWithHistory',
     ]);
+
+    userService = createMockService<UserService>(['findByEmail']);
+
+    userService.findByEmail.mockResolvedValue(mockAdminUser);
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AdminBugReportController],
@@ -26,6 +47,10 @@ describe('AdminBugReportController', () => {
         {
           provide: BugReportService,
           useValue: bugReportService,
+        },
+        {
+          provide: UserService,
+          useValue: userService,
         },
       ],
     }).compile();
@@ -156,36 +181,77 @@ describe('AdminBugReportController', () => {
 
   describe('findOne', () => {
     it('should return a single bug report by id', async () => {
-      const bugReport = BugReportFactory.create({ id: 1 });
-      bugReportService.findOne.mockResolvedValue(bugReport);
-
-      const result = await controller.findOne(1);
-
-      expect(bugReportService.findOne).toHaveBeenCalledWith(1);
-      expect(result).toEqual(bugReport);
-    });
-
-    it('should handle numeric id correctly', async () => {
-      const bugReport = BugReportFactory.create({ id: 123 });
-      bugReportService.findOne.mockResolvedValue(bugReport);
-
-      const result = await controller.findOne(123);
-
-      expect(bugReportService.findOne).toHaveBeenCalledWith(123);
-      expect(result).toEqual(bugReport);
-    });
-
-    it('should return bug report with user relation', async () => {
-      const bugReport = BugReportFactory.create({
+      const bugReportDetail = {
         id: 1,
+        category: 'Test Category',
+        title: 'Test Bug',
+        description: 'Test Description',
+        images: null,
+        status: 'UNCONFIRMED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
         user: {
           id: 1,
           email: 'test@example.com',
           name: 'Test User',
-        } as Partial<User> as User,
-      });
+          createdAt: new Date(),
+        },
+        statusHistory: [],
+      };
+      bugReportService.findOneWithDetails.mockResolvedValue(bugReportDetail);
 
-      bugReportService.findOne.mockResolvedValue(bugReport);
+      const result = await controller.findOne(1);
+
+      expect(bugReportService.findOneWithDetails).toHaveBeenCalledWith(1);
+      expect(result).toEqual(bugReportDetail);
+    });
+
+    it('should handle numeric id correctly', async () => {
+      const bugReportDetail = {
+        id: 123,
+        category: 'Test Category',
+        title: 'Test Bug',
+        description: 'Test Description',
+        images: null,
+        status: 'UNCONFIRMED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          name: 'Test User',
+          createdAt: new Date(),
+        },
+        statusHistory: [],
+      };
+      bugReportService.findOneWithDetails.mockResolvedValue(bugReportDetail);
+
+      const result = await controller.findOne(123);
+
+      expect(bugReportService.findOneWithDetails).toHaveBeenCalledWith(123);
+      expect(result).toEqual(bugReportDetail);
+    });
+
+    it('should return bug report with user relation', async () => {
+      const bugReportDetail = {
+        id: 1,
+        category: 'Test Category',
+        title: 'Test Bug',
+        description: 'Test Description',
+        images: null,
+        status: 'UNCONFIRMED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          name: 'Test User',
+          createdAt: new Date(),
+        },
+        statusHistory: [],
+      };
+
+      bugReportService.findOneWithDetails.mockResolvedValue(bugReportDetail);
 
       const result = await controller.findOne(1);
 
@@ -194,15 +260,28 @@ describe('AdminBugReportController', () => {
     });
 
     it('should return bug report with images', async () => {
-      const bugReport = BugReportFactory.create({
+      const bugReportDetail = {
         id: 1,
+        category: 'Test Category',
+        title: 'Test Bug',
+        description: 'Test Description',
         images: [
           'https://s3.amazonaws.com/bug-reports/image1.png',
           'https://s3.amazonaws.com/bug-reports/image2.png',
         ],
-      });
+        status: 'UNCONFIRMED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 1,
+          email: 'test@example.com',
+          name: 'Test User',
+          createdAt: new Date(),
+        },
+        statusHistory: [],
+      };
 
-      bugReportService.findOne.mockResolvedValue(bugReport);
+      bugReportService.findOneWithDetails.mockResolvedValue(bugReportDetail);
 
       const result = await controller.findOne(1);
 
@@ -220,13 +299,15 @@ describe('AdminBugReportController', () => {
         status: BugReportStatus.CONFIRMED,
       });
 
-      bugReportService.updateStatus.mockResolvedValue(bugReport);
+      bugReportService.updateStatusWithHistory.mockResolvedValue(bugReport);
 
-      const result = await controller.updateStatus(1, dto);
+      const result = await controller.updateStatus(1, dto, mockUser);
 
-      expect(bugReportService.updateStatus).toHaveBeenCalledWith(
+      expect(userService.findByEmail).toHaveBeenCalledWith('admin@test.com');
+      expect(bugReportService.updateStatusWithHistory).toHaveBeenCalledWith(
         1,
         BugReportStatus.CONFIRMED,
+        mockAdminUser,
       );
       expect(result.status).toBe(BugReportStatus.CONFIRMED);
     });
@@ -240,13 +321,15 @@ describe('AdminBugReportController', () => {
         status: BugReportStatus.UNCONFIRMED,
       });
 
-      bugReportService.updateStatus.mockResolvedValue(bugReport);
+      bugReportService.updateStatusWithHistory.mockResolvedValue(bugReport);
 
-      const result = await controller.updateStatus(1, dto);
+      const result = await controller.updateStatus(1, dto, mockUser);
 
-      expect(bugReportService.updateStatus).toHaveBeenCalledWith(
+      expect(userService.findByEmail).toHaveBeenCalledWith('admin@test.com');
+      expect(bugReportService.updateStatusWithHistory).toHaveBeenCalledWith(
         1,
         BugReportStatus.UNCONFIRMED,
+        mockAdminUser,
       );
       expect(result.status).toBe(BugReportStatus.UNCONFIRMED);
     });
@@ -257,13 +340,15 @@ describe('AdminBugReportController', () => {
       };
       const bugReport = BugReportFactory.create({ id: 456 });
 
-      bugReportService.updateStatus.mockResolvedValue(bugReport);
+      bugReportService.updateStatusWithHistory.mockResolvedValue(bugReport);
 
-      await controller.updateStatus(456, dto);
+      await controller.updateStatus(456, dto, mockUser);
 
-      expect(bugReportService.updateStatus).toHaveBeenCalledWith(
+      expect(userService.findByEmail).toHaveBeenCalledWith('admin@test.com');
+      expect(bugReportService.updateStatusWithHistory).toHaveBeenCalledWith(
         456,
         BugReportStatus.CONFIRMED,
+        mockAdminUser,
       );
     });
 
@@ -279,10 +364,16 @@ describe('AdminBugReportController', () => {
         description: 'Test Description',
       });
 
-      bugReportService.updateStatus.mockResolvedValue(bugReport);
+      bugReportService.updateStatusWithHistory.mockResolvedValue(bugReport);
 
-      const result = await controller.updateStatus(1, dto);
+      const result = await controller.updateStatus(1, dto, mockUser);
 
+      expect(userService.findByEmail).toHaveBeenCalledWith('admin@test.com');
+      expect(bugReportService.updateStatusWithHistory).toHaveBeenCalledWith(
+        1,
+        BugReportStatus.CONFIRMED,
+        mockAdminUser,
+      );
       expect(result).toEqual(bugReport);
       expect(result.category).toBe('UI/UX');
       expect(result.title).toBe('Test Bug');

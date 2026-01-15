@@ -6,7 +6,6 @@ import {
   Param,
   ParseIntPipe,
   Patch,
-  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,16 +17,15 @@ import {
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guard/jwt.guard';
 import { RolesGuard } from '../../auth/guard/roles.guard';
+import { ADMIN_ROLES } from '@/common/constants/roles.constants';
 import { UserService } from '../../user/user.service';
 import { BugReportService } from '../bug-report.service';
-import { AddNoteDto } from '../dto/add-note.dto';
-import { BatchUpdateStatusDto } from '../dto/batch-update-status.dto';
 import { BugReportListQueryDto } from '../dto/bug-report-list-query.dto';
 import { UpdateBugReportStatusDto } from '../dto/update-bug-report-status.dto';
 
 @Controller('admin/bug-reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
+@Roles(...ADMIN_ROLES)
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 export class AdminBugReportController {
   constructor(
@@ -45,15 +43,7 @@ export class AdminBugReportController {
   }
 
   /**
-   * 통계 조회 (라우팅 우선순위를 위해 :id보다 먼저 정의)
-   */
-  @Get('statistics')
-  async getStatistics() {
-    return this.bugReportService.getStatistics();
-  }
-
-  /**
-   * 버그 제보 상세 조회 (이력, 메모 포함)
+   * 버그 제보 상세 조회 (이력 포함)
    */
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
@@ -78,40 +68,5 @@ export class AdminBugReportController {
       dto.status,
       adminUser,
     );
-  }
-
-  /**
-   * 일괄 상태 변경
-   */
-  @Patch('batch-status')
-  async batchUpdateStatus(
-    @Body() dto: BatchUpdateStatusDto,
-    @CurrentUser() user: AuthUserPayload,
-  ) {
-    const adminUser = await this.userService.findByEmail(user.email);
-    if (!adminUser) {
-      throw new NotFoundException('관리자 사용자를 찾을 수 없습니다.');
-    }
-    return this.bugReportService.batchUpdateStatus(
-      dto.ids,
-      dto.status,
-      adminUser,
-    );
-  }
-
-  /**
-   * 관리자 메모 추가
-   */
-  @Post(':id/notes')
-  async addNote(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: AddNoteDto,
-    @CurrentUser() user: AuthUserPayload,
-  ) {
-    const adminUser = await this.userService.findByEmail(user.email);
-    if (!adminUser) {
-      throw new NotFoundException('관리자 사용자를 찾을 수 없습니다.');
-    }
-    return this.bugReportService.addAdminNote(id, dto.content, adminUser);
   }
 }

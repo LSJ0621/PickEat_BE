@@ -11,6 +11,7 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
 import { RolesGuard } from '@/auth/guard/roles.guard';
 import { Roles } from '@/auth/decorators/roles.decorator';
+import { ADMIN_ROLES } from '@/common/constants/roles.constants';
 import { AdminUserService } from './admin-user.service';
 import { AdminUserListQueryDto, AdminUserDetailDto } from './dto';
 import { PaginatedResponse } from '@/common/interfaces/pagination.interface';
@@ -18,7 +19,7 @@ import { AdminUserListItemDto } from './dto/admin-user-list-item.dto';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN')
+@Roles(...ADMIN_ROLES)
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 export class AdminUserController {
   constructor(private readonly adminUserService: AdminUserService) {}

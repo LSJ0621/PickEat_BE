@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from '../user/user.module';
-import { AdminNotificationController } from './controllers/admin-notification.controller';
 import { Notification } from './entities/notification.entity';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
@@ -9,7 +8,7 @@ import { NotificationSchedulerService } from './services/notification-scheduler.
 
 @Module({
   imports: [TypeOrmModule.forFeature([Notification]), UserModule],
-  controllers: [NotificationController, AdminNotificationController],
+  controllers: [NotificationController],
   providers: [NotificationService, NotificationSchedulerService],
   exports: [NotificationService],
 })
