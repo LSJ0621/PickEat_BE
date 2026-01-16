@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { User } from '../../user/entities/user.entity';
 import { UpdateMenuSelectionDto } from '../dto/update-menu-selection.dto';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
@@ -95,7 +96,10 @@ export class MenuSelectionService {
     });
 
     if (!selection) {
-      throw new BadRequestException('선택 이력을 찾을 수 없습니다.');
+      throw new BadRequestException({
+        message: '선택 이력을 찾을 수 없습니다.',
+        errorCode: ErrorCode.MENU_SELECTION_NOT_FOUND,
+      });
     }
 
     return this.performUpdate(selection, dto);
@@ -125,7 +129,10 @@ export class MenuSelectionService {
   // ========== Private Methods ==========
   private validateMenus(menus: Array<{ slot: string; name: string }>) {
     if (!menus || menus.length === 0) {
-      throw new BadRequestException('메뉴가 비어있습니다.');
+      throw new BadRequestException({
+        message: '메뉴가 비어있습니다.',
+        errorCode: ErrorCode.MENU_EMPTY,
+      });
     }
   }
 
@@ -139,7 +146,10 @@ export class MenuSelectionService {
       menuPayload.etc.length;
 
     if (totalMenus === 0) {
-      throw new BadRequestException('유효한 메뉴가 없습니다.');
+      throw new BadRequestException({
+        message: '유효한 메뉴가 없습니다.',
+        errorCode: ErrorCode.MENU_EMPTY,
+      });
     }
   }
 
@@ -225,7 +235,10 @@ export class MenuSelectionService {
     });
 
     if (!updated) {
-      throw new BadRequestException('업데이트된 선택 이력을 찾을 수 없습니다.');
+      throw new BadRequestException({
+        message: '업데이트된 선택 이력을 찾을 수 없습니다.',
+        errorCode: ErrorCode.MENU_SELECTION_NOT_FOUND,
+      });
     }
 
     return updated;
@@ -250,7 +263,10 @@ export class MenuSelectionService {
       dto.etc !== undefined;
 
     if (!hasAnySlotUpdate) {
-      throw new BadRequestException('변경할 메뉴가 없습니다.');
+      throw new BadRequestException({
+        message: '변경할 메뉴가 없습니다.',
+        errorCode: ErrorCode.MENU_EMPTY,
+      });
     }
 
     if (dto.breakfast !== undefined) {

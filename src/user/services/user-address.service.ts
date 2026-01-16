@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { USER_LIMITS } from '../../common/constants/business.constants';
 import { CreateUserAddressDto } from '../dto/create-user-address.dto';
 import { UpdateUserAddressDto } from '../dto/update-user-address.dto';
@@ -40,9 +41,10 @@ export class UserAddressService {
     });
 
     if (activeCount >= USER_LIMITS.MAX_ADDRESSES) {
-      throw new BadRequestException(
-        `주소는 최대 ${USER_LIMITS.MAX_ADDRESSES}개까지만 저장할 수 있습니다.`,
-      );
+      throw new BadRequestException({
+        message: `주소는 최대 ${USER_LIMITS.MAX_ADDRESSES}개까지만 저장할 수 있습니다.`,
+        errorCode: ErrorCode.USER_MAX_ADDRESSES_EXCEEDED,
+      });
     }
 
     const { selectedAddress, alias, isDefault, isSearchAddress } = dto;
@@ -88,7 +90,10 @@ export class UserAddressService {
     });
 
     if (!address) {
-      throw new NotFoundException('주소를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        message: '주소를 찾을 수 없습니다.',
+        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+      });
     }
 
     const whereCondition = { user: { id: entity.id }, deletedAt: IsNull() };
@@ -124,7 +129,10 @@ export class UserAddressService {
     });
 
     if (!address) {
-      throw new NotFoundException('주소를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        message: '주소를 찾을 수 없습니다.',
+        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+      });
     }
 
     const whereCondition = {
@@ -158,7 +166,10 @@ export class UserAddressService {
 
   async deleteAddresses(entity: User, addressIds: number[]): Promise<void> {
     if (!addressIds || addressIds.length === 0) {
-      throw new BadRequestException('삭제할 주소 ID가 없습니다.');
+      throw new BadRequestException({
+        message: '삭제할 주소 ID가 없습니다.',
+        errorCode: ErrorCode.VALIDATION_ERROR,
+      });
     }
 
     const addresses = await this.userAddressRepository.find({
@@ -172,16 +183,19 @@ export class UserAddressService {
     const foundIds = addresses.map((addr) => addr.id);
     const notFoundIds = addressIds.filter((id) => !foundIds.includes(id));
     if (notFoundIds.length > 0) {
-      throw new NotFoundException(
-        `주소를 찾을 수 없습니다. ID: ${notFoundIds.join(', ')}`,
-      );
+      throw new NotFoundException({
+        message: `주소를 찾을 수 없습니다. ID: ${notFoundIds.join(', ')}`,
+        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+      });
     }
 
     const defaultAddresses = addresses.filter((addr) => addr.isDefault);
     if (defaultAddresses.length > 0) {
-      throw new BadRequestException(
-        '기본 주소는 삭제할 수 없습니다. 기본 주소를 변경한 후 삭제해주세요.',
-      );
+      throw new BadRequestException({
+        message:
+          '기본 주소는 삭제할 수 없습니다. 기본 주소를 변경한 후 삭제해주세요.',
+        errorCode: ErrorCode.VALIDATION_ERROR,
+      });
     }
 
     const deletedSearchAddresses = addresses.filter(
@@ -216,7 +230,10 @@ export class UserAddressService {
     });
 
     if (!address) {
-      throw new NotFoundException('주소를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        message: '주소를 찾을 수 없습니다.',
+        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+      });
     }
 
     await this.userAddressRepository.update(
@@ -237,7 +254,10 @@ export class UserAddressService {
     });
 
     if (!address) {
-      throw new NotFoundException('주소를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        message: '주소를 찾을 수 없습니다.',
+        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+      });
     }
 
     await this.userAddressRepository.update(
@@ -280,7 +300,10 @@ export class UserAddressService {
         : null;
 
     if (!latitude || !longitude) {
-      throw new BadRequestException('위도와 경도 정보가 필요합니다.');
+      throw new BadRequestException({
+        message: '위도와 경도 정보가 필요합니다.',
+        errorCode: ErrorCode.VALIDATION_ERROR,
+      });
     }
 
     const existingAddresses = await this.userAddressRepository.count({
@@ -324,6 +347,9 @@ export class UserAddressService {
       return this.userAddressRepository.save(firstAddress);
     }
 
-    throw new BadRequestException('주소 업데이트에 실패했습니다.');
+    throw new BadRequestException({
+      message: '주소 업데이트에 실패했습니다.',
+      errorCode: ErrorCode.VALIDATION_ERROR,
+    });
   }
 }

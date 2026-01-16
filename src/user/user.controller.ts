@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { DeleteUserAddressesDto } from './dto/delete-user-addresses.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
+import { UpdateLanguageDto } from './dto/update-language.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { UpdateSingleAddressDto } from './dto/update-single-address.dto';
 import { UpdateUserNameDto } from './dto/update-user-name.dto';
@@ -94,6 +95,18 @@ export class UserController {
   async deleteCurrentUser(@CurrentUser() authUser: AuthUserPayload) {
     await this.userService.deleteUser(authUser.email);
     return { message: '회원 탈퇴가 완료되었습니다.' };
+  }
+
+  @Patch('language')
+  async updateLanguage(
+    @Body() dto: UpdateLanguageDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+    await this.userService.updateEntityLanguage(entity, dto.language);
+    return { message: '언어 설정이 변경되었습니다.' };
   }
 
   // ========== 주소 리스트 관련 엔드포인트 ==========

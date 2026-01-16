@@ -11,6 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { AUTH_TIMING } from '../common/constants/business.constants';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { UserAddress } from '../user/entities/user-address.entity';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
@@ -91,7 +92,10 @@ export class AuthService {
     );
 
     if (!isEmailVerified) {
-      throw new BadRequestException('이메일 인증이 완료되지 않았습니다.');
+      throw new BadRequestException({
+        message: '이메일 인증이 완료되지 않았습니다.',
+        errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+      });
     }
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
@@ -101,6 +105,7 @@ export class AuthService {
       password: hashedPassword,
       role: 'USER',
       name: registerDto.name,
+      preferredLanguage: registerDto.lang || 'ko',
     });
 
     await this.userService.markEmailVerified(registerDto.email);
@@ -158,14 +163,16 @@ export class AuthService {
             statusCode: HttpStatus.FORBIDDEN,
             message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
             error: 'USER_DEACTIVATED',
+            errorCode: ErrorCode.USER_DEACTIVATED,
           },
           HttpStatus.FORBIDDEN,
         );
       }
 
-      throw new UnauthorizedException(
-        '이메일 또는 비밀번호가 올바르지 않습니다.',
-      );
+      throw new UnauthorizedException({
+        message: '이메일 또는 비밀번호가 올바르지 않습니다.',
+        errorCode: ErrorCode.AUTH_INVALID_CREDENTIALS,
+      });
     }
 
     return this.buildAuthResult(user);
@@ -202,7 +209,10 @@ export class AuthService {
       EmailPurpose.RESET_PASSWORD,
     );
     if (!isEmailVerified) {
-      throw new BadRequestException('이메일 인증이 완료되지 않았습니다.');
+      throw new BadRequestException({
+        message: '이메일 인증이 완료되지 않았습니다.',
+        errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+      });
     }
 
     const user = await this.ensureRegularUserAccount(resetPasswordDto.email);
@@ -225,7 +235,10 @@ export class AuthService {
     });
 
     if (!deletedUser || !deletedUser.deletedAt) {
-      throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
+      throw new BadRequestException({
+        message: '재가입할 수 있는 계정이 없습니다.',
+        errorCode: ErrorCode.AUTH_RE_REGISTER_NOT_AVAILABLE,
+      });
     }
 
     const isEmailVerified = await this.emailVerificationService.isEmailVerified(
@@ -234,7 +247,10 @@ export class AuthService {
     );
 
     if (!isEmailVerified) {
-      throw new BadRequestException('이메일 인증이 완료되지 않았습니다.');
+      throw new BadRequestException({
+        message: '이메일 인증이 완료되지 않았습니다.',
+        errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+      });
     }
 
     const hashedPassword = await bcrypt.hash(reRegisterDto.password, 10);
@@ -261,7 +277,10 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new BadRequestException('재가입 처리 중 오류가 발생했습니다.');
+      throw new BadRequestException({
+        message: '재가입 처리 중 오류가 발생했습니다.',
+        errorCode: ErrorCode.AUTH_RE_REGISTER_ERROR,
+      });
     }
 
     return { message: '재가입이 완료되었습니다. 로그인해주세요.' };
@@ -320,16 +339,20 @@ export class AuthService {
 
     if (existingUser && !existingUser.deletedAt) {
       if (throwOnConflict) {
-        throw new BadRequestException('이미 등록된 이메일입니다.');
+        throw new BadRequestException({
+          message: '이미 등록된 이메일입니다.',
+          errorCode: ErrorCode.AUTH_EMAIL_ALREADY_EXISTS,
+        });
       }
       return { available: false, message: '이미 사용 중인 이메일입니다.' };
     }
 
     if (existingUser && existingUser.deletedAt) {
       if (throwOnConflict) {
-        throw new BadRequestException(
-          '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
-        );
+        throw new BadRequestException({
+          message: '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
+          errorCode: ErrorCode.AUTH_RE_REGISTER_NOT_AVAILABLE,
+        });
       }
       return {
         available: false,
@@ -377,7 +400,10 @@ export class AuthService {
 
     if (now - lastChanged < AUTH_TIMING.ONE_DAY_MS) {
       throw new HttpException(
-        '비밀번호는 하루에 한 번만 변경할 수 있습니다.',
+        {
+          message: '비밀번호는 하루에 한 번만 변경할 수 있습니다.',
+          errorCode: ErrorCode.VALIDATION_ERROR,
+        },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -386,11 +412,17 @@ export class AuthService {
   private async ensureRegularUserAccount(email: string): Promise<User> {
     const user = await this.userService.findByEmail(email);
     if (!user) {
-      throw new BadRequestException('등록되지 않은 이메일입니다.');
+      throw new BadRequestException({
+        message: '등록되지 않은 이메일입니다.',
+        errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+      });
     }
 
     if (!user.password) {
-      throw new BadRequestException('소셜 로그인으로 가입한 계정입니다.');
+      throw new BadRequestException({
+        message: '소셜 로그인으로 가입한 계정입니다.',
+        errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
+      });
     }
 
     return user;
