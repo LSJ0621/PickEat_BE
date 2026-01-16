@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
@@ -41,12 +42,14 @@ export class UserService {
     password: string;
     role?: string;
     name?: string | null;
+    preferredLanguage?: string;
   }): Promise<User> {
     const user = this.userRepository.create({
       email: userData.email,
       password: userData.password,
       role: userData.role,
       name: userData.name ?? undefined,
+      preferredLanguage: userData.preferredLanguage ?? 'ko',
     });
     return this.userRepository.save(user);
   }
@@ -79,7 +82,10 @@ export class UserService {
   async getOrFailByEmail(email: string): Promise<User> {
     const user = await this.findByEmail(email);
     if (!user) {
-      throw new NotFoundException(`User with email ${email} not found`);
+      throw new NotFoundException({
+        message: `User with email ${email} not found`,
+        errorCode: ErrorCode.USER_NOT_FOUND,
+      });
     }
     return user;
   }
@@ -115,7 +121,10 @@ export class UserService {
   async findOne(id: number) {
     const user = await this.userRepository.findOneBy({ id });
     if (!user) {
-      throw new NotFoundException(`User ${id} not found`);
+      throw new NotFoundException({
+        message: `User ${id} not found`,
+        errorCode: ErrorCode.USER_NOT_FOUND,
+      });
     }
     return user;
   }
@@ -128,11 +137,17 @@ export class UserService {
       });
 
       if (!user) {
-        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+        throw new NotFoundException({
+          message: '사용자를 찾을 수 없습니다.',
+          errorCode: ErrorCode.USER_NOT_FOUND,
+        });
       }
 
       if (user.deletedAt) {
-        throw new BadRequestException('이미 탈퇴한 계정입니다.');
+        throw new BadRequestException({
+          message: '이미 탈퇴한 계정입니다.',
+          errorCode: ErrorCode.USER_NOT_FOUND,
+        });
       }
 
       user.refreshToken = null;
@@ -168,6 +183,13 @@ export class UserService {
       entity,
       analysis,
     );
+  }
+
+  // ========== Language 관련 ==========
+
+  async updateEntityLanguage(entity: User, language: string): Promise<void> {
+    entity.preferredLanguage = language;
+    await this.userRepository.save(entity);
   }
 
   // ========== Address Search (위임) ==========
