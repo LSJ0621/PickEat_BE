@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 
 export class ExternalApiException extends HttpException {
   public readonly originalError?: Error;
@@ -7,6 +8,7 @@ export class ExternalApiException extends HttpException {
     public readonly provider: string,
     error?: unknown,
     message?: string,
+    public readonly errorCode?: ErrorCode,
   ) {
     // Convert unknown error to Error if possible
     const errorObj = error instanceof Error ? error : undefined;
@@ -17,6 +19,7 @@ export class ExternalApiException extends HttpException {
         error: 'External API Error',
         message: message || `${provider} API 호출 중 오류가 발생했습니다.`,
         provider,
+        errorCode,
       },
       HttpStatus.BAD_GATEWAY,
     );

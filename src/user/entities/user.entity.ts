@@ -39,6 +39,9 @@ export class User {
   @Column({ type: 'jsonb', nullable: true })
   preferences: UserPreferences | null;
 
+  @Column({ type: 'varchar', default: 'ko' })
+  preferredLanguage: string;
+
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;
 

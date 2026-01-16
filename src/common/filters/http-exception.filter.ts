@@ -11,6 +11,7 @@ import { ExternalApiException } from '../exceptions/external-api.exception';
 
 interface ErrorResponse {
   statusCode: number;
+  errorCode?: string;
   error: string;
   message: string;
   timestamp: string;
@@ -54,6 +55,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         status: exception.getStatus(),
         errorResponse: {
           statusCode: exception.getStatus(),
+          errorCode:
+            exception.errorCode || (exceptionResponse.errorCode as string),
           error: 'External API Error',
           message: exceptionResponse.message as string,
           timestamp,
@@ -80,10 +83,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
           ? message
           : JSON.stringify(message);
 
+      const errorCode =
+        typeof exceptionResponse === 'object' && exceptionResponse !== null
+          ? ((exceptionResponse as Record<string, unknown>).errorCode as
+              | string
+              | undefined)
+          : undefined;
+
       return {
         status,
         errorResponse: {
           statusCode: status,
+          errorCode,
           error: this.getErrorName(status),
           message: messageString,
           timestamp,
