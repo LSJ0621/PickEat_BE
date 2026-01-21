@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { ExternalApiException } from '../exceptions/external-api.exception';
 
 interface ErrorResponse {
@@ -51,14 +52,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         string,
         unknown
       >;
+      const errorCode =
+        exception.errorCode || (exceptionResponse.errorCode as string);
+
       return {
         status: exception.getStatus(),
         errorResponse: {
           statusCode: exception.getStatus(),
-          errorCode:
-            exception.errorCode || (exceptionResponse.errorCode as string),
+          errorCode,
           error: 'External API Error',
-          message: exceptionResponse.message as string,
+          message: errorCode || 'External API Error',
           timestamp,
           path,
           provider: exception.provider,
@@ -71,6 +74,30 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
+      // Extract errorCode if exists
+      const errorCode =
+        typeof exceptionResponse === 'object' && exceptionResponse !== null
+          ? ((exceptionResponse as Record<string, unknown>).errorCode as
+              | string
+              | undefined)
+          : undefined;
+
+      // If errorCode exists, return errorCode as message
+      if (errorCode) {
+        return {
+          status,
+          errorResponse: {
+            statusCode: status,
+            errorCode,
+            error: this.getErrorName(status),
+            message: errorCode,
+            timestamp,
+            path,
+          },
+        };
+      }
+
+      // Fallback for exceptions without errorCode
       const message =
         typeof exceptionResponse === 'string'
           ? exceptionResponse
@@ -82,13 +109,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : typeof message === 'string'
           ? message
           : JSON.stringify(message);
-
-      const errorCode =
-        typeof exceptionResponse === 'object' && exceptionResponse !== null
-          ? ((exceptionResponse as Record<string, unknown>).errorCode as
-              | string
-              | undefined)
-          : undefined;
 
       return {
         status,
@@ -105,12 +125,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // 예상치 못한 에러 (500)
     const status = HttpStatus.INTERNAL_SERVER_ERROR;
+
     return {
       status,
       errorResponse: {
         statusCode: status,
+        errorCode: ErrorCode.INTERNAL_SERVER_ERROR,
         error: 'Internal Server Error',
-        message: '서버 내부 오류가 발생했습니다.',
+        message: ErrorCode.INTERNAL_SERVER_ERROR,
         timestamp,
         path,
       },

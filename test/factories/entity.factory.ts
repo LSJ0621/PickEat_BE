@@ -24,6 +24,7 @@ export class UserFactory {
     user.socialType = overrides?.socialType ?? null;
     user.name = overrides?.name ?? 'Test User';
     user.role = overrides?.role ?? 'USER';
+    user.preferredLanguage = overrides?.preferredLanguage ?? 'ko';
     user.preferences = overrides?.preferences ?? null;
     user.refreshToken = overrides?.refreshToken ?? null;
     user.emailVerified = overrides?.emailVerified ?? false;

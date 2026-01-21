@@ -9,6 +9,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { EmailVerificationService } from '../../services/email-verification.service';
 import { EmailVerification } from '../../entities/email-verification.entity';
+import { User } from '../../../user/entities/user.entity';
 import { EmailPurpose } from '../../dto/send-email-code.dto';
 import { createMockRepository } from '../../../../test/mocks/repository.mock';
 import { EmailVerificationFactory } from '../../../../test/factories/entity.factory';
@@ -25,10 +26,12 @@ describe('EmailVerificationService', () => {
   let mockRepository: ReturnType<
     typeof createMockRepository<EmailVerification>
   >;
+  let mockUserRepository: ReturnType<typeof createMockRepository<any>>;
   let mockMailerService: jest.Mocked<Pick<MailerService, 'sendMail'>>;
 
   beforeEach(async () => {
     mockRepository = createMockRepository<EmailVerification>();
+    mockUserRepository = createMockRepository<any>();
     mockMailerService = {
       sendMail: jest.fn(),
     } as jest.Mocked<Pick<MailerService, 'sendMail'>>;
@@ -39,6 +42,10 @@ describe('EmailVerificationService', () => {
         {
           provide: getRepositoryToken(EmailVerification),
           useValue: mockRepository,
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: mockUserRepository,
         },
         {
           provide: MailerService,
@@ -117,8 +124,8 @@ describe('EmailVerificationService', () => {
       expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: email,
-          subject: '[PickEat] 이메일 인증 코드',
-          template: 'email-verification',
+          subject: '[회원가입] 이메일 인증번호',
+          template: 'email-verification.ko',
         }),
       );
       expect(mockRepository.save).toHaveBeenCalled();
@@ -143,8 +150,8 @@ describe('EmailVerificationService', () => {
       expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: email,
-          subject: '[PickEat] 비밀번호 재설정 인증 코드',
-          template: 'email-verification',
+          subject: '[비밀번호 재설정] 이메일 인증번호',
+          template: 'email-verification.ko',
         }),
       );
     });
@@ -168,8 +175,8 @@ describe('EmailVerificationService', () => {
       expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: email,
-          subject: '[PickEat] 재가입 인증 코드',
-          template: 'email-verification',
+          subject: '[재가입] 이메일 인증번호',
+          template: 'email-verification.ko',
         }),
       );
     });
@@ -306,6 +313,10 @@ describe('EmailVerificationService', () => {
             {
               provide: getRepositoryToken(EmailVerification),
               useValue: mockRepository,
+            },
+            {
+              provide: getRepositoryToken(User),
+              useValue: mockUserRepository,
             },
             {
               provide: MailerService,
@@ -780,6 +791,592 @@ describe('EmailVerificationService', () => {
 
       // Assert
       expect(mockRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Template Selection', () => {
+    beforeEach(() => {
+      mockMailerService.sendMail.mockResolvedValue({ messageId: 'test-id' });
+      mockRepository.findOne.mockResolvedValue(null);
+      mockRepository.create.mockReturnValue({} as EmailVerification);
+      mockRepository.save.mockResolvedValue({} as EmailVerification);
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-code' as never);
+    });
+
+    it('should use .ko template for Korean users', async () => {
+      // Act
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'ko');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+
+    it('should use .en template for English users', async () => {
+      // Act
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'en');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.en',
+        }),
+      );
+    });
+
+    it('should fallback to Korean for unsupported languages', async () => {
+      // Act
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'fr');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+
+    it('should auto-apply User.preferredLanguage when lang not specified', async () => {
+      // Arrange - Mock user with English preference
+      mockUserRepository.findOne.mockResolvedValue({
+        preferredLanguage: 'en',
+      });
+
+      // Act
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP); // No lang parameter
+
+      // Assert
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email: 'test@example.com' },
+        select: ['preferredLanguage'],
+      });
+
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.en',
+        }),
+      );
+    });
+
+    it('should fallback to Korean when user not found', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      // Act
+      await service.sendCode('nonexistent@example.com', EmailPurpose.SIGNUP);
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+
+    it('should fallback to Korean when user.preferredLanguage is null', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue({
+        preferredLanguage: null,
+      });
+
+      // Act
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP);
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+
+    it('should prioritize explicit lang parameter over User.preferredLanguage', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue({
+        preferredLanguage: 'en',
+      });
+
+      // Act
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'ko');
+
+      // Assert - Should NOT call findOne since lang is explicitly provided
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+  });
+
+  describe('Welcome Email', () => {
+    const mockKoreanUser = {
+      id: 123,
+      email: 'korean@example.com',
+      name: '테스트 사용자',
+      preferredLanguage: 'ko',
+    };
+
+    const mockEnglishUser = {
+      id: 456,
+      email: 'english@example.com',
+      name: 'Test User',
+      preferredLanguage: 'en',
+    };
+
+    beforeEach(() => {
+      mockMailerService.sendMail.mockResolvedValue({ messageId: 'test-id' });
+      jest.clearAllMocks();
+    });
+
+    it('should send Korean welcome email successfully', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
+
+      // Act
+      await service.sendWelcomeEmail('123');
+
+      // Assert
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 123 },
+        select: ['email', 'name', 'preferredLanguage'],
+      });
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockKoreanUser.email,
+          template: 'welcome.ko',
+          context: expect.objectContaining({
+            lang: 'ko',
+            pageTitle: 'PickEat에 오신 것을 환영합니다',
+            emailTitle: '환영합니다!',
+            userName: mockKoreanUser.name,
+            ctaText: '시작하기',
+          }),
+        }),
+      );
+    });
+
+    it('should send English welcome email successfully', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(mockEnglishUser);
+
+      // Act
+      await service.sendWelcomeEmail('456');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockEnglishUser.email,
+          template: 'welcome.en',
+          context: expect.objectContaining({
+            lang: 'en',
+            pageTitle: 'Welcome to PickEat',
+            emailTitle: 'Welcome!',
+            userName: mockEnglishUser.name,
+            ctaText: 'Get Started',
+          }),
+        }),
+      );
+    });
+
+    it('should use language parameter over user preference', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
+
+      // Act
+      await service.sendWelcomeEmail('123', 'en');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'welcome.en',
+          context: expect.objectContaining({
+            lang: 'en',
+            pageTitle: 'Welcome to PickEat',
+          }),
+        }),
+      );
+    });
+
+    it('should fallback to Korean for unsupported language', async () => {
+      // Arrange
+      const frenchUser = { ...mockKoreanUser, preferredLanguage: 'fr' };
+      mockUserRepository.findOne.mockResolvedValue(frenchUser);
+
+      // Act
+      await service.sendWelcomeEmail('123');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'welcome.ko',
+          context: expect.objectContaining({
+            lang: 'fr',
+          }),
+        }),
+      );
+    });
+
+    it('should throw error if user not found', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      // Act & Assert
+      await service.sendWelcomeEmail('999');
+
+      // Verify logger was called but no exception was thrown (logs warning and returns)
+      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('should skip sending in test mode', async () => {
+      // Arrange
+      const { isTestMode } = require('../../../common/utils/test-mode.util');
+      (isTestMode as jest.Mock).mockReturnValue(true);
+      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
+
+      // Act
+      await service.sendWelcomeEmail('123', 'ko');
+
+      // Assert
+      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
+
+      // Cleanup
+      (isTestMode as jest.Mock).mockReturnValue(false);
+    });
+
+    it('should include correct context variables', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
+
+      // Act
+      await service.sendWelcomeEmail('123', 'ko');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            lang: 'ko',
+            pageTitle: expect.any(String),
+            emailTitle: expect.any(String),
+            userName: mockKoreanUser.name,
+            description: expect.any(String),
+            featuresTitle: expect.any(String),
+            loginLink: expect.any(String),
+            ctaText: expect.any(String),
+            footer: expect.any(String),
+          }),
+        }),
+      );
+    });
+
+    it('should use email prefix as userName when name is missing', async () => {
+      // Arrange
+      const userWithoutName = {
+        ...mockKoreanUser,
+        name: null,
+      };
+      mockUserRepository.findOne.mockResolvedValue(userWithoutName);
+
+      // Act
+      await service.sendWelcomeEmail('123');
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            userName: 'korean',
+          }),
+        }),
+      );
+    });
+
+    it('should return correct template names for getWelcomeTemplateName', () => {
+      // Access private method via service instance
+      const getTemplateName = (service as any).getWelcomeTemplateName.bind(
+        service,
+      );
+
+      // Assert
+      expect(getTemplateName('ko')).toBe('welcome.ko');
+      expect(getTemplateName('en')).toBe('welcome.en');
+      expect(getTemplateName('fr')).toBe('welcome.ko'); // Fallback
+    });
+
+    it('should return Korean content for getWelcomeEmailContent', () => {
+      // Access private method
+      const getContent = (service as any).getWelcomeEmailContent.bind(service);
+
+      // Act
+      const content = getContent('ko');
+
+      // Assert
+      expect(content.pageTitle).toContain('환영합니다');
+      expect(content.ctaText).toBe('시작하기');
+      expect(content.footer).toBe('PickEat 팀 드림');
+    });
+
+    it('should return English content for getWelcomeEmailContent', () => {
+      // Access private method
+      const getContent = (service as any).getWelcomeEmailContent.bind(service);
+
+      // Act
+      const content = getContent('en');
+
+      // Assert
+      expect(content.pageTitle).toContain('Welcome');
+      expect(content.ctaText).toBe('Get Started');
+      expect(content.footer).toBe('The PickEat Team');
+    });
+  });
+
+  describe('Account Deactivation Email', () => {
+    const mockKoreanUser = {
+      email: 'korean@example.com',
+      preferredLanguage: 'ko',
+    };
+
+    const mockEnglishUser = {
+      email: 'english@example.com',
+      preferredLanguage: 'en',
+    };
+
+    beforeEach(() => {
+      mockMailerService.sendMail.mockResolvedValue({ messageId: 'test-id' });
+      jest.clearAllMocks();
+    });
+
+    it('should send Korean deactivation email', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
+      const reason = 'Violated terms of service';
+      const deactivatedAt = new Date('2026-01-20T14:30:00Z');
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockKoreanUser.email,
+        reason,
+        deactivatedAt,
+      );
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: mockKoreanUser.email,
+          template: 'account-deactivation.ko',
+          context: expect.objectContaining({
+            lang: 'ko',
+            pageTitle: '계정 비활성화 안내',
+            emailTitle: '계정 비활성화',
+            reason,
+            supportEmail: 'support@pickeat.com',
+            dataRetentionDays: '30',
+          }),
+        }),
+      );
+    });
+
+    it('should send English deactivation email', async () => {
+      // Arrange
+      const reason = 'Account policy violation';
+      const deactivatedAt = new Date('2026-01-20T14:30:00Z');
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockEnglishUser.email,
+        reason,
+        deactivatedAt,
+        'en',
+      );
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'account-deactivation.en',
+          context: expect.objectContaining({
+            lang: 'en',
+            pageTitle: 'Account Deactivation Notice',
+            emailTitle: 'Account Deactivation',
+          }),
+        }),
+      );
+    });
+
+    it('should format deactivatedAt timestamp correctly', async () => {
+      // Arrange
+      const deactivatedAt = new Date('2026-01-20T14:30:00Z');
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockKoreanUser.email,
+        'Test reason',
+        deactivatedAt,
+        'ko',
+      );
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            deactivatedAt: expect.stringContaining('2026'),
+          }),
+        }),
+      );
+    });
+
+    it('should include reason in context', async () => {
+      // Arrange
+      const reason = 'Policy violation: spam';
+      const deactivatedAt = new Date();
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockKoreanUser.email,
+        reason,
+        deactivatedAt,
+        'ko',
+      );
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            reason,
+          }),
+        }),
+      );
+    });
+
+    it('should include support contact info', async () => {
+      // Arrange
+      const deactivatedAt = new Date();
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockKoreanUser.email,
+        'Test',
+        deactivatedAt,
+        'ko',
+      );
+
+      // Assert
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            supportEmail: 'support@pickeat.com',
+            dataRetentionDays: '30',
+          }),
+        }),
+      );
+    });
+
+    it('should work without fetching user if language provided', async () => {
+      // Arrange
+      const deactivatedAt = new Date();
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        'test@example.com',
+        'Test reason',
+        deactivatedAt,
+        'en',
+      );
+
+      // Assert
+      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'account-deactivation.en',
+        }),
+      );
+    });
+
+    it('should fetch user language if not provided', async () => {
+      // Arrange
+      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
+      const deactivatedAt = new Date();
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockKoreanUser.email,
+        'Test',
+        deactivatedAt,
+      );
+
+      // Assert
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { email: mockKoreanUser.email },
+        select: ['preferredLanguage'],
+      });
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          template: 'account-deactivation.ko',
+        }),
+      );
+    });
+
+    it('should skip sending in test mode', async () => {
+      // Arrange
+      const { isTestMode } = require('../../../common/utils/test-mode.util');
+      (isTestMode as jest.Mock).mockReturnValue(true);
+      const deactivatedAt = new Date();
+
+      // Act
+      await service.sendAccountDeactivationEmail(
+        mockKoreanUser.email,
+        'Test',
+        deactivatedAt,
+        'ko',
+      );
+
+      // Assert
+      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
+
+      // Cleanup
+      (isTestMode as jest.Mock).mockReturnValue(false);
+    });
+
+    it('should return correct template names for getAccountDeactivationTemplateName', () => {
+      // Access private method
+      const getTemplateName = (
+        service as any
+      ).getAccountDeactivationTemplateName.bind(service);
+
+      // Assert
+      expect(getTemplateName('ko')).toBe('account-deactivation.ko');
+      expect(getTemplateName('en')).toBe('account-deactivation.en');
+      expect(getTemplateName('fr')).toBe('account-deactivation.ko'); // Fallback
+    });
+
+    it('should return localized content for Korean', () => {
+      // Access private method
+      const getContent = (service as any).getDeactivationEmailContent.bind(
+        service,
+      );
+
+      // Act
+      const content = getContent('ko');
+
+      // Assert
+      expect(content.pageTitle).toContain('비활성화');
+      expect(content.supportEmail).toBe('support@pickeat.com');
+    });
+
+    it('should return localized content for English', () => {
+      // Access private method
+      const getContent = (service as any).getDeactivationEmailContent.bind(
+        service,
+      );
+
+      // Act
+      const content = getContent('en');
+
+      // Assert
+      expect(content.pageTitle).toContain('Deactivation');
+      expect(content.supportEmail).toBe('support@pickeat.com');
     });
   });
 });

@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { AuthUserPayload } from '../auth/decorators/current-user.decorator';
 import {
   PageInfo,
@@ -123,7 +124,10 @@ export class BugReportService {
     });
 
     if (!bugReport) {
-      throw new NotFoundException(`버그 제보를 찾을 수 없습니다. (ID: ${id})`);
+      throw new NotFoundException({
+        message: `버그 제보를 찾을 수 없습니다. (ID: ${id})`,
+        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+      });
     }
 
     return bugReport;
@@ -139,7 +143,10 @@ export class BugReportService {
     });
 
     if (!bugReport) {
-      throw new NotFoundException(`버그 제보를 찾을 수 없습니다. (ID: ${id})`);
+      throw new NotFoundException({
+        message: `버그 제보를 찾을 수 없습니다. (ID: ${id})`,
+        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+      });
     }
 
     // 상태 업데이트 (updatedAt은 자동으로 갱신됨)
@@ -201,7 +208,10 @@ export class BugReportService {
     });
 
     if (!bugReport) {
-      throw new NotFoundException(`버그 제보를 찾을 수 없습니다. (ID: ${id})`);
+      throw new NotFoundException({
+        message: `버그 제보를 찾을 수 없습니다. (ID: ${id})`,
+        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+      });
     }
 
     const previousStatus = bugReport.status;
@@ -227,7 +237,9 @@ export class BugReportService {
     });
 
     if (!bugReport) {
-      throw new NotFoundException('버그 리포트를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+      });
     }
 
     const statusHistory = await this.statusHistoryRepo.find({

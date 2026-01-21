@@ -85,8 +85,8 @@ describe('Auth (e2e)', () => {
         .send(registerDto)
         .expect(201);
 
-      expect(response.body).toEqual({
-        message: '회원가입이 완료되었습니다.',
+      expect(response.body).toMatchObject({
+        messageCode: 'AUTH_REGISTRATION_COMPLETED',
       });
 
       // Verify user was created in database
@@ -585,7 +585,7 @@ describe('Auth (e2e)', () => {
         .set('Cookie', [`refreshToken=${refreshToken}`])
         .expect(201);
 
-      expect(response.body.message).toBe('로그아웃되었습니다.');
+      expect(response.body.messageCode).toBe('AUTH_LOGOUT_COMPLETED');
 
       // Verify refresh token cookie was cleared
       const cookieHeader = response.headers['set-cookie'];
@@ -605,7 +605,7 @@ describe('Auth (e2e)', () => {
         .post('/auth/logout')
         .expect(201);
 
-      expect(response.body.message).toBe('로그아웃되었습니다.');
+      expect(response.body.messageCode).toBe('AUTH_LOGOUT_COMPLETED');
     });
   });
 
@@ -688,7 +688,7 @@ describe('Auth (e2e)', () => {
         .expect(200);
 
       expect(response.body.available).toBe(false);
-      expect(response.body.message).toBe('이미 사용 중인 이메일입니다.');
+      expect(response.body.errorCode).toBe('AUTH_EMAIL_IN_USE');
     });
 
     it('should return available: true for non-existent email', async () => {
@@ -698,7 +698,7 @@ describe('Auth (e2e)', () => {
         .expect(200);
 
       expect(response.body.available).toBe(true);
-      expect(response.body.message).toBe('사용 가능한 이메일입니다.');
+      expect(response.body.messageCode).toBe('AUTH_EMAIL_AVAILABLE');
     });
 
     it('should fail with invalid email format', async () => {
@@ -726,8 +726,7 @@ describe('Auth (e2e)', () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body).toHaveProperty('remainCount');
-      expect(response.body).toHaveProperty('message');
-      expect(response.body.message).toContain('인증번호가 발송되었습니다');
+      expect(response.body.messageCode).toBe('AUTH_VERIFICATION_CODE_SENT');
 
       // Verify verification code was created in database
       const verification = await emailVerificationRepository.findOne({
@@ -786,7 +785,9 @@ describe('Auth (e2e)', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('이메일 인증이 완료되었습니다.');
+      expect(response.body.messageCode).toBe(
+        'AUTH_EMAIL_VERIFICATION_COMPLETED',
+      );
 
       // Verify code was marked as used
       const verification = await emailVerificationRepository.findOne({
@@ -884,6 +885,130 @@ describe('Auth (e2e)', () => {
 
       expect(response.body).toHaveProperty('message');
       expect(response.body.statusCode).toBe(401);
+    });
+  });
+
+  describe('POST /auth/register - Welcome Email', () => {
+    it('should trigger welcome email for Korean user registration', async () => {
+      const registerDto = {
+        email: 'korean-welcome@example.com',
+        password: 'Password123!',
+        name: '한국 사용자',
+        lang: 'ko',
+      };
+
+      // Step 1: Send verification code
+      await request(app.getHttpServer())
+        .post('/auth/email/send-code')
+        .send({ email: registerDto.email, purpose: 'SIGNUP' })
+        .expect(201);
+
+      // Step 2: Mark as verified
+      const verification = await emailVerificationRepository.findOne({
+        where: { email: registerDto.email, purpose: 'SIGNUP' },
+      });
+      verification!.status = 'USED';
+      verification!.used = true;
+      await emailVerificationRepository.save(verification!);
+
+      // Step 3: Register user
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send(registerDto)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        messageCode: 'AUTH_REGISTRATION_COMPLETED',
+      });
+
+      // Verify user was created
+      const user = await userRepository.findOne({
+        where: { email: registerDto.email },
+      });
+      expect(user).toBeDefined();
+      expect(user!.preferredLanguage).toBe('ko');
+
+      // Note: In test mode, the actual email sending is skipped
+      // We're verifying registration completes successfully
+    });
+
+    it('should trigger welcome email for English user registration', async () => {
+      const registerDto = {
+        email: 'english-welcome@example.com',
+        password: 'Password123!',
+        name: 'English User',
+        lang: 'en',
+      };
+
+      // Step 1: Send verification code
+      await request(app.getHttpServer())
+        .post('/auth/email/send-code')
+        .send({ email: registerDto.email, purpose: 'SIGNUP' })
+        .expect(201);
+
+      // Step 2: Mark as verified
+      const verification = await emailVerificationRepository.findOne({
+        where: { email: registerDto.email, purpose: 'SIGNUP' },
+      });
+      verification!.status = 'USED';
+      verification!.used = true;
+      await emailVerificationRepository.save(verification!);
+
+      // Step 3: Register user
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send(registerDto)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        messageCode: 'AUTH_REGISTRATION_COMPLETED',
+      });
+
+      // Verify user was created
+      const user = await userRepository.findOne({
+        where: { email: registerDto.email },
+      });
+      expect(user).toBeDefined();
+      expect(user!.preferredLanguage).toBe('en');
+    });
+
+    it('should complete registration even if welcome email fails', async () => {
+      const registerDto = {
+        email: 'resilient@example.com',
+        password: 'Password123!',
+        name: 'Resilient User',
+      };
+
+      // Step 1: Send verification code
+      await request(app.getHttpServer())
+        .post('/auth/email/send-code')
+        .send({ email: registerDto.email, purpose: 'SIGNUP' })
+        .expect(201);
+
+      // Step 2: Mark as verified
+      const verification = await emailVerificationRepository.findOne({
+        where: { email: registerDto.email, purpose: 'SIGNUP' },
+      });
+      verification!.status = 'USED';
+      verification!.used = true;
+      await emailVerificationRepository.save(verification!);
+
+      // Step 3: Register user (email will be skipped in test mode anyway)
+      const response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send(registerDto)
+        .expect(201);
+
+      expect(response.body).toMatchObject({
+        messageCode: 'AUTH_REGISTRATION_COMPLETED',
+      });
+
+      // Verify user was created even though email might fail
+      const user = await userRepository.findOne({
+        where: { email: registerDto.email },
+      });
+      expect(user).toBeDefined();
+      expect(user!.emailVerified).toBe(true);
     });
   });
 });

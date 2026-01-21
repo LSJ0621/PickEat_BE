@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { ErrorCode } from '@/common/constants/error-codes';
 import {
   AuthUserPayload,
   CurrentUser,
@@ -61,7 +62,9 @@ export class AdminBugReportController {
   ) {
     const adminUser = await this.userService.findByEmail(user.email);
     if (!adminUser) {
-      throw new NotFoundException('관리자 사용자를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+      });
     }
     return this.bugReportService.updateStatusWithHistory(
       id,

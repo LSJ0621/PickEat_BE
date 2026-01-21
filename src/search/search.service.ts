@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { runPipeline } from '@/common/pipeline/pipeline';
 import { NaverSearchClient } from '@/external/naver/clients/naver-search.client';
 import { LocationService } from '@/external/naver/services/location.service';
@@ -56,7 +57,9 @@ export class SearchService {
             const items = await this.naverSearchClient.searchLocal(ctx.query);
 
             if (!items.length) {
-              throw new BadRequestException('검색 결과가 없습니다.');
+              throw new BadRequestException({
+                errorCode: ErrorCode.SEARCH_NO_RESULTS,
+              });
             }
 
             ctx.restaurants = items.map((item) => this.mapNaverItem(item));

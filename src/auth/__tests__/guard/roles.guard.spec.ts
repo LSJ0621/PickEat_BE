@@ -57,7 +57,9 @@ describe('RolesGuard', () => {
 
     it('should allow access when user has required role', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN']);
       const context = createMockExecutionContext({ role: 'ADMIN' });
 
       // Act
@@ -69,7 +71,9 @@ describe('RolesGuard', () => {
 
     it('should allow access when user has one of the required roles', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN', 'MODERATOR']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN', 'MODERATOR']);
       const context = createMockExecutionContext({ role: 'ADMIN' });
 
       // Act
@@ -81,7 +85,9 @@ describe('RolesGuard', () => {
 
     it('should allow USER role when required', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['USER']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['USER']);
       const context = createMockExecutionContext({ role: 'USER' });
 
       // Act
@@ -93,7 +99,11 @@ describe('RolesGuard', () => {
 
     it('should throw ForbiddenException when user does not have required role', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN'])
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN']);
       const context = createMockExecutionContext({ role: 'USER' });
 
       // Act & Assert
@@ -105,7 +115,11 @@ describe('RolesGuard', () => {
 
     it('should throw ForbiddenException when user does not have any of the required roles', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN', 'MODERATOR']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN', 'MODERATOR'])
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN', 'MODERATOR']);
       const context = createMockExecutionContext({ role: 'USER' });
 
       // Act & Assert
@@ -117,7 +131,11 @@ describe('RolesGuard', () => {
 
     it('should throw ForbiddenException when user is not in request', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN'])
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN']);
       const context = createMockExecutionContext(undefined);
 
       // Act & Assert
@@ -127,7 +145,11 @@ describe('RolesGuard', () => {
 
     it('should throw ForbiddenException when user has no role property', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN'])
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN']);
       const context = createMockExecutionContext({} as { role: string });
 
       // Act & Assert
@@ -137,7 +159,9 @@ describe('RolesGuard', () => {
 
     it('should throw ForbiddenException when required roles array is empty but present', () => {
       // Arrange - empty array means no role matches
-      mockReflector.getAllAndOverride.mockReturnValue([]);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce([]);
       const context = createMockExecutionContext({ role: 'USER' });
 
       // Act & Assert
@@ -148,7 +172,9 @@ describe('RolesGuard', () => {
 
     it('should be case-sensitive for role comparison', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['admin']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['admin']);
       const context = createMockExecutionContext({ role: 'ADMIN' });
 
       // Act & Assert
@@ -157,7 +183,9 @@ describe('RolesGuard', () => {
 
     it('should retrieve roles from both handler and class', () => {
       // Arrange
-      mockReflector.getAllAndOverride.mockReturnValue(['ADMIN']);
+      mockReflector.getAllAndOverride
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(['ADMIN']);
       const context = createMockExecutionContext({ role: 'ADMIN' });
 
       // Act

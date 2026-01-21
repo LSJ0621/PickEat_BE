@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository } from 'typeorm';
+import { ErrorCode } from '../../common/constants/error-codes';
+import { MessageCode } from '../../common/constants/message-codes';
 import { GoogleOAuthClient } from '../../external/google/clients/google-oauth.client';
 import { KakaoOAuthClient } from '../../external/kakao/clients/kakao-oauth.client';
 import { User } from '../../user/entities/user.entity';
@@ -34,20 +36,22 @@ export class AuthSocialService {
   async kakaoLogin(
     code: string,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
+    language?: 'ko' | 'en',
   ): Promise<AuthResult> {
     const accessTokenDto = await this.getKakaoAccessToken(code);
     const kakaoProfileDto = await this.getKakaoProfile(
       accessTokenDto.access_token,
     );
-    return this.processKakaoProfile(kakaoProfileDto, buildAuthResult);
+    return this.processKakaoProfile(kakaoProfileDto, buildAuthResult, language);
   }
 
   async kakaoLoginWithToken(
     accessToken: string,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
+    language?: 'ko' | 'en',
   ): Promise<AuthResult> {
     const kakaoProfileDto = await this.getKakaoProfile(accessToken);
-    return this.processKakaoProfile(kakaoProfileDto, buildAuthResult);
+    return this.processKakaoProfile(kakaoProfileDto, buildAuthResult, language);
   }
 
   private async getKakaoAccessToken(
@@ -65,21 +69,22 @@ export class AuthSocialService {
   private async processKakaoProfile(
     kakaoProfileDto: KakaoProfileDto,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
+    language?: 'ko' | 'en',
   ): Promise<AuthResult> {
     const email = kakaoProfileDto.kakao_account.email;
     if (!email) {
-      throw new BadRequestException(
-        '카카오 프로필에 이메일이 포함되어 있지 않습니다. 이메일 권한을 허용해주세요.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+      });
     }
 
     const activeUser = await this.userRepository.findOne({
       where: { email, password: Not(IsNull()) },
     });
     if (activeUser) {
-      throw new BadRequestException(
-        '이미 일반 회원가입으로 가입한 이메일입니다.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
+      });
     }
 
     let user = await this.userService.getUserBySocialId(kakaoProfileDto.id);
@@ -89,12 +94,13 @@ export class AuthSocialService {
         kakaoProfileDto.id,
         email,
         SocialType.KAKAO,
+        undefined,
+        language,
       );
     } else if (user.deletedAt) {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          message: '탈퇴한 이력이 있습니다. 재가입하시겠습니까?',
           error: 'RE_REGISTER_REQUIRED',
           email: email,
         },
@@ -104,8 +110,8 @@ export class AuthSocialService {
       throw new HttpException(
         {
           statusCode: HttpStatus.FORBIDDEN,
-          message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
           error: 'USER_DEACTIVATED',
+          errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
         },
         HttpStatus.FORBIDDEN,
       );
@@ -119,12 +125,17 @@ export class AuthSocialService {
   async googleLogin(
     code: string,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
+    language?: 'ko' | 'en',
   ): Promise<AuthResult> {
     const accessTokenDto = await this.getGoogleAccessToken(code);
     const googleProfileDto = await this.getGoogleProfile(
       accessTokenDto.access_token,
     );
-    return this.processGoogleProfile(googleProfileDto, buildAuthResult);
+    return this.processGoogleProfile(
+      googleProfileDto,
+      buildAuthResult,
+      language,
+    );
   }
 
   private async getGoogleAccessToken(
@@ -142,21 +153,22 @@ export class AuthSocialService {
   private async processGoogleProfile(
     googleProfileDto: GoogleProfileDto,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
+    language?: 'ko' | 'en',
   ): Promise<AuthResult> {
     const email = googleProfileDto.email;
     if (!email) {
-      throw new BadRequestException(
-        '구글 프로필에 이메일이 포함되어 있지 않습니다. 이메일 권한을 허용해주세요.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+      });
     }
 
     const activeUser = await this.userRepository.findOne({
       where: { email, password: Not(IsNull()) },
     });
     if (activeUser) {
-      throw new BadRequestException(
-        '이미 일반 회원가입으로 가입한 이메일입니다.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
+      });
     }
 
     let user = await this.userService.getUserBySocialId(googleProfileDto.sub);
@@ -168,12 +180,12 @@ export class AuthSocialService {
         email,
         SocialType.GOOGLE,
         name,
+        language,
       );
     } else if (user.deletedAt) {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          message: '탈퇴한 이력이 있습니다. 재가입하시겠습니까?',
           error: 'RE_REGISTER_REQUIRED',
           email: email,
         },
@@ -183,8 +195,8 @@ export class AuthSocialService {
       throw new HttpException(
         {
           statusCode: HttpStatus.FORBIDDEN,
-          message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
           error: 'USER_DEACTIVATED',
+          errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
         },
         HttpStatus.FORBIDDEN,
       );
@@ -197,14 +209,16 @@ export class AuthSocialService {
 
   async reRegisterSocial(
     reRegisterSocialDto: ReRegisterSocialDto,
-  ): Promise<{ message: string }> {
+  ): Promise<{ messageCode: MessageCode }> {
     const deletedUser = await this.userRepository.findOne({
       where: { email: reRegisterSocialDto.email, socialId: Not(IsNull()) },
       withDeleted: true,
     });
 
     if (!deletedUser || !deletedUser.deletedAt) {
-      throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_NO_REREGISTER_ACCOUNT,
+      });
     }
 
     const activeRegularUser = await this.userRepository.findOne({
@@ -212,9 +226,10 @@ export class AuthSocialService {
     });
 
     if (activeRegularUser) {
-      throw new BadRequestException(
-        '이미 일반 회원가입으로 가입한 이메일입니다.',
-      );
+      throw new BadRequestException({
+        message: '이미 일반 회원가입으로 가입한 이메일입니다.',
+        errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
+      });
     }
 
     await this.userRepository.update(
@@ -227,9 +242,13 @@ export class AuthSocialService {
     });
 
     if (!user) {
-      throw new BadRequestException('재가입 처리 중 오류가 발생했습니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_RE_REGISTER_ERROR,
+      });
     }
 
-    return { message: '재가입이 완료되었습니다. 로그인해주세요.' };
+    return {
+      messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
+    };
   }
 }

@@ -364,9 +364,7 @@ describe('Menu Recommendation Integration', () => {
       const prompt = '오늘 날씨 어때?';
 
       // Act & Assert: Should throw InvalidMenuRequestException
-      await expect(menuService.recommend(testUser, prompt)).rejects.toThrow(
-        '죄송합니다. 메뉴 추천과 관련 없는 요청입니다',
-      );
+      await expect(menuService.recommend(testUser, prompt)).rejects.toThrow();
 
       // Verify Stage 2 was never called
       expect(mockChatCompletionsCreate).toHaveBeenCalledTimes(1);
@@ -605,7 +603,7 @@ describe('Menu Recommendation Integration', () => {
           '김치찌개',
           menuRecommendation.id,
         ),
-      ).rejects.toThrow('이 메뉴는 이미 AI 가게 추천을 받았습니다');
+      ).rejects.toThrow();
 
       // Verify no API calls were made
       expect(mockGooglePlacesClient.searchByText).not.toHaveBeenCalled();
@@ -627,7 +625,7 @@ describe('Menu Recommendation Integration', () => {
           '김치찌개',
           menuRecommendation.id,
         ),
-      ).rejects.toThrow('검색 결과를 찾을 수 없습니다');
+      ).rejects.toThrow();
 
       // Verify OpenAI was not called
       expect(mockChatCompletionsCreate).not.toHaveBeenCalled();

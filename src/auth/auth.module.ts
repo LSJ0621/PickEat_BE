@@ -50,7 +50,12 @@ import { LocalStrategy } from './strategy/local.strategy';
           from: `"PickEat" <${config.get<string>('EMAIL_ADDRESS')}>`,
         },
         template: {
-          dir: join(process.cwd(), 'src', 'auth', 'templates'),
+          dir: join(
+            process.cwd(),
+            process.env.NODE_ENV === 'production' ? 'dist' : 'src',
+            'auth',
+            'templates',
+          ),
           adapter: new HandlebarsAdapter(),
           options: {
             strict: true,

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Response, Request } from 'express';
 import { Repository } from 'typeorm';
+import { MessageCode } from '@/common/constants/message-codes';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthController } from '../auth.controller';
@@ -37,6 +38,7 @@ describe('AuthController', () => {
     emailVerified: true,
     reRegisterEmailVerified: false,
     preferences: null,
+    preferredLanguage: 'ko',
     refreshToken: null,
     socialId: null,
     socialType: null,
@@ -137,12 +139,21 @@ describe('AuthController', () => {
       const mockResponse = {
         cookie: jest.fn(),
       } as unknown as Response;
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ko-KR,ko;q=0.9',
+        },
+      } as Request;
 
       authService.kakaoLogin.mockResolvedValue(mockAuthResult);
 
-      const result = await controller.kakaoLogin(redirectDto, mockResponse);
+      const result = await controller.kakaoLogin(
+        redirectDto,
+        mockResponse,
+        mockRequest,
+      );
 
-      expect(authService.kakaoLogin).toHaveBeenCalledWith('kakao-code');
+      expect(authService.kakaoLogin).toHaveBeenCalledWith('kakao-code', 'ko');
       expect(mockResponse.cookie).toHaveBeenCalledWith(
         'refreshToken',
         mockAuthResult.refreshToken,
@@ -165,16 +176,23 @@ describe('AuthController', () => {
       const mockResponse = {
         cookie: jest.fn(),
       } as unknown as Response;
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ko-KR,ko;q=0.9',
+        },
+      } as Request;
 
       authService.kakaoLoginWithToken.mockResolvedValue(mockAuthResult);
 
       const result = await controller.kakaoAppLogin(
         appKakaoLoginDto,
         mockResponse,
+        mockRequest,
       );
 
       expect(authService.kakaoLoginWithToken).toHaveBeenCalledWith(
         'kakao-access-token',
+        'ko',
       );
       expect(mockResponse.cookie).toHaveBeenCalled();
       expect(result).not.toHaveProperty('refreshToken');
@@ -187,12 +205,21 @@ describe('AuthController', () => {
       const mockResponse = {
         cookie: jest.fn(),
       } as unknown as Response;
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ko-KR,ko;q=0.9',
+        },
+      } as Request;
 
       authService.googleLogin.mockResolvedValue(mockAuthResult);
 
-      const result = await controller.googleLogin(redirectDto, mockResponse);
+      const result = await controller.googleLogin(
+        redirectDto,
+        mockResponse,
+        mockRequest,
+      );
 
-      expect(authService.googleLogin).toHaveBeenCalledWith('google-code');
+      expect(authService.googleLogin).toHaveBeenCalledWith('google-code', 'ko');
       expect(mockResponse.cookie).toHaveBeenCalled();
       expect(result).not.toHaveProperty('refreshToken');
     });
@@ -205,7 +232,10 @@ describe('AuthController', () => {
         password: 'password123',
         name: 'New User',
       };
-      const expectedResult = { message: '회원가입이 완료되었습니다.' };
+      const expectedResult = {
+        message: '회원가입이 완료되었습니다.',
+        messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
+      };
 
       authService.register.mockResolvedValue(expectedResult);
 
@@ -262,6 +292,7 @@ describe('AuthController', () => {
       const expectedResult = {
         remainCount: 4,
         message: '인증번호가 발송되었습니다. 남은 재발송 횟수는 4회입니다.',
+        messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       };
 
       emailVerificationService.sendCode.mockResolvedValue(expectedResult);
@@ -271,6 +302,7 @@ describe('AuthController', () => {
       expect(emailVerificationService.sendCode).toHaveBeenCalledWith(
         sendEmailCodeDto.email,
         sendEmailCodeDto.purpose,
+        undefined,
       );
       expect(result).toEqual({ success: true, ...expectedResult });
     });
@@ -297,6 +329,7 @@ describe('AuthController', () => {
       expect(result).toEqual({
         success: true,
         message: '이메일 인증이 완료되었습니다.',
+        messageCode: MessageCode.AUTH_EMAIL_VERIFICATION_COMPLETED,
       });
     });
 
@@ -341,6 +374,7 @@ describe('AuthController', () => {
       const expectedResult = {
         remainCount: 4,
         message: '인증번호가 발송되었습니다. 남은 재발송 횟수는 4회입니다.',
+        messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       };
 
       authService.sendResetPasswordCode.mockResolvedValue(expectedResult);
@@ -351,6 +385,7 @@ describe('AuthController', () => {
 
       expect(authService.sendResetPasswordCode).toHaveBeenCalledWith(
         sendResetPasswordCodeDto.email,
+        undefined,
       );
       expect(result).toEqual({ success: true, ...expectedResult });
     });
@@ -392,6 +427,7 @@ describe('AuthController', () => {
       expect(result).toEqual({
         success: true,
         message: '비밀번호가 성공적으로 변경되었습니다.',
+        messageCode: MessageCode.AUTH_PASSWORD_RESET_COMPLETED,
       });
     });
   });
@@ -480,7 +516,10 @@ describe('AuthController', () => {
           sameSite: 'strict',
         }),
       );
-      expect(result).toEqual({ message: '로그아웃되었습니다.' });
+      expect(result).toEqual({
+        message: '로그아웃되었습니다.',
+        messageCode: MessageCode.AUTH_LOGOUT_COMPLETED,
+      });
     });
   });
 
@@ -493,6 +532,7 @@ describe('AuthController', () => {
       };
       const expectedResult = {
         message: '재가입이 완료되었습니다. 로그인해주세요.',
+        messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
       };
 
       authService.reRegister.mockResolvedValue(expectedResult);
@@ -511,6 +551,7 @@ describe('AuthController', () => {
       };
       const expectedResult = {
         message: '재가입이 완료되었습니다. 로그인해주세요.',
+        messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
       };
 
       authService.reRegisterSocial.mockResolvedValue(expectedResult);

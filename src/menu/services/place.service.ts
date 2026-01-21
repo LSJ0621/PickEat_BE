@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { runPipeline } from '@/common/pipeline/pipeline';
+import { parseLanguage } from '@/common/utils/language.util';
 import { User } from '@/user/entities/user.entity';
 import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
 import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
@@ -115,7 +117,15 @@ export class PlaceService {
 
     this.validateNoExistingRecommendation(menuRecord, menuName);
 
-    return this.executeRecommendation(menuRecord, textQuery, menuName);
+    // Determine language from user preference (default 'ko')
+    const language = parseLanguage(user.preferredLanguage);
+
+    return this.executeRecommendation(
+      menuRecord,
+      textQuery,
+      menuName,
+      language,
+    );
   }
 
   async buildRecommendationDetailResponse(recommendation: MenuRecommendation) {
@@ -193,13 +203,15 @@ export class PlaceService {
     menuRecommendationId?: number,
   ) {
     if (!menuName) {
-      throw new BadRequestException('menuName이 필요합니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_NAME_REQUIRED,
+      });
     }
 
     if (typeof menuRecommendationId !== 'number') {
-      throw new BadRequestException(
-        'menuRecommendationId가 필요합니다. 먼저 메뉴 추천 이력을 생성한 뒤 사용하세요.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_RECOMMENDATION_ID_REQUIRED,
+      });
     }
   }
 
@@ -210,9 +222,9 @@ export class PlaceService {
     if (
       menuRecord.placeRecommendations?.some((pr) => pr.menuName === menuName)
     ) {
-      throw new BadRequestException(
-        '이 메뉴는 이미 AI 가게 추천을 받았습니다. 기존 결과를 확인하세요.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.PLACE_ALREADY_RECOMMENDED,
+      });
     }
   }
 
@@ -220,6 +232,7 @@ export class PlaceService {
     menuRecord: MenuRecommendation,
     textQuery: string,
     menuName: string,
+    language: 'ko' | 'en',
   ) {
     const context: {
       places: Array<{
@@ -253,9 +266,9 @@ export class PlaceService {
               await this.searchRestaurantsWithGooglePlaces(textQuery);
 
             if (!places?.length) {
-              throw new BadRequestException(
-                `"${textQuery}"에 대한 검색 결과를 찾을 수 없습니다. 다른 검색어로 시도해주세요.`,
-              );
+              throw new BadRequestException({
+                errorCode: ErrorCode.PLACE_SEARCH_NO_RESULTS,
+              });
             }
 
             ctx.places = places;
@@ -268,12 +281,14 @@ export class PlaceService {
               await this.openAiPlacesService.recommendFromGooglePlaces(
                 textQuery,
                 ctx.places,
+                menuName,
+                language,
               );
 
             if (!ctx.recommendations.recommendations?.length) {
-              throw new BadRequestException(
-                'AI 추천 결과를 생성하지 못했습니다. 검색어를 조정해 주세요.',
-              );
+              throw new BadRequestException({
+                errorCode: ErrorCode.PLACE_AI_RECOMMENDATION_FAILED,
+              });
             }
           },
         },

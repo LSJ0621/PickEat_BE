@@ -4,9 +4,10 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import {
   buildGooglePlacesUserPrompt,
-  GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
-  GOOGLE_PLACES_SYSTEM_PROMPT,
+  getGooglePlacesRecommendationsJsonSchema,
+  getGooglePlacesSystemPrompt,
 } from '@/external/openai/prompts';
+import { detectLanguage } from '@/common/utils/language.util';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
 import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
 import {
@@ -42,6 +43,8 @@ export class OpenAiPlacesService implements OnModuleInit {
   async recommendFromGooglePlaces(
     query: string,
     candidates: PlaceCandidate[],
+    menuName?: string,
+    language?: 'ko' | 'en',
   ): Promise<PlaceRecommendationsResponse> {
     if (!this.openai) {
       throw new ExternalApiException(
@@ -55,9 +58,19 @@ export class OpenAiPlacesService implements OnModuleInit {
       return { recommendations: [] };
     }
 
-    const systemPrompt = GOOGLE_PLACES_SYSTEM_PROMPT;
-    const userPrompt = buildGooglePlacesUserPrompt(query, candidates);
-    const jsonSchema = GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA;
+    // Determine language (priority: explicit > detection > default)
+    let finalLanguage: 'ko' | 'en' = language || 'ko';
+    if (!language && menuName) {
+      finalLanguage = detectLanguage(menuName);
+    }
+
+    const systemPrompt = getGooglePlacesSystemPrompt(finalLanguage);
+    const userPrompt = buildGooglePlacesUserPrompt(
+      query,
+      candidates,
+      finalLanguage,
+    );
+    const jsonSchema = getGooglePlacesRecommendationsJsonSchema(finalLanguage);
 
     this.logger.log(
       `📤 [OpenAI 장소 추천 요청 시작] model=${this.model}, candidates=${candidates.length}`,
@@ -111,16 +124,16 @@ export class OpenAiPlacesService implements OnModuleInit {
       const choice = response.choices[0];
       const content = choice?.message?.content;
       if (!content) {
-        throw new OpenAIResponseException('응답 내용이 비어있습니다', response);
+        throw new OpenAIResponseException(
+          'Response content is empty.',
+          response,
+        );
       }
 
       const parsed = JSON.parse(content) as PlaceRecommendationsResponse;
 
       if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
-        throw new OpenAIResponseException(
-          '응답 형식이 올바르지 않습니다',
-          parsed,
-        );
+        throw new OpenAIResponseException('Invalid response format.', parsed);
       }
 
       return {
@@ -136,7 +149,7 @@ export class OpenAiPlacesService implements OnModuleInit {
       throw new ExternalApiException(
         'OpenAI',
         error instanceof Error ? error : undefined,
-        'OpenAI 장소 추천에 실패했습니다.',
+        'Failed to get OpenAI place recommendations.',
       );
     }
   }
