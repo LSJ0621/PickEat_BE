@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="{{lang}}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PickEat 인증번호</title>
+  <title>{{pageTitle}}</title>
   <!--[if mso]>
   <style type="text/css">
     body, table, td {font-family: Arial, sans-serif !important;}
@@ -16,7 +16,7 @@
       <td align="center" style="padding: 40px 20px;">
         <!-- Main Container -->
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: rgba(255, 255, 255, 0.05); border-radius: 32px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);">
-          
+
           <!-- Header with Logo -->
           <tr>
             <td align="center" style="padding: 40px 40px 20px 40px;">
@@ -40,13 +40,13 @@
             <td style="padding: 0 40px 40px 40px;">
               <!-- Title -->
               <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #ffffff; text-align: center;">
-                이메일 인증번호
+                {{emailTitle}}
               </h2>
-              
+
               <!-- Description -->
               <p style="margin: 0 0 32px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1; text-align: center;">
                 {{description}}<br>
-                아래 인증번호를 입력해주세요.
+                {{inputPrompt}}
               </p>
               <!-- Verification Code Box -->
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 auto 32px auto; background-color: rgba(15, 23, 42, 0.6); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1);">
@@ -66,8 +66,8 @@
                 <tr>
                   <td style="padding: 16px 20px;">
                     <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #fed7aa; text-align: center;">
-                      ⏱️ 인증번호는 <strong style="color: #ffffff;">3분</strong>간 유효합니다.<br>
-                      🔒 보안을 위해 인증번호를 타인에게 공유하지 마세요.
+                      ⏱️ {{{validityMessage}}}<br>
+                      🔒 {{securityMessage}}
                     </p>
                   </td>
                 </tr>
@@ -81,7 +81,7 @@
                 {{footer}}
               </p>
               <p style="margin: 0; font-size: 11px; color: #475569; text-align: center;">
-                요청하지 않으셨다면 이 이메일을 무시하셔도 됩니다.
+                {{ignoreMessage}}
               </p>
               <p style="margin: 16px 0 0 0; font-size: 11px; color: #64748b; text-align: center;">
                 © 2025 PickEat. All rights reserved.

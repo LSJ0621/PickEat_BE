@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { AUTH_TIMING } from '../common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
+import { MessageCode } from '@/common/constants/message-codes';
 import { UserAddress } from '../user/entities/user-address.entity';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
@@ -45,27 +46,42 @@ export class AuthService {
 
   // ========== 소셜 로그인 (위임) ==========
 
-  async kakaoLogin(code: string): Promise<AuthResult> {
-    return this.authSocialService.kakaoLogin(code, (entity) =>
-      this.buildAuthResult(entity),
+  async kakaoLogin(
+    code: string,
+    language?: 'ko' | 'en',
+  ): Promise<AuthResult> {
+    return this.authSocialService.kakaoLogin(
+      code,
+      (entity) => this.buildAuthResult(entity),
+      language,
     );
   }
 
-  async kakaoLoginWithToken(accessToken: string): Promise<AuthResult> {
-    return this.authSocialService.kakaoLoginWithToken(accessToken, (entity) =>
-      this.buildAuthResult(entity),
+  async kakaoLoginWithToken(
+    accessToken: string,
+    language?: 'ko' | 'en',
+  ): Promise<AuthResult> {
+    return this.authSocialService.kakaoLoginWithToken(
+      accessToken,
+      (entity) => this.buildAuthResult(entity),
+      language,
     );
   }
 
-  async googleLogin(code: string): Promise<AuthResult> {
-    return this.authSocialService.googleLogin(code, (entity) =>
-      this.buildAuthResult(entity),
+  async googleLogin(
+    code: string,
+    language?: 'ko' | 'en',
+  ): Promise<AuthResult> {
+    return this.authSocialService.googleLogin(
+      code,
+      (entity) => this.buildAuthResult(entity),
+      language,
     );
   }
 
   async reRegisterSocial(
     reRegisterSocialDto: ReRegisterSocialDto,
-  ): Promise<{ message: string }> {
+  ): Promise<{ messageCode: MessageCode }> {
     return this.authSocialService.reRegisterSocial(reRegisterSocialDto);
   }
 
@@ -93,14 +109,13 @@ export class AuthService {
 
     if (!isEmailVerified) {
       throw new BadRequestException({
-        message: '이메일 인증이 완료되지 않았습니다.',
         errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
       });
     }
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
-    await this.userService.createUser({
+    const user = await this.userService.createUser({
       email: registerDto.email,
       password: hashedPassword,
       role: 'USER',
@@ -114,7 +129,22 @@ export class AuthService {
       EmailPurpose.SIGNUP,
     );
 
-    return { message: '회원가입이 완료되었습니다.' };
+    // Send welcome email
+    try {
+      await this.emailVerificationService.sendWelcomeEmail(
+        user.id.toString(),
+        registerDto.lang,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send welcome email to ${registerDto.email}: ${error.message}`,
+      );
+      // Don't fail registration if welcome email fails
+    }
+
+    return {
+      messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
+    };
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -161,7 +191,6 @@ export class AuthService {
         throw new HttpException(
           {
             statusCode: HttpStatus.FORBIDDEN,
-            message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
             error: 'USER_DEACTIVATED',
             errorCode: ErrorCode.USER_DEACTIVATED,
           },
@@ -170,7 +199,6 @@ export class AuthService {
       }
 
       throw new UnauthorizedException({
-        message: '이메일 또는 비밀번호가 올바르지 않습니다.',
         errorCode: ErrorCode.AUTH_INVALID_CREDENTIALS,
       });
     }
@@ -186,11 +214,13 @@ export class AuthService {
 
   async sendResetPasswordCode(
     email: string,
-  ): Promise<{ remainCount: number; message: string }> {
+    lang?: 'ko' | 'en',
+  ): Promise<{ remainCount: number; messageCode: MessageCode }> {
     await this.ensureRegularUserAccount(email);
     return this.emailVerificationService.sendCode(
       email,
       EmailPurpose.RESET_PASSWORD,
+      lang,
     );
   }
 
@@ -210,7 +240,6 @@ export class AuthService {
     );
     if (!isEmailVerified) {
       throw new BadRequestException({
-        message: '이메일 인증이 완료되지 않았습니다.',
         errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
       });
     }
@@ -228,7 +257,9 @@ export class AuthService {
 
   // ========== 재가입 ==========
 
-  async reRegister(reRegisterDto: ReRegisterDto): Promise<{ message: string }> {
+  async reRegister(
+    reRegisterDto: ReRegisterDto,
+  ): Promise<{ messageCode: MessageCode }> {
     const deletedUser = await this.userRepository.findOne({
       where: { email: reRegisterDto.email },
       withDeleted: true,
@@ -236,7 +267,6 @@ export class AuthService {
 
     if (!deletedUser || !deletedUser.deletedAt) {
       throw new BadRequestException({
-        message: '재가입할 수 있는 계정이 없습니다.',
         errorCode: ErrorCode.AUTH_RE_REGISTER_NOT_AVAILABLE,
       });
     }
@@ -248,7 +278,6 @@ export class AuthService {
 
     if (!isEmailVerified) {
       throw new BadRequestException({
-        message: '이메일 인증이 완료되지 않았습니다.',
         errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
       });
     }
@@ -278,12 +307,13 @@ export class AuthService {
 
     if (!user) {
       throw new BadRequestException({
-        message: '재가입 처리 중 오류가 발생했습니다.',
         errorCode: ErrorCode.AUTH_RE_REGISTER_ERROR,
       });
     }
 
-    return { message: '재가입이 완료되었습니다. 로그인해주세요.' };
+    return {
+      messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
+    };
   }
 
   // ========== 프로필 조회 ==========
@@ -329,8 +359,10 @@ export class AuthService {
     throwOnConflict: boolean,
   ): Promise<{
     available: boolean;
-    message: string;
+    message?: string;
     canReRegister?: boolean;
+    errorCode?: ErrorCode;
+    messageCode?: MessageCode;
   } | void> {
     const existingUser = await this.userRepository.findOne({
       where: { email },
@@ -340,31 +372,35 @@ export class AuthService {
     if (existingUser && !existingUser.deletedAt) {
       if (throwOnConflict) {
         throw new BadRequestException({
-          message: '이미 등록된 이메일입니다.',
           errorCode: ErrorCode.AUTH_EMAIL_ALREADY_EXISTS,
         });
       }
-      return { available: false, message: '이미 사용 중인 이메일입니다.' };
+      return {
+        available: false,
+        errorCode: ErrorCode.AUTH_EMAIL_IN_USE,
+      };
     }
 
     if (existingUser && existingUser.deletedAt) {
       if (throwOnConflict) {
         throw new BadRequestException({
-          message: '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
-          errorCode: ErrorCode.AUTH_RE_REGISTER_NOT_AVAILABLE,
+          errorCode: ErrorCode.AUTH_WITHDRAWAL_HISTORY_REREGISTER,
         });
       }
       return {
         available: false,
         canReRegister: true,
-        message: '기존에 탈퇴 이력이 있습니다. 재가입하시겠습니까?',
+        errorCode: ErrorCode.AUTH_WITHDRAWAL_HISTORY_CONFIRM,
       };
     }
 
     if (throwOnConflict) {
       return;
     }
-    return { available: true, message: '사용 가능한 이메일입니다.' };
+    return {
+      available: true,
+      messageCode: MessageCode.AUTH_EMAIL_AVAILABLE,
+    };
   }
 
   private buildAddressResponse(
@@ -401,8 +437,7 @@ export class AuthService {
     if (now - lastChanged < AUTH_TIMING.ONE_DAY_MS) {
       throw new HttpException(
         {
-          message: '비밀번호는 하루에 한 번만 변경할 수 있습니다.',
-          errorCode: ErrorCode.VALIDATION_ERROR,
+          errorCode: ErrorCode.AUTH_PASSWORD_CHANGE_LIMIT,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -413,14 +448,12 @@ export class AuthService {
     const user = await this.userService.findByEmail(email);
     if (!user) {
       throw new BadRequestException({
-        message: '등록되지 않은 이메일입니다.',
         errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
       });
     }
 
     if (!user.password) {
       throw new BadRequestException({
-        message: '소셜 로그인으로 가입한 계정입니다.',
         errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
       });
     }

@@ -1,85 +1,183 @@
 import { PlaceCandidate } from '../../../menu/interface/openai-places.interface';
 
 /**
- * Google Places 기반 식당 추천 프롬프트
+ * Google Places based restaurant recommendation prompts
  */
 
 /**
- * System 프롬프트: AI의 역할과 규칙 정의
+ * System prompt (Korean): Define AI role and rules
  */
-export const GOOGLE_PLACES_SYSTEM_PROMPT = [
-  '역할: Pick-Eat 식당 추천 AI',
+export const GOOGLE_PLACES_SYSTEM_PROMPT_KO = [
+  '역할: Pick-Eat 레스토랑 추천 AI',
   '출력: JSON만',
   '',
   '규칙:',
-  '- 후보 리스트에서만 선택, 최대 3곳',
-  '- 검색어와 무관한 가게 제외',
-  '- 관련 가게 없으면 빈 배열',
-  '- placeId는 후보 id 그대로 사용',
-  '- 가게명보다 리뷰를 판단 기준으로 사용',
-  '- 메뉴 판매 여부는 리뷰에 명시된 경우만 인정',
-  '- reason: 100~300자, 존댓말',
-  '- 리뷰에서 반복 언급된 맛/품질/양/재방문을 근거로 작성',
+  '- 후보 목록에서만 선택, 최대 3곳',
+  '- 검색 쿼리와 무관한 가게 제외',
+  '- 관련 가게가 없으면 빈 배열 반환',
+  '- 후보의 id를 그대로 placeId로 사용',
+  '- 가게 이름보다 리뷰를 판단 기준으로 사용',
+  '- 리뷰에 명시적으로 언급된 경우에만 메뉴 제공 인정',
+  '- reason: 100-300자, 존댓말 사용',
+  '- 리뷰에서 반복적으로 언급되는 맛/품질/양/재방문 기반 추천 이유 작성',
+  '',
+  '<language_rule>',
+  '- RESPONSE_LANGUAGE 필드가 있으면 절대적 우선순위',
+  '- 없으면 검색 쿼리의 언어 감지',
+  '- 결정된 언어로 응답',
+  '- 한국어 -> 한국어 응답 (reason 필드)',
+  '- 영어 -> 영어 응답 (reason 필드)',
+  '</language_rule>',
 ].join('\n');
 
 /**
- * User 프롬프트 생성
- * @param query 사용자가 검색한 텍스트 (예: "덕소 마라탕")
- * @param candidates Google Places에서 가져온 후보 식당 리스트
+ * System prompt (English): Define AI role and rules
+ */
+export const GOOGLE_PLACES_SYSTEM_PROMPT_EN = [
+  'Role: Pick-Eat restaurant recommendation AI',
+  'Output: JSON only',
+  '',
+  'Rules:',
+  '- Select only from candidate list, maximum 3 places',
+  '- Exclude stores unrelated to search query',
+  '- Return empty array if no relevant stores',
+  '- Use candidate id as-is for placeId',
+  '- Use reviews rather than store name as judgment criteria',
+  '- Only acknowledge menu availability if explicitly mentioned in reviews',
+  '- reason: 100-300 characters, polite language',
+  '- Base reasoning on repeatedly mentioned taste/quality/portion/revisit in reviews',
+  '',
+  '<language_rule>',
+  '- RESPONSE_LANGUAGE field takes absolute priority if present',
+  '- If absent, detect the language of the search query',
+  '- Respond in the determined language',
+  '- Korean -> Korean response (reason field)',
+  '- English -> English response (reason field)',
+  '</language_rule>',
+].join('\n');
+
+/**
+ * Get Google Places system prompt based on language
+ * @param language - Language code ('ko' | 'en')
+ * @returns System prompt in the specified language
+ * @default 'ko' - Korean is the default language
+ */
+export function getGooglePlacesSystemPrompt(
+  language: 'ko' | 'en' = 'ko',
+): string {
+  return language === 'en'
+    ? GOOGLE_PLACES_SYSTEM_PROMPT_EN
+    : GOOGLE_PLACES_SYSTEM_PROMPT_KO;
+}
+
+/**
+ * @deprecated Use getGooglePlacesSystemPrompt() instead
+ * Maintained for backward compatibility
+ */
+export const GOOGLE_PLACES_SYSTEM_PROMPT = GOOGLE_PLACES_SYSTEM_PROMPT_KO;
+
+/**
+ * Generate user prompt
+ * @param query User's search text (e.g., "Malatang near Deokso")
+ * @param candidates Candidate restaurant list from Google Places
+ * @param language Optional language override for response ('ko' | 'en')
  */
 export function buildGooglePlacesUserPrompt(
   query: string,
   candidates: PlaceCandidate[],
+  language?: 'ko' | 'en',
 ): string {
-  return [
-    `검색어: ${query}`,
+  const lines: string[] = [];
+
+  if (language) {
+    const langLabel = language === 'ko' ? 'Korean' : 'English';
+    lines.push(`RESPONSE_LANGUAGE: ${langLabel}`);
+    lines.push('');
+  }
+
+  lines.push(
+    `Search query: ${query}`,
     '',
-    '[후보 리스트]',
+    '[Candidate list]',
     'id, name, rating, userRatingCount, priceLevel, reviews',
     JSON.stringify(candidates),
     '',
-    '[요청]',
-    '검색어와 관련된 식당만 최대 3곳 추천.',
-    '리뷰가 없는 경우 판단하지 말 것.',
-    '관련 없으면 빈 배열.',
-    '조합 다양성 고려.',
-  ].join('\n');
+    '[Request]',
+    'Recommend up to 3 restaurants related to the search query.',
+    'Do not make judgments if there are no reviews.',
+    'Return empty array if none are relevant.',
+    'Consider variety in combinations.',
+  );
+
+  return lines.join('\n');
 }
 
 /**
- * JSON Schema for Structured Outputs (장소 추천 응답 스키마)
+ * Get Google Places recommendations JSON schema based on language
+ * @param language - Language code ('ko' | 'en')
+ * @returns JSON schema for Google Places recommendations with language-specific descriptions
+ * @default 'ko' - Korean is the default language
  */
-export const GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    recommendations: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          placeId: {
-            type: 'string',
-            description: 'Google Place ID (후보 id 그대로)',
-          },
-          name: {
-            type: 'string',
-            description: '식당 이름',
-          },
-          reason: {
-            type: 'string',
-            description: '추천 이유 (100~300자, 존댓말)',
-            minLength: 100,
-            maxLength: 300,
-          },
-        },
-        required: ['placeId', 'name', 'reason'],
-        additionalProperties: false,
-      },
-      minItems: 0,
-      maxItems: 5,
-      description: '추천 식당 (최대 3개, 관련 없으면 빈 배열 가능)',
+export function getGooglePlacesRecommendationsJsonSchema(
+  language: 'ko' | 'en' = 'ko',
+) {
+  const descriptions = {
+    ko: {
+      placeId: 'Google Place ID (후보의 id를 그대로 사용)',
+      name: '레스토랑 이름',
+      reason: '추천 이유 (100-300자, 존댓말)',
+      recommendations: '추천 레스토랑 (최대 3개, 관련 없으면 빈 배열)',
     },
-  },
-  required: ['recommendations'],
-  additionalProperties: false,
-} as const;
+    en: {
+      placeId: 'Google Place ID (use candidate id as-is)',
+      name: 'Restaurant name',
+      reason: 'Recommendation reason (100-300 characters, polite language)',
+      recommendations:
+        'Recommended restaurants (max 3, empty array if none relevant)',
+    },
+  };
+
+  const desc = descriptions[language];
+
+  return {
+    type: 'object',
+    properties: {
+      recommendations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            placeId: {
+              type: 'string',
+              description: desc.placeId,
+            },
+            name: {
+              type: 'string',
+              description: desc.name,
+            },
+            reason: {
+              type: 'string',
+              description: desc.reason,
+              minLength: 100,
+              maxLength: 300,
+            },
+          },
+          required: ['placeId', 'name', 'reason'],
+          additionalProperties: false,
+        },
+        minItems: 0,
+        maxItems: 5,
+        description: desc.recommendations,
+      },
+    },
+    required: ['recommendations'],
+    additionalProperties: false,
+  } as const;
+}
+
+/**
+ * @deprecated Use getGooglePlacesRecommendationsJsonSchema() instead
+ * Maintained for backward compatibility
+ */
+export const GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA =
+  getGooglePlacesRecommendationsJsonSchema('en');

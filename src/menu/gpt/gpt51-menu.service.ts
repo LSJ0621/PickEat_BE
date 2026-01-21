@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts';
+import { getMenuRecommendationsJsonSchema } from '@/external/openai/prompts';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { OpenAIChatCompletionParams } from '@/external/openai/openai.types';
 import { BaseMenuService } from './base-menu.service';
@@ -37,7 +37,7 @@ export class Gpt51MenuService extends BaseMenuService {
   protected buildRequestParams(
     systemPrompt: string,
     userPrompt: string,
-    jsonSchema: typeof MENU_RECOMMENDATIONS_JSON_SCHEMA,
+    jsonSchema: ReturnType<typeof getMenuRecommendationsJsonSchema>,
   ): OpenAIChatCompletionParams {
     return {
       model: this.model,

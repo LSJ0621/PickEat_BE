@@ -14,6 +14,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Request, Response } from 'express';
 import { Repository } from 'typeorm';
 import { AUTH_TIMING } from '../common/constants/business.constants';
+import { ErrorCode } from '../common/constants/error-codes';
+import { MessageCode } from '../common/constants/message-codes';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { AuthService } from './auth.service';
@@ -51,8 +53,13 @@ export class AuthController {
   async kakaoLogin(
     @Body() redirectDto: RedirectDto,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
   ) {
-    const result = await this.authService.kakaoLogin(redirectDto.code);
+    const language = this.extractLanguage(req);
+    const result = await this.authService.kakaoLogin(
+      redirectDto.code,
+      language,
+    );
     return this.handleAuthSuccess(res, result);
   }
 
@@ -60,9 +67,12 @@ export class AuthController {
   async kakaoAppLogin(
     @Body() appKakaoLoginDto: AppKakaoLoginDto,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
   ) {
+    const language = this.extractLanguage(req);
     const result = await this.authService.kakaoLoginWithToken(
       appKakaoLoginDto.accessToken,
+      language,
     );
     return this.handleAuthSuccess(res, result);
   }
@@ -71,8 +81,13 @@ export class AuthController {
   async googleLogin(
     @Body() redirectDto: RedirectDto,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
   ) {
-    const result = await this.authService.googleLogin(redirectDto.code);
+    const language = this.extractLanguage(req);
+    const result = await this.authService.googleLogin(
+      redirectDto.code,
+      language,
+    );
     return this.handleAuthSuccess(res, result);
   }
 
@@ -101,6 +116,7 @@ export class AuthController {
     const result = await this.emailVerificationService.sendCode(
       sendEmailCodeDto.email,
       sendEmailCodeDto.purpose,
+      sendEmailCodeDto.lang,
     );
     return { success: true, ...result };
   }
@@ -116,7 +132,9 @@ export class AuthController {
         withDeleted: true,
       });
       if (!deletedUser || !deletedUser.deletedAt) {
-        throw new BadRequestException('재가입할 수 있는 계정이 없습니다.');
+        throw new BadRequestException({
+          errorCode: ErrorCode.AUTH_NO_REREGISTER_ACCOUNT,
+        });
       }
     }
 
@@ -134,7 +152,10 @@ export class AuthController {
       }
     }
 
-    return { success: true, message: '이메일 인증이 완료되었습니다.' };
+    return {
+      success: true,
+      messageCode: MessageCode.AUTH_EMAIL_VERIFICATION_COMPLETED,
+    };
   }
 
   @Post('password/reset/send-code')
@@ -143,6 +164,7 @@ export class AuthController {
   ) {
     const result = await this.authService.sendResetPasswordCode(
       sendResetPasswordCodeDto.email,
+      sendResetPasswordCodeDto.lang,
     );
     return { success: true, ...result };
   }
@@ -163,7 +185,7 @@ export class AuthController {
     await this.authService.resetPassword(resetPasswordDto);
     return {
       success: true,
-      message: '비밀번호가 성공적으로 변경되었습니다.',
+      messageCode: MessageCode.AUTH_PASSWORD_RESET_COMPLETED,
     };
   }
 
@@ -191,7 +213,9 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(req.cookies?.refreshToken);
     this.clearRefreshTokenCookie(res);
-    return { message: '로그아웃되었습니다.' };
+    return {
+      messageCode: MessageCode.AUTH_LOGOUT_COMPLETED,
+    };
   }
 
   @Post('re-register')
@@ -228,5 +252,31 @@ export class AuthController {
       sameSite: 'strict',
       path: '/',
     });
+  }
+
+  private extractLanguage(req: Request): 'ko' | 'en' | undefined {
+    const acceptLanguage = req.headers['accept-language'];
+
+    // Input validation
+    if (!acceptLanguage || typeof acceptLanguage !== 'string') {
+      return undefined;
+    }
+
+    // Length limit (DoS prevention)
+    if (acceptLanguage.length > 100) {
+      return undefined;
+    }
+
+    // Extract language code
+    const primaryLanguage = acceptLanguage.split(',')[0]?.split('-')[0]?.trim();
+
+    // Allow only supported languages
+    if (primaryLanguage === 'en') {
+      return 'en';
+    }
+    if (primaryLanguage === 'ko') {
+      return 'ko';
+    }
+    return undefined;
   }
 }

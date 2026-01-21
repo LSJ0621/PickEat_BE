@@ -29,6 +29,7 @@ export class TwoStageMenuService {
     likes: string[],
     dislikes: string[],
     analysis?: string,
+    language: 'ko' | 'en' = 'ko',
   ): Promise<MenuRecommendationsResponse> {
     // Stage 1: 요청 검증 및 의도 분류
     this.logger.log('[Stage 1] 요청 검증 시작');
@@ -36,6 +37,7 @@ export class TwoStageMenuService {
       prompt,
       likes,
       dislikes,
+      language,
     );
 
     // Stage 1 검증 실패 (isValid=false)
@@ -45,7 +47,7 @@ export class TwoStageMenuService {
       );
 
       throw new InvalidMenuRequestException(
-        '죄송합니다. 메뉴 추천과 관련 없는 요청입니다.\n음식 선택이나 식사와 관련된 내용으로 다시 요청해 주세요.',
+        'Sorry, this request is not related to menu recommendations.\nPlease request something related to food selection or dining.',
       );
     }
 
@@ -72,6 +74,7 @@ export class TwoStageMenuService {
       dislikes,
       analysis,
       validationContext,
+      language,
     );
 
     this.logger.log(

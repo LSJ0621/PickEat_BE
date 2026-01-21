@@ -255,6 +255,7 @@ export class PreferencesScheduler {
       await this.preferenceUpdateAiService.generatePreferenceAnalysis(
         current,
         slotMenus,
+        user.preferredLanguage,
       );
 
     await this.userService.updateEntityPreferencesAnalysis(

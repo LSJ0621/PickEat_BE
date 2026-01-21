@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { MessageCode } from '@/common/constants/message-codes';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthService } from '../auth.service';
@@ -25,6 +26,7 @@ describe('AuthService', () => {
     password: '$2b$10$hashedpassword',
     name: 'Test User',
     role: 'USER',
+    preferredLanguage: 'ko',
     emailVerified: true,
     reRegisterEmailVerified: false,
     preferences: null,
@@ -262,7 +264,10 @@ describe('AuthService', () => {
           role: 'USER',
         }),
       );
-      expect(result).toEqual({ message: '회원가입이 완료되었습니다.' });
+      expect(result).toEqual({
+        message: '회원가입이 완료되었습니다.',
+        messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
+      });
     });
 
     it('should throw BadRequestException when email already exists', async () => {
@@ -417,6 +422,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         available: true,
         message: '사용 가능한 이메일입니다.',
+        messageCode: MessageCode.AUTH_EMAIL_AVAILABLE,
       });
     });
 
@@ -428,6 +434,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         available: false,
         message: '이미 사용 중인 이메일입니다.',
+        errorCode: 'AUTH_EMAIL_IN_USE',
       });
     });
 
@@ -441,6 +448,7 @@ describe('AuthService', () => {
         available: false,
         canReRegister: true,
         message: '기존에 탈퇴 이력이 있습니다. 재가입하시겠습니까?',
+        errorCode: 'AUTH_WITHDRAWAL_HISTORY_CONFIRM',
       });
     });
   });
@@ -452,6 +460,7 @@ describe('AuthService', () => {
       emailVerificationService.sendCode.mockResolvedValue({
         remainCount: 4,
         message: '인증번호가 발송되었습니다. 남은 재발송 횟수는 4회입니다.',
+        messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       });
 
       const result = await service.sendResetPasswordCode(email);
@@ -460,6 +469,7 @@ describe('AuthService', () => {
       expect(emailVerificationService.sendCode).toHaveBeenCalledWith(
         email,
         EmailPurpose.RESET_PASSWORD,
+        undefined,
       );
       expect(result.remainCount).toBe(4);
     });
@@ -547,6 +557,7 @@ describe('AuthService', () => {
       );
       expect(result).toEqual({
         message: '재가입이 완료되었습니다. 로그인해주세요.',
+        messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
       });
     });
 
@@ -594,6 +605,7 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue(null);
       emailVerificationService.isEmailVerified.mockResolvedValue(true);
       userService.createUser.mockResolvedValue(mockUser);
+      (emailVerificationService as any).sendWelcomeEmail = jest.fn();
 
       await service.register(registerDto);
 
@@ -635,6 +647,133 @@ describe('AuthService', () => {
 
       await expect(service.register(registerDto)).rejects.toThrow(
         '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
+      );
+    });
+  });
+
+  describe('register - welcome email integration', () => {
+    it('should send welcome email after successful registration', async () => {
+      // Arrange
+      const registerDto = {
+        email: 'newuser@example.com',
+        password: 'password123',
+        name: 'New User',
+        lang: 'ko',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      emailVerificationService.isEmailVerified.mockResolvedValue(true);
+      userService.createUser.mockResolvedValue(mockUser);
+      (emailVerificationService as any).sendWelcomeEmail = jest.fn();
+
+      // Act
+      await service.register(registerDto);
+
+      // Assert
+      expect(
+        (emailVerificationService as any).sendWelcomeEmail,
+      ).toHaveBeenCalledWith(mockUser.id.toString(), registerDto.lang);
+      expect(userService.markEmailVerified).toHaveBeenCalled();
+      expect(
+        (emailVerificationService as any).sendWelcomeEmail,
+      ).toHaveBeenCalled();
+    });
+
+    it('should not fail registration if welcome email fails', async () => {
+      // Arrange
+      const registerDto = {
+        email: 'newuser@example.com',
+        password: 'password123',
+        name: 'New User',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      emailVerificationService.isEmailVerified.mockResolvedValue(true);
+      userService.createUser.mockResolvedValue(mockUser);
+      (emailVerificationService as any).sendWelcomeEmail = jest
+        .fn()
+        .mockRejectedValue(new Error('SMTP connection failed'));
+
+      // Act
+      const result = await service.register(registerDto);
+
+      // Assert
+      expect(result).toEqual({
+        message: '회원가입이 완료되었습니다.',
+        messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
+      });
+    });
+
+    it('should pass user preferred language to welcome email', async () => {
+      // Arrange
+      const registerDto = {
+        email: 'english@example.com',
+        password: 'password123',
+        name: 'English User',
+        lang: 'en',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      emailVerificationService.isEmailVerified.mockResolvedValue(true);
+      userService.createUser.mockResolvedValue(mockUser);
+      (emailVerificationService as any).sendWelcomeEmail = jest.fn();
+
+      // Act
+      await service.register(registerDto);
+
+      // Assert
+      expect(
+        (emailVerificationService as any).sendWelcomeEmail,
+      ).toHaveBeenCalledWith(mockUser.id.toString(), 'en');
+    });
+
+    it('should still send welcome email if language is not provided', async () => {
+      // Arrange
+      const registerDto = {
+        email: 'noLang@example.com',
+        password: 'password123',
+        name: 'No Lang User',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      emailVerificationService.isEmailVerified.mockResolvedValue(true);
+      userService.createUser.mockResolvedValue(mockUser);
+      (emailVerificationService as any).sendWelcomeEmail = jest.fn();
+
+      // Act
+      await service.register(registerDto);
+
+      // Assert
+      expect(
+        (emailVerificationService as any).sendWelcomeEmail,
+      ).toHaveBeenCalledWith(mockUser.id.toString(), undefined);
+    });
+
+    it('should log warning if welcome email service fails', async () => {
+      // Arrange
+      const registerDto = {
+        email: 'emailfail@example.com',
+        password: 'password123',
+        name: 'Email Fail User',
+      };
+
+      userRepository.findOne.mockResolvedValue(null);
+      emailVerificationService.isEmailVerified.mockResolvedValue(true);
+      userService.createUser.mockResolvedValue(mockUser);
+
+      const emailError = new Error('SMTP connection failed');
+      (emailVerificationService as any).sendWelcomeEmail = jest
+        .fn()
+        .mockRejectedValue(emailError);
+
+      const loggerWarnSpy = jest.spyOn((service as any).logger, 'warn');
+
+      // Act
+      await service.register(registerDto);
+
+      // Assert
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to send welcome email'),
       );
     });
   });
@@ -863,7 +1002,10 @@ describe('AuthService', () => {
         email: 'social@example.com',
         socialType: 'kakao' as const,
       };
-      const expectedResult = { message: '재가입이 완료되었습니다.' };
+      const expectedResult = {
+        message: '재가입이 완료되었습니다. 로그인해주세요.',
+        messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
+      };
 
       authSocialService.reRegisterSocial.mockResolvedValue(expectedResult);
 

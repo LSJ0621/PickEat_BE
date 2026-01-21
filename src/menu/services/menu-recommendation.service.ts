@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { parseLanguage } from '@/common/utils/language.util';
 import { PageInfo } from '../../common/interfaces/pagination.interface';
 import { User } from '../../user/entities/user.entity';
 import { UserAddressService } from '../../user/services/user-address.service';
@@ -31,19 +33,25 @@ export class MenuRecommendationService {
     const dislikes = user.preferences?.dislikes ?? [];
     const analysis = user.preferences?.analysis;
 
+    // Determine language from user preference (default 'ko')
+    const language = parseLanguage(user.preferredLanguage);
+
     const { recommendations, reason } =
       await this.openAiMenuService.generateMenuRecommendations(
         prompt,
         likes,
         dislikes,
         analysis,
+        language,
       );
 
     // 기본 주소 조회 (필수)
     const defaultAddress =
       await this.userAddressService.getDefaultAddress(user);
     if (!defaultAddress || !defaultAddress.roadAddress) {
-      throw new BadRequestException('기본 주소를 설정해주세요.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_DEFAULT_ADDRESS_REQUIRED,
+      });
     }
 
     const record = this.recommendationRepository.create({
@@ -117,7 +125,9 @@ export class MenuRecommendationService {
     });
 
     if (!recommendation) {
-      throw new BadRequestException('추천 이력을 찾을 수 없습니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_HISTORY_NOT_FOUND,
+      });
     }
 
     return recommendation;
@@ -136,9 +146,9 @@ export class MenuRecommendationService {
     });
 
     if (!recommendation) {
-      throw new BadRequestException(
-        '본인 추천 이력에만 선택을 연결할 수 있습니다.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_HISTORY_OWNERSHIP_REQUIRED,
+      });
     }
 
     return recommendation;

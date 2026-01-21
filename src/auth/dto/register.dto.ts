@@ -1,11 +1,11 @@
 import {
   IsEmail,
-  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
+import { IsLanguage } from '@/common/validators/language.validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -23,6 +23,6 @@ export class RegisterDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(['ko', 'en'])
-  lang?: string;
+  @IsLanguage()
+  lang?: 'ko' | 'en';
 }

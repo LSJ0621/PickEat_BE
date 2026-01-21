@@ -4,8 +4,8 @@ import { ExternalApiException } from '@/common/exceptions/external-api.exception
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
 import {
   buildValidationUserPrompt,
-  VALIDATION_JSON_SCHEMA,
-  VALIDATION_SYSTEM_PROMPT,
+  getValidationJsonSchema,
+  getValidationSystemPrompt,
 } from '@/external/openai/prompts/menu-validation.prompts';
 import { ValidationResponse } from '../interfaces/menu-validation.interface';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
@@ -50,6 +50,7 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
     userPrompt: string,
     likes: string[],
     dislikes: string[],
+    language: 'ko' | 'en' = 'ko',
   ): Promise<ValidationResponse> {
     if (!this.openai) {
       throw new ExternalApiException(
@@ -59,11 +60,12 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
       );
     }
 
-    const systemPrompt = VALIDATION_SYSTEM_PROMPT;
+    const systemPrompt = getValidationSystemPrompt(language);
     const validationPrompt = buildValidationUserPrompt(
       userPrompt,
       likes,
       dislikes,
+      language,
     );
 
     try {
@@ -77,7 +79,7 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
           type: 'json_schema',
           json_schema: {
             name: 'menu_validation',
-            schema: VALIDATION_JSON_SCHEMA,
+            schema: getValidationJsonSchema(language),
             strict: true,
           },
         },
@@ -102,12 +104,15 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
 
       const choice = response.choices[0];
       if (!choice) {
-        throw new OpenAIResponseException('검증 결과가 없습니다', response);
+        throw new OpenAIResponseException(
+          'Validation result not found.',
+          response,
+        );
       }
 
       const content = choice.message?.content;
       if (!content) {
-        throw new OpenAIResponseException('응답 내용이 비어있습니다', {
+        throw new OpenAIResponseException('Response content is empty.', {
           finishReason: choice.finish_reason,
         });
       }
@@ -127,7 +132,7 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
       throw new ExternalApiException(
         'OpenAI',
         error instanceof Error ? error : undefined,
-        '메뉴 요청 검증에 실패했습니다.',
+        'Failed to validate menu request.',
       );
     }
   }

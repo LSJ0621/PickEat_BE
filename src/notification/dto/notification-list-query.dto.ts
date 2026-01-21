@@ -6,26 +6,26 @@ import { NotificationType } from '../enum/notification-type.enum';
 export class NotificationListQueryDto {
   @IsOptional()
   @Type(() => Number)
-  @IsInt({ message: '페이지는 정수여야 합니다.' })
-  @Min(1, { message: '페이지는 1 이상이어야 합니다.' })
+  @IsInt({ message: 'VALIDATION_INT:page' })
+  @Min(1, { message: 'VALIDATION_MIN:page:1' })
   page?: number = 1;
 
   @IsOptional()
   @Type(() => Number)
-  @IsInt({ message: 'limit는 정수여야 합니다.' })
-  @Min(1, { message: 'limit는 1 이상이어야 합니다.' })
-  @Max(50, { message: 'limit는 최대 50까지 가능합니다.' })
+  @IsInt({ message: 'VALIDATION_INT:limit' })
+  @Min(1, { message: 'VALIDATION_MIN:limit:1' })
+  @Max(50, { message: 'VALIDATION_MAX:limit:50' })
   limit?: number = 20;
 
   @IsOptional()
   @IsEnum(NotificationStatus, {
-    message: '유효한 공지사항 상태여야 합니다.',
+    message: 'VALIDATION_INVALID_ENUM:status',
   })
   status?: NotificationStatus;
 
   @IsOptional()
   @IsEnum(NotificationType, {
-    message: '유효한 공지사항 타입이어야 합니다.',
+    message: 'VALIDATION_INVALID_ENUM:type',
   })
   type?: NotificationType;
 }
