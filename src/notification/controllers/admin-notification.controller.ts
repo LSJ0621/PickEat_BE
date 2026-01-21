@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { MessageCode } from '@/common/constants/message-codes';
 import {
   AuthUserPayload,
   CurrentUser,
@@ -80,6 +81,8 @@ export class AdminNotificationController {
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.notificationService.softDelete(id);
-    return { message: '공지사항이 삭제되었습니다.' };
+    return {
+      messageCode: MessageCode.NOTIFICATION_DELETED,
+    };
   }
 }

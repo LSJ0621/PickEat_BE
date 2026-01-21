@@ -40,7 +40,7 @@ export class User {
   preferences: UserPreferences | null;
 
   @Column({ type: 'varchar', default: 'ko' })
-  preferredLanguage: string;
+  preferredLanguage: 'ko' | 'en';
 
   @Column({ type: 'text', nullable: true })
   refreshToken: string | null;

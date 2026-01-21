@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { NaverMapClient } from '@/external/naver/clients/naver-map.client';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { NaverReverseGeocodeResult } from '@/external/naver/naver.types';
@@ -36,7 +37,9 @@ export class LocationService {
       );
 
       if (!address) {
-        throw new BadRequestException('주소를 찾을 수 없습니다.');
+        throw new BadRequestException({
+          errorCode: ErrorCode.LOCATION_ADDRESS_NOT_FOUND,
+        });
       }
 
       this.logger.log(`✅ [역지오코딩 응답] address="${address}"`);

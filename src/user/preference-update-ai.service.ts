@@ -4,8 +4,8 @@ import OpenAI from 'openai';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import {
   buildPreferenceUserPrompt,
-  PREFERENCE_RESPONSE_SCHEMA,
-  PREFERENCE_SYSTEM_PROMPT,
+  getPreferenceSystemPrompt,
+  getPreferenceResponseSchema,
 } from '@/external/openai/prompts';
 import { OPENAI_SETTINGS } from '../common/constants/business.constants';
 import { OpenAIResponseException } from '../common/exceptions/openai-response.exception';
@@ -51,21 +51,24 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       dinner: string[];
       etc: string[];
     },
+    preferredLanguage?: string,
   ): Promise<PreferenceAnalysisResponse> {
     if (!this.openai) {
       throw new ExternalApiException(
         'OpenAI',
         undefined,
-        'OpenAI API key가 없습니다.',
+        'OpenAI API key is missing.',
       );
     }
 
-    const system = PREFERENCE_SYSTEM_PROMPT;
+    const language = this.mapPreferredLanguage(preferredLanguage);
+    const system = getPreferenceSystemPrompt(language);
     const user = buildPreferenceUserPrompt({
       currentLikes: current.likes ?? [],
       currentDislikes: current.dislikes ?? [],
       currentAnalysis: current.analysis,
       slotMenus,
+      language,
     });
 
     try {
@@ -79,7 +82,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
           type: 'json_schema',
           json_schema: {
             name: 'preference_analysis',
-            schema: PREFERENCE_RESPONSE_SCHEMA,
+            schema: getPreferenceResponseSchema(language),
             strict: true,
           },
         },
@@ -112,7 +115,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
-        throw new OpenAIResponseException('응답이 비어있습니다', response);
+        throw new OpenAIResponseException('Response is empty.', response);
       }
 
       this.logger.debug(`[LLM 응답] ${content}`);
@@ -122,7 +125,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
         parsed = JSON.parse(content) as PreferenceAnalysisResponse;
       } catch {
         this.logger.error(`[JSON 파싱 실패] ${content}`);
-        throw new OpenAIResponseException('JSON 파싱에 실패했습니다', content);
+        throw new OpenAIResponseException('Failed to parse JSON.', content);
       }
 
       this.validateSchema(parsed);
@@ -136,7 +139,7 @@ export class PreferenceUpdateAiService implements OnModuleInit {
       throw new ExternalApiException(
         'OpenAI',
         error instanceof Error ? error : undefined,
-        '취향 분석 생성에 실패했습니다.',
+        'Failed to generate preference analysis.',
       );
     }
   }
@@ -144,17 +147,24 @@ export class PreferenceUpdateAiService implements OnModuleInit {
   private validateSchema(data: PreferenceAnalysisResponse) {
     if (!data) {
       this.logger.error(`[스키마 검증 실패] data is null or undefined`);
-      throw new OpenAIResponseException('응답 형식이 올바르지 않습니다', data);
+      throw new OpenAIResponseException('Invalid response format.', data);
     }
     if (typeof data.analysis !== 'string') {
       this.logger.error(
         `[스키마 검증 실패] analysis type is ${typeof data.analysis}, value: ${JSON.stringify(data.analysis)}`,
       );
-      throw new OpenAIResponseException('응답 형식이 올바르지 않습니다', data);
+      throw new OpenAIResponseException('Invalid response format.', data);
     }
     if (!data.analysis.trim()) {
       this.logger.error(`[스키마 검증 실패] analysis is empty string`);
-      throw new OpenAIResponseException('분석 결과가 비어있습니다', data);
+      throw new OpenAIResponseException('Analysis result is empty.', data);
     }
+  }
+
+  private mapPreferredLanguage(
+    preferredLanguage?: string,
+  ): 'ko' | 'en' | undefined {
+    if (!preferredLanguage) return undefined;
+    return preferredLanguage === 'en' ? 'en' : 'ko';
   }
 }

@@ -12,31 +12,31 @@ import { NotificationType } from '../enum/notification-type.enum';
 
 export class CreateNotificationDto {
   @IsEnum(NotificationType, {
-    message: '유효한 공지사항 타입이어야 합니다.',
+    message: 'VALIDATION_INVALID_ENUM:type',
   })
-  @IsNotEmpty({ message: '공지사항 타입은 필수입니다.' })
+  @IsNotEmpty({ message: 'VALIDATION_REQUIRED:type' })
   type: NotificationType;
 
-  @IsString({ message: '제목은 문자열이어야 합니다.' })
-  @IsNotEmpty({ message: '제목은 필수입니다.' })
-  @MaxLength(100, { message: '제목은 최대 100자까지 입력 가능합니다.' })
+  @IsString({ message: 'VALIDATION_STRING:title' })
+  @IsNotEmpty({ message: 'VALIDATION_REQUIRED:title' })
+  @MaxLength(100, { message: 'VALIDATION_MAX_LENGTH:title:100' })
   title: string;
 
-  @IsString({ message: '내용은 문자열이어야 합니다.' })
-  @IsNotEmpty({ message: '내용은 필수입니다.' })
+  @IsString({ message: 'VALIDATION_STRING:content' })
+  @IsNotEmpty({ message: 'VALIDATION_REQUIRED:content' })
   content: string;
 
   @IsOptional()
   @IsEnum(NotificationStatus, {
-    message: '유효한 공지사항 상태여야 합니다.',
+    message: 'VALIDATION_INVALID_ENUM:status',
   })
   status?: NotificationStatus;
 
   @IsOptional()
-  @IsBoolean({ message: '고정 여부는 boolean이어야 합니다.' })
+  @IsBoolean({ message: 'VALIDATION_BOOLEAN:isPinned' })
   isPinned?: boolean;
 
   @IsOptional()
-  @IsDateString({}, { message: '예약 시간은 ISO 8601 형식이어야 합니다.' })
+  @IsDateString({}, { message: 'VALIDATION_DATE_FORMAT:scheduledAt' })
   scheduledAt?: string;
 }

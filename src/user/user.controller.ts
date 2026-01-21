@@ -14,6 +14,7 @@ import {
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
+import { MessageCode } from '../common/constants/message-codes';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { DeleteUserAddressesDto } from './dto/delete-user-addresses.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
@@ -94,7 +95,9 @@ export class UserController {
   @Delete('me')
   async deleteCurrentUser(@CurrentUser() authUser: AuthUserPayload) {
     await this.userService.deleteUser(authUser.email);
-    return { message: '회원 탈퇴가 완료되었습니다.' };
+    return {
+      messageCode: MessageCode.USER_WITHDRAWAL_COMPLETED,
+    };
   }
 
   @Patch('language')
@@ -106,7 +109,9 @@ export class UserController {
       authUser.email,
     );
     await this.userService.updateEntityLanguage(entity, dto.language);
-    return { message: '언어 설정이 변경되었습니다.' };
+    return {
+      messageCode: MessageCode.USER_LANGUAGE_CHANGED,
+    };
   }
 
   // ========== 주소 리스트 관련 엔드포인트 ==========
@@ -168,7 +173,9 @@ export class UserController {
       authUser.email,
     );
     await this.userService.deleteEntityAddresses(entity, dto.ids);
-    return { message: '주소가 삭제되었습니다.' };
+    return {
+      messageCode: MessageCode.USER_ADDRESS_DELETED,
+    };
   }
 
   @Patch('addresses/:id/default')

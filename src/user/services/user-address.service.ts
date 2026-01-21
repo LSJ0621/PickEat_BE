@@ -42,8 +42,7 @@ export class UserAddressService {
 
     if (activeCount >= USER_LIMITS.MAX_ADDRESSES) {
       throw new BadRequestException({
-        message: `주소는 최대 ${USER_LIMITS.MAX_ADDRESSES}개까지만 저장할 수 있습니다.`,
-        errorCode: ErrorCode.USER_MAX_ADDRESSES_EXCEEDED,
+        errorCode: ErrorCode.ADDRESS_MAX_LIMIT,
       });
     }
 
@@ -91,8 +90,7 @@ export class UserAddressService {
 
     if (!address) {
       throw new NotFoundException({
-        message: '주소를 찾을 수 없습니다.',
-        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+        errorCode: ErrorCode.ADDRESS_NOT_FOUND,
       });
     }
 
@@ -130,8 +128,7 @@ export class UserAddressService {
 
     if (!address) {
       throw new NotFoundException({
-        message: '주소를 찾을 수 없습니다.',
-        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+        errorCode: ErrorCode.ADDRESS_NOT_FOUND,
       });
     }
 
@@ -167,8 +164,7 @@ export class UserAddressService {
   async deleteAddresses(entity: User, addressIds: number[]): Promise<void> {
     if (!addressIds || addressIds.length === 0) {
       throw new BadRequestException({
-        message: '삭제할 주소 ID가 없습니다.',
-        errorCode: ErrorCode.VALIDATION_ERROR,
+        errorCode: ErrorCode.ADDRESS_NO_ID_TO_DELETE,
       });
     }
 
@@ -184,17 +180,14 @@ export class UserAddressService {
     const notFoundIds = addressIds.filter((id) => !foundIds.includes(id));
     if (notFoundIds.length > 0) {
       throw new NotFoundException({
-        message: `주소를 찾을 수 없습니다. ID: ${notFoundIds.join(', ')}`,
-        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+        errorCode: ErrorCode.ADDRESS_NOT_FOUND,
       });
     }
 
     const defaultAddresses = addresses.filter((addr) => addr.isDefault);
     if (defaultAddresses.length > 0) {
       throw new BadRequestException({
-        message:
-          '기본 주소는 삭제할 수 없습니다. 기본 주소를 변경한 후 삭제해주세요.',
-        errorCode: ErrorCode.VALIDATION_ERROR,
+        errorCode: ErrorCode.ADDRESS_CANNOT_DELETE_DEFAULT,
       });
     }
 
@@ -231,8 +224,7 @@ export class UserAddressService {
 
     if (!address) {
       throw new NotFoundException({
-        message: '주소를 찾을 수 없습니다.',
-        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+        errorCode: ErrorCode.ADDRESS_NOT_FOUND,
       });
     }
 
@@ -255,8 +247,7 @@ export class UserAddressService {
 
     if (!address) {
       throw new NotFoundException({
-        message: '주소를 찾을 수 없습니다.',
-        errorCode: ErrorCode.USER_ADDRESS_NOT_FOUND,
+        errorCode: ErrorCode.ADDRESS_NOT_FOUND,
       });
     }
 
@@ -301,8 +292,7 @@ export class UserAddressService {
 
     if (!latitude || !longitude) {
       throw new BadRequestException({
-        message: '위도와 경도 정보가 필요합니다.',
-        errorCode: ErrorCode.VALIDATION_ERROR,
+        errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
       });
     }
 
@@ -348,8 +338,7 @@ export class UserAddressService {
     }
 
     throw new BadRequestException({
-      message: '주소 업데이트에 실패했습니다.',
-      errorCode: ErrorCode.VALIDATION_ERROR,
+      errorCode: ErrorCode.ADDRESS_UPDATE_FAILED,
     });
   }
 }

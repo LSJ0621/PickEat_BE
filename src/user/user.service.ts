@@ -42,7 +42,7 @@ export class UserService {
     password: string;
     role?: string;
     name?: string | null;
-    preferredLanguage?: string;
+    preferredLanguage?: 'ko' | 'en';
   }): Promise<User> {
     const user = this.userRepository.create({
       email: userData.email,
@@ -83,7 +83,6 @@ export class UserService {
     const user = await this.findByEmail(email);
     if (!user) {
       throw new NotFoundException({
-        message: `User with email ${email} not found`,
         errorCode: ErrorCode.USER_NOT_FOUND,
       });
     }
@@ -106,6 +105,7 @@ export class UserService {
     email: string,
     socialType: SocialType,
     name?: string,
+    preferredLanguage?: 'ko' | 'en',
   ): Promise<User> {
     const user = this.userRepository.create({
       email,
@@ -114,6 +114,7 @@ export class UserService {
       role: 'USER',
       name,
       password: null,
+      preferredLanguage: preferredLanguage ?? 'ko',
     });
     return this.userRepository.save(user);
   }
@@ -122,7 +123,6 @@ export class UserService {
     const user = await this.userRepository.findOneBy({ id });
     if (!user) {
       throw new NotFoundException({
-        message: `User ${id} not found`,
         errorCode: ErrorCode.USER_NOT_FOUND,
       });
     }
@@ -138,15 +138,13 @@ export class UserService {
 
       if (!user) {
         throw new NotFoundException({
-          message: '사용자를 찾을 수 없습니다.',
           errorCode: ErrorCode.USER_NOT_FOUND,
         });
       }
 
       if (user.deletedAt) {
         throw new BadRequestException({
-          message: '이미 탈퇴한 계정입니다.',
-          errorCode: ErrorCode.USER_NOT_FOUND,
+          errorCode: ErrorCode.USER_ALREADY_WITHDRAWN,
         });
       }
 
@@ -187,7 +185,10 @@ export class UserService {
 
   // ========== Language 관련 ==========
 
-  async updateEntityLanguage(entity: User, language: string): Promise<void> {
+  async updateEntityLanguage(
+    entity: User,
+    language: 'ko' | 'en',
+  ): Promise<void> {
     entity.preferredLanguage = language;
     await this.userRepository.save(entity);
   }

@@ -64,7 +64,10 @@ export class NaverSearchClient {
       this.logger.log(`✅ [Naver 로컬 검색 완료] count=${items.length}`);
       return items;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'unknown error';
+      // unknown → Error 변환
+      const errorObj =
+        error instanceof Error ? error : new Error(String(error));
+      const message = errorObj.message;
 
       let statusCode: number | undefined;
       let errorData: unknown;
@@ -86,9 +89,10 @@ export class NaverSearchClient {
           `에러 상세: ${JSON.stringify(errorData).slice(0, 500)}`,
         );
       }
+
       throw new ExternalApiException(
         'Naver Search',
-        error,
+        errorObj,
         '로컬 검색에 실패했습니다.',
       );
     }

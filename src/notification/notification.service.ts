@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import {
   PageInfo,
   PaginatedResponse,
@@ -91,7 +92,10 @@ export class NotificationService {
     });
 
     if (!notification) {
-      throw new NotFoundException(`공지사항을 찾을 수 없습니다. (ID: ${id})`);
+      throw new NotFoundException({
+        message: `공지사항을 찾을 수 없습니다. (ID: ${id})`,
+        errorCode: ErrorCode.NOTIFICATION_NOT_FOUND,
+      });
     }
 
     return notification;
@@ -187,7 +191,10 @@ export class NotificationService {
     });
 
     if (!notification) {
-      throw new NotFoundException(`공지사항을 찾을 수 없습니다. (ID: ${id})`);
+      throw new NotFoundException({
+        message: `공지사항을 찾을 수 없습니다. (ID: ${id})`,
+        errorCode: ErrorCode.NOTIFICATION_NOT_FOUND,
+      });
     }
 
     return notification;

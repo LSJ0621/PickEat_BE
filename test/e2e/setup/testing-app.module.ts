@@ -244,7 +244,8 @@ export async function createTestingApp(): Promise<{
       transform: true,
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // Use app.get() to retrieve HttpExceptionFilter with its dependencies injected
+  app.useGlobalFilters(app.get(HttpExceptionFilter));
   app.use(cookieParser());
 
   await app.init();

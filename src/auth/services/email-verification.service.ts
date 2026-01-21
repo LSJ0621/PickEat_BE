@@ -11,10 +11,14 @@ import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import { Repository } from 'typeorm';
 import { EMAIL_VERIFICATION } from '../../common/constants/business.constants';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { MessageCode } from '@/common/constants/message-codes';
 import { TEST_MODE } from '../../common/constants/test-mode.constants';
 import { isTestMode } from '../../common/utils/test-mode.util';
+import { EMAIL_CONTENT } from '../constants/email-content.constants';
 import { EmailPurpose } from '../dto/send-email-code.dto';
 import { EmailVerification } from '../entities/email-verification.entity';
+import { User } from '../../user/entities/user.entity';
 
 @Injectable()
 export class EmailVerificationService {
@@ -24,6 +28,8 @@ export class EmailVerificationService {
   constructor(
     @InjectRepository(EmailVerification)
     private readonly emailVerificationRepository: Repository<EmailVerification>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly mailerService: MailerService,
     private readonly config: ConfigService,
   ) {
@@ -39,33 +45,49 @@ export class EmailVerificationService {
   async sendCode(
     email: string,
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
-  ): Promise<{ remainCount: number; message: string }> {
+    lang?: 'ko' | 'en',
+  ): Promise<{
+    remainCount: number;
+    messageCode: MessageCode;
+  }> {
     this.ensureMailConfig();
     const normalizedPurpose = this.normalizePurpose(purpose);
-    const isResetPassword = normalizedPurpose === EmailPurpose.RESET_PASSWORD;
-    const isReRegister = normalizedPurpose === EmailPurpose.RE_REGISTER;
-    let purposeLabel = '회원가입';
-    let subject = '[PickEat] 이메일 인증 코드';
-    if (isResetPassword) {
-      purposeLabel = '비밀번호 재설정';
-      subject = '[PickEat] 비밀번호 재설정 인증 코드';
-    } else if (isReRegister) {
-      purposeLabel = '재가입';
-      subject = '[PickEat] 재가입 인증 코드';
+
+    // User lookup and language selection
+    let selectedLang = lang || 'ko';
+    if (!lang) {
+      const user = await this.userRepository.findOne({
+        where: { email },
+        select: ['preferredLanguage'],
+      });
+      if (user?.preferredLanguage) {
+        selectedLang = user.preferredLanguage;
+      }
     }
-    const description = `PickEat ${purposeLabel}을 위한 인증번호입니다.`;
-    const footer = `이 이메일은 PickEat ${purposeLabel} 요청으로 인해 발송되었습니다.`;
+
+    const emailContent = EMAIL_CONTENT[selectedLang as 'ko' | 'en'];
+    const localizedContent = {
+      emailTitle: emailContent.verification.emailTitle[normalizedPurpose],
+      pageTitle: emailContent.verification.pageTitle,
+      purposeLabel: emailContent.verification.purposeLabel[normalizedPurpose],
+      description: emailContent.verification.description[normalizedPurpose],
+      inputPrompt: emailContent.verification.inputPrompt,
+      validityMessage: emailContent.verification.validityMessage,
+      securityMessage: emailContent.verification.securityMessage,
+      ignoreMessage: emailContent.verification.ignoreMessage,
+      footer: emailContent.verification.footer[normalizedPurpose],
+    };
     const now = new Date();
     const latest = await this.getLatest(email, normalizedPurpose);
     const isSamePurposeDay =
       latest &&
       this.isSameDay(now, latest.lastSentAt ?? latest.createdAt ?? now);
 
-    this.ensureNotCompletedToday(latest, now, normalizedPurpose);
-    this.ensureNotBlocked(latest, now);
+    this.ensureNotCompletedToday(latest, now, normalizedPurpose, selectedLang);
+    this.ensureNotBlocked(latest, now, selectedLang);
 
     if (latest && isSamePurposeDay) {
-      this.ensureResendAllowed(latest, now);
+      this.ensureResendAllowed(latest, now, selectedLang);
     }
 
     const code = this.generateCode();
@@ -75,7 +97,9 @@ export class EmailVerificationService {
     );
     const nextSendCount = latest && isSamePurposeDay ? latest.sendCount + 1 : 1;
     if (nextSendCount > this.dailySendLimit) {
-      throw new BadRequestException('하루 최대 발송 횟수를 초과했습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_DAILY_SEND_LIMIT_EXCEEDED,
+      });
     }
     const remainCount = Math.max(this.dailySendLimit - nextSendCount, 0);
 
@@ -105,25 +129,23 @@ export class EmailVerificationService {
       );
       return {
         remainCount,
-        message: `[TEST MODE] 인증번호가 발송되었습니다. 남은 재발송 횟수는 ${remainCount}회입니다.`,
+        messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       };
     }
 
     await this.mailerService.sendMail({
       to: email,
-      subject,
-      template: 'email-verification',
+      subject: localizedContent.emailTitle,
+      template: this.getTemplateName(selectedLang),
       context: {
+        ...localizedContent,
         verificationCode: code,
-        purposeLabel,
-        description,
-        footer,
       },
     });
 
     return {
       remainCount,
-      message: `인증번호가 발송되었습니다. 남은 재발송 횟수는 ${remainCount}회입니다.`,
+      messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
     };
   }
 
@@ -131,6 +153,7 @@ export class EmailVerificationService {
     email: string,
     code: string,
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
+    lang?: string,
   ): Promise<boolean> {
     // 테스트 모드에서 테스트 코드 사용 시 바이패스
     if (isTestMode() && code === TEST_MODE.EMAIL_VERIFICATION_CODE) {
@@ -151,21 +174,25 @@ export class EmailVerificationService {
     const now = new Date();
     const latest = await this.getLatest(email, normalizedPurpose);
 
-    this.ensureNotBlocked(latest, now);
+    this.ensureNotBlocked(latest, now, lang);
 
     if (!latest) {
-      throw new BadRequestException('코드가 유효하지 않습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_CODE_INVALID,
+      });
     }
 
-    this.ensureUsableStatus(latest);
+    this.ensureUsableStatus(latest, lang);
     if (latest.expiresAt.getTime() <= now.getTime()) {
       await this.markAsExpired(latest);
-      throw new BadRequestException('코드가 만료되었습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_CODE_EXPIRED,
+      });
     }
 
     const isValid = await bcrypt.compare(code, latest.codeHash);
     if (!isValid) {
-      await this.handleFailedAttempt(latest, now);
+      await this.handleFailedAttempt(latest, now, lang);
     }
 
     latest.used = true;
@@ -232,14 +259,16 @@ export class EmailVerificationService {
       !emailAddress ||
       !emailPassword
     ) {
-      this.logger.error('이메일 환경변수가 설정되지 않았습니다.');
-      throw new InternalServerErrorException(
-        '메일 설정이 완료되지 않았습니다. 관리자에게 문의하세요.',
-      );
+      this.logger.error('Email configuration is missing');
+      throw new InternalServerErrorException('Email configuration error');
     }
   }
 
-  private ensureNotBlocked(record: EmailVerification | null, now: Date) {
+  private ensureNotBlocked(
+    record: EmailVerification | null,
+    now: Date,
+    _lang?: string,
+  ) {
     if (!record) {
       return;
     }
@@ -249,21 +278,25 @@ export class EmailVerificationService {
       referenceDate &&
       this.isSameDay(now, referenceDate)
     ) {
-      throw new BadRequestException(
-        '5회 실패로 인해 다음날까지 회원가입이 불가능합니다',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_BLOCKED,
+      });
     }
   }
 
-  private ensureResendAllowed(record: EmailVerification, now: Date) {
+  private ensureResendAllowed(
+    record: EmailVerification,
+    now: Date,
+    _lang?: string,
+  ) {
     const baseDate = record.lastSentAt ?? record.createdAt;
     if (
       baseDate &&
       now.getTime() - baseDate.getTime() < EMAIL_VERIFICATION.RESEND_LIMIT_MS
     ) {
-      throw new BadRequestException(
-        '인증코드를 너무 자주 요청하고 있습니다. 잠시 후 다시 시도해주세요.',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_TOO_MANY_REQUESTS,
+      });
     }
 
     if (
@@ -271,7 +304,9 @@ export class EmailVerificationService {
       this.isSameDay(now, baseDate) &&
       record.sendCount >= this.dailySendLimit
     ) {
-      throw new BadRequestException('하루 최대 발송 횟수를 초과했습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_DAILY_SEND_LIMIT_EXCEEDED,
+      });
     }
   }
 
@@ -325,15 +360,21 @@ export class EmailVerificationService {
     await this.emailVerificationRepository.save(newRecord);
   }
 
-  private ensureUsableStatus(record: EmailVerification) {
+  private ensureUsableStatus(record: EmailVerification, _lang?: string) {
     if (record.status === 'INVALIDATED') {
-      throw new BadRequestException('이미 사용이 완료된 코드입니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_CODE_INVALIDATED,
+      });
     }
     if (record.status === 'EXPIRED') {
-      throw new BadRequestException('코드가 만료되었습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_CODE_EXPIRED,
+      });
     }
     if (record.status === 'USED') {
-      throw new BadRequestException('이미 사용된 코드입니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_CODE_USED,
+      });
     }
   }
 
@@ -346,7 +387,8 @@ export class EmailVerificationService {
   private ensureNotCompletedToday(
     record: EmailVerification | null,
     now: Date,
-    purpose: EmailPurpose,
+    _purpose: EmailPurpose,
+    _lang?: string,
   ) {
     if (
       !record ||
@@ -356,16 +398,16 @@ export class EmailVerificationService {
       return;
     }
 
-    const message =
-      purpose === EmailPurpose.RESET_PASSWORD
-        ? '이미 비밀번호 재설정을 완료했습니다. 내일 다시 시도해주세요.'
-        : purpose === EmailPurpose.RE_REGISTER
-          ? '이미 재가입을 완료했습니다. 내일 다시 시도해주세요.'
-          : '이미 이메일 인증이 완료되었습니다. 잠시 후 다시 시도해주세요.';
-    throw new BadRequestException(message);
+    throw new BadRequestException({
+      errorCode: ErrorCode.AUTH_ALREADY_COMPLETED_TODAY,
+    });
   }
 
-  private async handleFailedAttempt(record: EmailVerification, now: Date) {
+  private async handleFailedAttempt(
+    record: EmailVerification,
+    now: Date,
+    _lang?: string,
+  ) {
     if (this.isSameDay(now, record.updatedAt ?? record.createdAt)) {
       record.failCount += 1;
     } else {
@@ -377,12 +419,14 @@ export class EmailVerificationService {
       record.failCount >= 5 &&
       this.isSameDay(now, record.updatedAt ?? record.createdAt)
     ) {
-      throw new BadRequestException(
-        '5회 실패로 인해 다음날까지 회원가입이 불가능합니다',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.AUTH_VERIFICATION_BLOCKED,
+      });
     }
 
-    throw new BadRequestException('코드가 유효하지 않습니다');
+    throw new BadRequestException({
+      errorCode: ErrorCode.AUTH_VERIFICATION_CODE_INVALID,
+    });
   }
 
   private isSameDay(now: Date, target?: Date | null): boolean {
@@ -390,5 +434,168 @@ export class EmailVerificationService {
       return false;
     }
     return now.toDateString() === target.toDateString();
+  }
+
+  private getTemplateName(lang: string): string {
+    const supportedLangs = ['ko', 'en'];
+    const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
+    return `email-verification.${selectedLang}`;
+  }
+
+  /**
+   * Send welcome email to newly registered user
+   * @param userId - User ID for fetching user data
+   * @param language - Preferred language ('ko' | 'en')
+   */
+  async sendWelcomeEmail(
+    userId: string,
+    language?: 'ko' | 'en',
+  ): Promise<void> {
+    try {
+      // Fetch user data
+      const user = await this.userRepository.findOne({
+        where: { id: parseInt(userId, 10) },
+        select: ['email', 'name', 'preferredLanguage'],
+      });
+
+      if (!user) {
+        this.logger.warn(`User with ID ${userId} not found for welcome email`);
+        return;
+      }
+
+      // Determine language
+      const selectedLang = language || user.preferredLanguage || 'ko';
+
+      // Build localized content
+      const content = EMAIL_CONTENT[selectedLang as 'ko' | 'en']?.welcome;
+      const userName = user.name || user.email.split('@')[0];
+      const loginLink =
+        this.config.get<string>('FRONTEND_URL') || 'https://pickeat.com';
+
+      // Test mode check
+      if (isTestMode()) {
+        this.logger.debug(
+          `[TEST MODE] Skipping welcome email to ${user.email} in ${selectedLang}`,
+        );
+        return;
+      }
+
+      // Send email
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: content.emailTitle,
+        template: this.getWelcomeTemplateName(selectedLang),
+        context: {
+          lang: selectedLang,
+          pageTitle: content.pageTitle,
+          emailTitle: content.emailTitle,
+          userName,
+          description: content.description,
+          featuresTitle: content.featuresTitle,
+          loginLink,
+          ctaText: content.ctaText,
+          footer: content.footer,
+        },
+      });
+
+      this.logger.log(`Welcome email sent to ${user.email} in ${selectedLang}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send welcome email to user ${userId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Send account deactivation notification email
+   * @param email - User email address
+   * @param reason - Deactivation reason (HTML-safe)
+   * @param deactivatedAt - Deactivation timestamp
+   * @param language - Preferred language ('ko' | 'en')
+   */
+  async sendAccountDeactivationEmail(
+    email: string,
+    reason: string,
+    deactivatedAt: Date,
+    language?: 'ko' | 'en',
+  ): Promise<void> {
+    try {
+      // Determine language
+      let selectedLang = language || 'ko';
+      if (!language) {
+        const user = await this.userRepository.findOne({
+          where: { email },
+          select: ['preferredLanguage'],
+        });
+        if (user?.preferredLanguage) {
+          selectedLang = user.preferredLanguage;
+        }
+      }
+
+      // Build localized content
+      const content = EMAIL_CONTENT[selectedLang as 'ko' | 'en']?.deactivation;
+      const userName = email.split('@')[0];
+
+      // Format timestamp
+      const formattedDate = deactivatedAt.toLocaleString(
+        selectedLang === 'ko' ? 'ko-KR' : 'en-US',
+        {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        },
+      );
+
+      // Test mode check
+      if (isTestMode()) {
+        this.logger.debug(
+          `[TEST MODE] Skipping deactivation email to ${email} in ${selectedLang}`,
+        );
+        return;
+      }
+
+      // Send email
+      await this.mailerService.sendMail({
+        to: email,
+        subject: content.emailTitle,
+        template: this.getAccountDeactivationTemplateName(selectedLang),
+        context: {
+          lang: selectedLang,
+          pageTitle: content.pageTitle,
+          emailTitle: content.emailTitle,
+          userName,
+          description: content.description,
+          reason,
+          deactivatedAt: formattedDate,
+          supportEmail: content.supportEmail,
+          dataRetentionDays: content.dataRetentionDays,
+          footer: content.footer,
+        },
+      });
+
+      this.logger.log(`Deactivation email sent to ${email} in ${selectedLang}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send deactivation email to ${email}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  private getWelcomeTemplateName(lang: string): string {
+    const supportedLangs = ['ko', 'en'];
+    const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
+    return `welcome.${selectedLang}`;
+  }
+
+  private getAccountDeactivationTemplateName(lang: string): string {
+    const supportedLangs = ['ko', 'en'];
+    const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
+    return `account-deactivation.${selectedLang}`;
   }
 }

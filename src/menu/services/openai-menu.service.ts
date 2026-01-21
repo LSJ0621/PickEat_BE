@@ -22,12 +22,14 @@ export class OpenAiMenuService {
     likes: string[],
     dislikes: string[],
     analysis?: string,
+    language: 'ko' | 'en' = 'ko',
   ): Promise<MenuRecommendationsResponse> {
     return this.twoStageMenuService.generateMenuRecommendations(
       prompt,
       likes,
       dislikes,
       analysis,
+      language,
     );
   }
 }
