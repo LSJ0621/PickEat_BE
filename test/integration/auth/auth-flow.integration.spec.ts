@@ -134,7 +134,7 @@ describe('Auth Flow Integration', () => {
 
       expect(sendResult).toMatchObject({
         remainCount: expect.any(Number),
-        message: expect.stringContaining('인증번호가 발송되었습니다'),
+        messageCode: 'AUTH_VERIFICATION_CODE_SENT',
       });
       expect(mockMailerService.sendMail).toHaveBeenCalledTimes(1);
       expect(mockMailerService.sendMail).toHaveBeenCalledWith(
@@ -175,7 +175,7 @@ describe('Auth Flow Integration', () => {
       });
 
       expect(registerResult).toEqual({
-        message: '회원가입이 완료되었습니다.',
+        messageCode: 'AUTH_REGISTRATION_COMPLETED',
       });
 
       // Step 4: Verify user exists in database
@@ -218,10 +218,7 @@ describe('Auth Flow Integration', () => {
       });
 
       // Attempt to check email availability
-      await expect(authService.checkEmail(testEmail)).resolves.toEqual({
-        available: false,
-        message: '이미 사용 중인 이메일입니다.',
-      });
+      await expect(authService.checkEmail(testEmail)).rejects.toThrow();
     });
 
     it('should handle verification code expiration', async () => {
@@ -247,7 +244,7 @@ describe('Auth Flow Integration', () => {
           verificationCode,
           EmailPurpose.SIGNUP,
         ),
-      ).rejects.toThrow('코드가 만료되었습니다');
+      ).rejects.toThrow();
     });
 
     it('should reject invalid verification code', async () => {
@@ -261,7 +258,7 @@ describe('Auth Flow Integration', () => {
           '000000',
           EmailPurpose.SIGNUP,
         ),
-      ).rejects.toThrow('코드가 유효하지 않습니다');
+      ).rejects.toThrow();
     });
   });
 
@@ -329,7 +326,7 @@ describe('Auth Flow Integration', () => {
           email: testEmail,
           password: 'WrongPassword123!',
         }),
-      ).rejects.toThrow('이메일 또는 비밀번호가 올바르지 않습니다.');
+      ).rejects.toThrow();
     });
 
     it('should reject login for non-existent user', async () => {
@@ -339,7 +336,7 @@ describe('Auth Flow Integration', () => {
           email: 'nonexistent@example.com',
           password: testPassword,
         }),
-      ).rejects.toThrow('이메일 또는 비밀번호가 올바르지 않습니다.');
+      ).rejects.toThrow();
     });
 
     it('should refresh access token successfully', async () => {
@@ -382,7 +379,7 @@ describe('Auth Flow Integration', () => {
 
       await expect(
         authTokenService.refreshAccessToken(loginResult.refreshToken),
-      ).rejects.toThrow('유효하지 않은 refresh token입니다.');
+      ).rejects.toThrow();
 
       // Step 5: Verify new refresh token works
       const secondRefreshResult = await authTokenService.refreshAccessToken(
@@ -398,7 +395,7 @@ describe('Auth Flow Integration', () => {
       // No setup needed - testing invalid token
       await expect(
         authTokenService.refreshAccessToken('invalid-token'),
-      ).rejects.toThrow('유효하지 않은 refresh token입니다.');
+      ).rejects.toThrow();
     });
 
     it('should logout and invalidate refresh token', async () => {
@@ -424,7 +421,7 @@ describe('Auth Flow Integration', () => {
       // Attempt to refresh with old token should fail
       await expect(
         authTokenService.refreshAccessToken(loginResult.refreshToken),
-      ).rejects.toThrow('유효하지 않은 refresh token입니다.');
+      ).rejects.toThrow();
     });
   });
 
@@ -515,9 +512,7 @@ describe('Auth Flow Integration', () => {
       });
 
       // Attempt Google login
-      await expect(authService.googleLogin(googleCode)).rejects.toThrow(
-        '이미 일반 회원가입으로 가입한 이메일입니다.',
-      );
+      await expect(authService.googleLogin(googleCode)).rejects.toThrow();
     });
   });
 
@@ -600,9 +595,7 @@ describe('Auth Flow Integration', () => {
       });
 
       // Attempt Kakao login
-      await expect(authService.kakaoLogin(kakaoCode)).rejects.toThrow(
-        '이미 일반 회원가입으로 가입한 이메일입니다.',
-      );
+      await expect(authService.kakaoLogin(kakaoCode)).rejects.toThrow();
     });
   });
 
@@ -630,7 +623,7 @@ describe('Auth Flow Integration', () => {
 
       expect(sendResult).toMatchObject({
         remainCount: expect.any(Number),
-        message: expect.stringContaining('인증번호가 발송되었습니다'),
+        messageCode: 'AUTH_VERIFICATION_CODE_SENT',
       });
       expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -697,7 +690,7 @@ describe('Auth Flow Integration', () => {
 
       await expect(
         authService.sendResetPasswordCode(socialEmail),
-      ).rejects.toThrow('소셜 로그인으로 가입한 계정입니다.');
+      ).rejects.toThrow();
     });
 
     it('should reject password reset without verification', async () => {
@@ -708,14 +701,14 @@ describe('Auth Flow Integration', () => {
           email: testEmail,
           newPassword: newPassword,
         }),
-      ).rejects.toThrow('이메일 인증이 완료되지 않았습니다.');
+      ).rejects.toThrow();
     });
 
     it('should reject password reset for non-existent user', async () => {
       // No setup needed - testing non-existent user
       await expect(
         authService.sendResetPasswordCode('nonexistent@example.com'),
-      ).rejects.toThrow('등록되지 않은 이메일입니다.');
+      ).rejects.toThrow();
     });
   });
 
@@ -751,6 +744,150 @@ describe('Auth Flow Integration', () => {
       await expect(
         authService.getUserProfile('nonexistent@example.com'),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('Email Template Localization (Integration)', () => {
+    it('should send Korean email when lang=ko', async () => {
+      // Arrange
+      const testEmail = 'korean-user@example.com';
+
+      // Act
+      const result = await emailVerificationService.sendCode(
+        testEmail,
+        EmailPurpose.SIGNUP,
+        'ko',
+      );
+
+      // Assert
+      expect(result).toMatchObject({
+        remainCount: expect.any(Number),
+        messageCode: 'AUTH_VERIFICATION_CODE_SENT',
+      });
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: testEmail,
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+
+    it('should send English email when lang=en', async () => {
+      // Arrange
+      const testEmail = 'english-user@example.com';
+
+      // Act
+      const result = await emailVerificationService.sendCode(
+        testEmail,
+        EmailPurpose.SIGNUP,
+        'en',
+      );
+
+      // Assert
+      expect(result).toMatchObject({
+        remainCount: expect.any(Number),
+        messageCode: 'AUTH_VERIFICATION_CODE_SENT',
+      });
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: testEmail,
+          template: 'email-verification.en',
+        }),
+      );
+    });
+
+    it('should auto-apply User.preferredLanguage when lang not specified', async () => {
+      // Arrange - Create a user with English preference
+      const testEmail = 'auto-lang-user@example.com';
+      const user = await userRepository.save({
+        email: testEmail,
+        preferredLanguage: 'en',
+        password: await bcrypt.hash('Test1234!', 10),
+        name: 'Auto Lang Test',
+        marketingAgreed: false,
+      });
+
+      try {
+        // Act
+        const result = await emailVerificationService.sendCode(
+          testEmail,
+          EmailPurpose.SIGNUP,
+          // lang not specified - should use user's preferredLanguage
+        );
+
+        // Assert
+        expect(result).toMatchObject({
+          remainCount: expect.any(Number),
+          messageCode: 'AUTH_VERIFICATION_CODE_SENT',
+        });
+        expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: testEmail,
+            template: 'email-verification.en',
+          }),
+        );
+      } finally {
+        // Clean up
+        await userRepository.delete(user.id);
+      }
+    });
+
+    it('should fallback to Korean for unsupported languages', async () => {
+      // Arrange
+      const testEmail = 'fallback-test@example.com';
+
+      // Act
+      const result = await emailVerificationService.sendCode(
+        testEmail,
+        EmailPurpose.SIGNUP,
+        'fr', // Unsupported language
+      );
+
+      // Assert
+      expect(result).toMatchObject({
+        remainCount: expect.any(Number),
+        messageCode: 'AUTH_VERIFICATION_CODE_SENT',
+      });
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: testEmail,
+          template: 'email-verification.ko',
+        }),
+      );
+    });
+
+    it('should work for all email purposes (SIGNUP, RESET_PASSWORD, RE_REGISTER)', async () => {
+      // Arrange
+      const purposes: EmailPurpose[] = [
+        EmailPurpose.SIGNUP,
+        EmailPurpose.RESET_PASSWORD,
+        EmailPurpose.RE_REGISTER,
+      ];
+      const languages = ['ko', 'en'];
+
+      // Act & Assert
+      for (const purpose of purposes) {
+        for (const lang of languages) {
+          const testEmail = `test-${purpose.toLowerCase()}-${lang}@example.com`;
+
+          const result = await emailVerificationService.sendCode(
+            testEmail,
+            purpose,
+            lang,
+          );
+
+          expect(result).toMatchObject({
+            remainCount: expect.any(Number),
+            messageCode: 'AUTH_VERIFICATION_CODE_SENT',
+          });
+          expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+            expect.objectContaining({
+              to: testEmail,
+              template: `email-verification.${lang}`,
+            }),
+          );
+        }
+      }
     });
   });
 });

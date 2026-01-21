@@ -14,6 +14,7 @@ import {
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
+import { ErrorCode } from '../common/constants/error-codes';
 import { UserService } from '../user/user.service';
 import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
 import { RecommendMenuDto } from './dto/recommend-menu.dto';
@@ -78,7 +79,9 @@ export class MenuController {
   ) {
     const selectionId = Number(id);
     if (Number.isNaN(selectionId)) {
-      throw new BadRequestException('유효하지 않은 선택 ID입니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_INVALID_SELECTION_ID,
+      });
     }
     const entity = await this.userService.getAuthenticatedEntity(
       authUser.email,
@@ -128,7 +131,9 @@ export class MenuController {
     @CurrentUser() authUser: AuthUserPayload,
   ) {
     if (!menuName) {
-      throw new BadRequestException('menuName 쿼리 파라미터가 필요합니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_NAME_REQUIRED,
+      });
     }
     const entity = await this.userService.getAuthenticatedEntity(
       authUser.email,
@@ -154,7 +159,9 @@ export class MenuController {
   ) {
     const numericId = Number(id);
     if (Number.isNaN(numericId)) {
-      throw new BadRequestException('유효하지 않은 추천 이력 ID입니다.');
+      throw new BadRequestException({
+        errorCode: ErrorCode.MENU_INVALID_HISTORY_ID,
+      });
     }
     const entity = await this.userService.getAuthenticatedEntity(
       authUser.email,

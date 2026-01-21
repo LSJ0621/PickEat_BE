@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { User } from '@/user/entities/user.entity';
 import { UserAddress } from '@/user/entities/user-address.entity';
 import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
@@ -119,7 +120,9 @@ export class AdminUserService {
     });
 
     if (!user) {
-      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     const [addresses, stats, recentRecommendations, recentBugReports] =
@@ -159,9 +162,13 @@ export class AdminUserService {
     if (result.affected === 0) {
       const user = await this.userRepository.findOneBy({ id });
       if (!user) {
-        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+        throw new NotFoundException({
+          errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+        });
       }
-      throw new ConflictException('이미 비활성화된 사용자입니다.');
+      throw new ConflictException({
+        errorCode: ErrorCode.ADMIN_USER_ALREADY_DEACTIVATED,
+      });
     }
   }
 
@@ -174,9 +181,13 @@ export class AdminUserService {
     if (result.affected === 0) {
       const user = await this.userRepository.findOneBy({ id });
       if (!user) {
-        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+        throw new NotFoundException({
+          errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+        });
       }
-      throw new ConflictException('이미 활성화된 사용자입니다.');
+      throw new ConflictException({
+        errorCode: ErrorCode.ADMIN_USER_ALREADY_ACTIVATED,
+      });
     }
   }
 

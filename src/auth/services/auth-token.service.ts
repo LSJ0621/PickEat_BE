@@ -11,6 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '../../common/constants/error-codes';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthEntity } from '../interfaces/auth.interface';
@@ -88,7 +89,9 @@ export class AuthTokenService {
       });
 
       if (payload.type !== 'refresh') {
-        throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+        throw new UnauthorizedException({
+          errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+        });
       }
 
       // Fetch user with SELECT FOR UPDATE to lock the row and ensure latest data
@@ -99,22 +102,26 @@ export class AuthTokenService {
         .getOne();
 
       if (!user) {
-        throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
+        throw new UnauthorizedException({
+          errorCode: ErrorCode.USER_NOT_FOUND,
+        });
       }
 
       if (user.isDeactivated) {
         throw new HttpException(
           {
             statusCode: HttpStatus.FORBIDDEN,
-            message: '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
             error: 'USER_DEACTIVATED',
+            errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
           },
           HttpStatus.FORBIDDEN,
         );
       }
 
       if (!user.refreshToken) {
-        throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+        throw new UnauthorizedException({
+          errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+        });
       }
 
       const isTokenValid = await bcrypt.compare(
@@ -123,7 +130,9 @@ export class AuthTokenService {
       );
 
       if (!isTokenValid) {
-        throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+        throw new UnauthorizedException({
+          errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+        });
       }
 
       const newAccessToken = this.jwtTokenProvider.createToken(

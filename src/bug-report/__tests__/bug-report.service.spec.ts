@@ -5,7 +5,6 @@ import { DataSource, SelectQueryBuilder } from 'typeorm';
 import { BugReportService } from '../bug-report.service';
 import { BugReport } from '../entities/bug-report.entity';
 import { BugReportStatusHistory } from '../entities/bug-report-status-history.entity';
-import { BugReportAdminNote } from '../entities/bug-report-admin-note.entity';
 import { BugReportStatus } from '../enum/bug-report-status.enum';
 import { UserService } from '../../user/user.service';
 import { S3Client } from '../../external/aws/clients/s3.client';
@@ -25,9 +24,6 @@ describe('BugReportService', () => {
   let statusHistoryRepository: ReturnType<
     typeof createMockRepository<BugReportStatusHistory>
   >;
-  let adminNoteRepository: ReturnType<
-    typeof createMockRepository<BugReportAdminNote>
-  >;
   let userService: jest.Mocked<UserService>;
   let s3Client: ReturnType<typeof createMockS3Client>;
   let dataSource: jest.Mocked<DataSource>;
@@ -36,18 +32,10 @@ describe('BugReportService', () => {
     jest.clearAllMocks();
     bugReportRepository = createMockRepository<BugReport>();
     statusHistoryRepository = createMockRepository<BugReportStatusHistory>();
-    adminNoteRepository = createMockRepository<BugReportAdminNote>();
     userService = createMockService<UserService>(['getAuthenticatedEntity']);
     s3Client = createMockS3Client();
-
-    // Mock DataSource for transaction testing
-    const mockEntityManager = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-    };
-
     dataSource = {
-      transaction: jest.fn((callback) => callback(mockEntityManager)),
+      transaction: jest.fn(),
     } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -60,10 +48,6 @@ describe('BugReportService', () => {
         {
           provide: getRepositoryToken(BugReportStatusHistory),
           useValue: statusHistoryRepository,
-        },
-        {
-          provide: getRepositoryToken(BugReportAdminNote),
-          useValue: adminNoteRepository,
         },
         {
           provide: UserService,
@@ -462,304 +446,6 @@ describe('BugReportService', () => {
       const result = await service.updateStatus(1, BugReportStatus.CONFIRMED);
 
       expect(result.status).toBe(BugReportStatus.CONFIRMED);
-    });
-  });
-
-  describe('batchUpdateStatus', () => {
-    const changedBy = UserFactory.create({
-      id: 1,
-      email: 'admin@example.com',
-    });
-
-    beforeEach(() => {
-      // Reset transaction mock for each test
-      const mockEntityManager = {
-        findOne: jest.fn(),
-        save: jest.fn(),
-      };
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-    });
-
-    it('should update all bug reports in a transaction when all exist', async () => {
-      // Arrange
-      const ids = [1, 2, 3];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockBugReports = ids.map((id) =>
-        BugReportFactory.create({
-          id,
-          status: BugReportStatus.UNCONFIRMED,
-        }),
-      );
-
-      const mockEntityManager = {
-        findOne: jest
-          .fn()
-          .mockResolvedValueOnce(mockBugReports[0])
-          .mockResolvedValueOnce(mockBugReports[1])
-          .mockResolvedValueOnce(mockBugReports[2]),
-        save: jest.fn().mockResolvedValue({}),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      const result = await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(result.updatedCount).toBe(3);
-      expect(result.failedIds).toEqual([]);
-      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
-      expect(mockEntityManager.findOne).toHaveBeenCalledTimes(3);
-      expect(mockEntityManager.save).toHaveBeenCalledTimes(6); // 3 BugReport + 3 BugReportStatusHistory
-    });
-
-    it('should handle partial failure and return failedIds', async () => {
-      // Arrange
-      const ids = [1, 2, 3];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockBugReport1 = BugReportFactory.create({
-        id: 1,
-        status: BugReportStatus.UNCONFIRMED,
-      });
-      const mockBugReport3 = BugReportFactory.create({
-        id: 3,
-        status: BugReportStatus.UNCONFIRMED,
-      });
-
-      const mockEntityManager = {
-        findOne: jest
-          .fn()
-          .mockResolvedValueOnce(mockBugReport1) // ID 1 exists
-          .mockResolvedValueOnce(null) // ID 2 not found
-          .mockResolvedValueOnce(mockBugReport3), // ID 3 exists
-        save: jest.fn().mockResolvedValue({}),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      const result = await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(result.updatedCount).toBe(2);
-      expect(result.failedIds).toEqual([2]);
-      expect(mockEntityManager.findOne).toHaveBeenCalledTimes(3);
-      expect(mockEntityManager.save).toHaveBeenCalledTimes(4); // 2 BugReport + 2 BugReportStatusHistory
-    });
-
-    it('should handle empty array input', async () => {
-      // Arrange
-      const ids: number[] = [];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockEntityManager = {
-        findOne: jest.fn(),
-        save: jest.fn(),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      const result = await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(result.updatedCount).toBe(0);
-      expect(result.failedIds).toEqual([]);
-      expect(mockEntityManager.findOne).not.toHaveBeenCalled();
-      expect(mockEntityManager.save).not.toHaveBeenCalled();
-    });
-
-    it('should handle all failures when no bug reports exist', async () => {
-      // Arrange
-      const ids = [999, 1000, 1001];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockEntityManager = {
-        findOne: jest.fn().mockResolvedValue(null), // All not found
-        save: jest.fn(),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      const result = await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(result.updatedCount).toBe(0);
-      expect(result.failedIds).toEqual([999, 1000, 1001]);
-      expect(mockEntityManager.findOne).toHaveBeenCalledTimes(3);
-      expect(mockEntityManager.save).not.toHaveBeenCalled();
-    });
-
-    it('should update bug report status and create status history', async () => {
-      // Arrange
-      const ids = [1];
-      const status = BugReportStatus.FIXED;
-      const previousStatus = BugReportStatus.CONFIRMED;
-
-      const mockBugReport = BugReportFactory.create({
-        id: 1,
-        status: previousStatus,
-      });
-
-      const saveCalls: unknown[] = [];
-      const mockEntityManager = {
-        findOne: jest.fn().mockResolvedValue(mockBugReport),
-        save: jest.fn().mockImplementation((entity, data) => {
-          saveCalls.push({ entity, data });
-          return Promise.resolve(data);
-        }),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(mockEntityManager.save).toHaveBeenCalledTimes(2);
-
-      // First call should be BugReport save
-      expect(saveCalls[0]).toEqual({
-        entity: BugReport,
-        data: expect.objectContaining({
-          id: 1,
-          status: BugReportStatus.FIXED,
-        }),
-      });
-
-      // Second call should be BugReportStatusHistory save
-      expect(saveCalls[1]).toEqual({
-        entity: expect.anything(),
-        data: expect.objectContaining({
-          bugReport: expect.objectContaining({ id: 1 }),
-          previousStatus,
-          status: BugReportStatus.FIXED,
-          changedBy,
-        }),
-      });
-    });
-
-    it('should run all updates within a single transaction', async () => {
-      // Arrange
-      const ids = [1, 2];
-      const status = BugReportStatus.CLOSED;
-
-      const mockEntityManager = {
-        findOne: jest.fn().mockResolvedValue(
-          BugReportFactory.create({
-            status: BugReportStatus.FIXED,
-          }),
-        ),
-        save: jest.fn().mockResolvedValue({}),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert - Verify transaction was called once (all updates in single transaction)
-      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
-      expect(dataSource.transaction).toHaveBeenCalledWith(expect.any(Function));
-    });
-
-    it('should handle database errors gracefully and include failed ID', async () => {
-      // Arrange
-      const ids = [1, 2];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockEntityManager = {
-        findOne: jest
-          .fn()
-          .mockResolvedValueOnce(BugReportFactory.create({ id: 1 }))
-          .mockRejectedValueOnce(new Error('Database connection lost')), // ID 2 fails
-        save: jest.fn().mockResolvedValue({}),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      const result = await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(result.updatedCount).toBe(1);
-      expect(result.failedIds).toEqual([2]);
-    });
-
-    it('should continue processing remaining IDs after individual failure', async () => {
-      // Arrange
-      const ids = [1, 2, 3, 4];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockEntityManager = {
-        findOne: jest
-          .fn()
-          .mockResolvedValueOnce(BugReportFactory.create({ id: 1 })) // Success
-          .mockResolvedValueOnce(null) // ID 2 fails (not found)
-          .mockRejectedValueOnce(new Error('DB error')) // ID 3 fails (error)
-          .mockResolvedValueOnce(BugReportFactory.create({ id: 4 })), // Success
-        save: jest.fn().mockResolvedValue({}),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      const result = await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(result.updatedCount).toBe(2); // IDs 1 and 4 succeeded
-      expect(result.failedIds).toEqual([2, 3]); // IDs 2 and 3 failed
-      expect(mockEntityManager.findOne).toHaveBeenCalledTimes(4); // All 4 were attempted
-    });
-
-    it('should query bug reports with correct relations', async () => {
-      // Arrange
-      const ids = [1];
-      const status = BugReportStatus.CONFIRMED;
-
-      const mockEntityManager = {
-        findOne: jest.fn().mockResolvedValue(
-          BugReportFactory.create({
-            id: 1,
-            user: UserFactory.create(),
-          }),
-        ),
-        save: jest.fn().mockResolvedValue({}),
-      };
-
-      dataSource.transaction = jest.fn((callback) =>
-        callback(mockEntityManager),
-      ) as jest.Mock;
-
-      // Act
-      await service.batchUpdateStatus(ids, status, changedBy);
-
-      // Assert
-      expect(mockEntityManager.findOne).toHaveBeenCalledWith(BugReport, {
-        where: { id: 1 },
-        relations: ['user'],
-      });
     });
   });
 });

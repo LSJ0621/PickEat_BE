@@ -651,7 +651,7 @@ describe('User (e2e)', () => {
         .send(deleteDto)
         .expect(200);
 
-      expect(response.body.message).toBe('주소가 삭제되었습니다.');
+      expect(response.body.messageCode).toBe('USER_ADDRESS_DELETED');
 
       // Verify addresses were soft deleted
       const deletedAddresses = await userAddressRepository.find({
@@ -883,7 +883,7 @@ describe('User (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
-      expect(response.body.message).toBe('회원 탈퇴가 완료되었습니다.');
+      expect(response.body.messageCode).toBe('USER_WITHDRAWAL_COMPLETED');
 
       // Verify user was soft deleted
       const deletedUser = await userRepository.findOne({

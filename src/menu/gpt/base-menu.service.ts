@@ -8,8 +8,8 @@ import { ValidationContext } from '../interfaces/menu-validation.interface';
 import {
   buildUserPrompt,
   buildUserPromptWithValidation,
-  MENU_RECOMMENDATIONS_JSON_SCHEMA,
-  SYSTEM_PROMPT,
+  getMenuRecommendationsJsonSchema,
+  getSystemPrompt,
 } from '@/external/openai/prompts';
 import {
   OpenAIChatCompletionParams,
@@ -49,6 +49,7 @@ export abstract class BaseMenuService implements OnModuleInit {
     dislikes: string[],
     analysis?: string,
     validationContext?: ValidationContext,
+    language: 'ko' | 'en' = 'ko',
   ): Promise<MenuRecommendationsResponse> {
     if (!this.openai) {
       throw new ExternalApiException(
@@ -58,7 +59,7 @@ export abstract class BaseMenuService implements OnModuleInit {
       );
     }
 
-    const systemPrompt = SYSTEM_PROMPT;
+    const systemPrompt = getSystemPrompt(language);
     const userPrompt = validationContext
       ? buildUserPromptWithValidation(
           prompt,
@@ -66,9 +67,10 @@ export abstract class BaseMenuService implements OnModuleInit {
           dislikes,
           analysis,
           validationContext,
+          language,
         )
-      : buildUserPrompt(prompt, likes, dislikes, analysis);
-    const jsonSchema = MENU_RECOMMENDATIONS_JSON_SCHEMA;
+      : buildUserPrompt(prompt, likes, dislikes, analysis, language);
+    const jsonSchema = getMenuRecommendationsJsonSchema(language);
 
     try {
       const requestParams = this.buildRequestParams(
@@ -96,14 +98,17 @@ export abstract class BaseMenuService implements OnModuleInit {
 
       const choice = response.choices[0];
       if (!choice) {
-        throw new OpenAIResponseException('추천 결과가 없습니다', response);
+        throw new OpenAIResponseException(
+          'No recommendations found.',
+          response,
+        );
       }
 
       const content = choice.message?.content;
       const finishReason = choice.finish_reason;
 
       if (!content) {
-        throw new OpenAIResponseException('응답 내용이 비어있습니다', {
+        throw new OpenAIResponseException('Response content is empty.', {
           finishReason,
         });
       }
@@ -113,14 +118,17 @@ export abstract class BaseMenuService implements OnModuleInit {
       const reason = parsed.reason?.trim() ?? '';
 
       if (!recommendations.length) {
-        throw new OpenAIResponseException('추천 결과가 없습니다', parsed);
+        throw new OpenAIResponseException('No recommendations found.', parsed);
       }
 
       if (!reason) {
-        throw new OpenAIResponseException('추천 이유가 없습니다', parsed);
+        throw new OpenAIResponseException(
+          'Recommendation reason is missing.',
+          parsed,
+        );
       }
 
-      const normalized = this.normalizeMenuNames(recommendations);
+      const normalized = this.normalizeMenuNames(recommendations, language);
 
       this.logger.log(`[Menu recommendation] Count: ${normalized.length}`);
 
@@ -129,7 +137,7 @@ export abstract class BaseMenuService implements OnModuleInit {
       throw new ExternalApiException(
         'OpenAI',
         error instanceof Error ? error : undefined,
-        '메뉴 추천 생성에 실패했습니다.',
+        'Failed to generate menu recommendations.',
       );
     }
   }
@@ -145,21 +153,39 @@ export abstract class BaseMenuService implements OnModuleInit {
   protected abstract buildRequestParams(
     systemPrompt: string,
     userPrompt: string,
-    jsonSchema: typeof MENU_RECOMMENDATIONS_JSON_SCHEMA,
+    jsonSchema: ReturnType<typeof getMenuRecommendationsJsonSchema>,
   ): OpenAIChatCompletionParams;
 
   /**
-   * 메뉴명 정규화: 영어 주석, 괄호, 불필요한 문자 제거
+   * 메뉴명 정규화: 괄호, 불필요한 문자 제거, 한글/영어 메뉴명 지원
+   *
+   * Note: Normalization is character-based (detects Korean/English from menu names)
+   * rather than language parameter-based for more robust handling of mixed contexts.
    */
-  protected normalizeMenuNames(menuNames: string[]): string[] {
+  protected normalizeMenuNames(
+    menuNames: string[],
+    _language: 'ko' | 'en' = 'ko',
+  ): string[] {
     return menuNames
       .map((name) => {
+        // Remove content in parentheses
         let normalized = name.replace(/\([^)]*\)/g, '').trim();
-        normalized = normalized.replace(/[a-zA-Z]/g, '').trim();
-        normalized = normalized.replace(/\s+/g, '');
+        // Remove extra whitespace
+        normalized = normalized.replace(/\s+/g, ' ').trim();
 
-        const match = normalized.match(/^[가-힣]+$/);
-        return match ? match[0] : null;
+        // Accept Korean-only or English-only menu names
+        const koreanMatch = normalized.match(/^[가-힣\s]+$/);
+        const englishMatch = normalized.match(/^[a-zA-Z\s]+$/);
+
+        if (koreanMatch) {
+          // Korean: remove all whitespace
+          return normalized.replace(/\s+/g, '');
+        } else if (englishMatch) {
+          // English: lowercase with spaces preserved
+          return normalized.toLowerCase();
+        }
+
+        return null; // Reject mixed or invalid names
       })
       .filter((name): name is string => name !== null && name.length > 0)
       .filter((name, index, array) => array.indexOf(name) === index);

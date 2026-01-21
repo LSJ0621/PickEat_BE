@@ -1,8 +1,9 @@
-import { IsIn, IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
+import { IsLanguage } from '@/common/validators/language.validator';
 
 export class UpdateLanguageDto {
   @IsString()
   @IsNotEmpty()
-  @IsIn(['ko', 'en'])
-  language: string;
+  @IsLanguage()
+  language: 'ko' | 'en';
 }

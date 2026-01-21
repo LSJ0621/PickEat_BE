@@ -115,6 +115,7 @@ describe('UserService', () => {
         password: userData.password,
         role: userData.role,
         name: undefined,
+        preferredLanguage: 'ko',
       });
       expect(userRepository.save).toHaveBeenCalledWith(createdUser);
     });
@@ -141,6 +142,7 @@ describe('UserService', () => {
         password: userData.password,
         role: userData.role,
         name: userData.name,
+        preferredLanguage: 'ko',
       });
     });
 
@@ -166,6 +168,7 @@ describe('UserService', () => {
         password: userData.password,
         role: userData.role,
         name: undefined,
+        preferredLanguage: 'ko',
       });
     });
 
@@ -189,6 +192,7 @@ describe('UserService', () => {
         password: userData.password,
         role: undefined,
         name: undefined,
+        preferredLanguage: 'ko',
       });
     });
   });
