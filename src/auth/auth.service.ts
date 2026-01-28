@@ -46,10 +46,7 @@ export class AuthService {
 
   // ========== 소셜 로그인 (위임) ==========
 
-  async kakaoLogin(
-    code: string,
-    language?: 'ko' | 'en',
-  ): Promise<AuthResult> {
+  async kakaoLogin(code: string, language?: 'ko' | 'en'): Promise<AuthResult> {
     return this.authSocialService.kakaoLogin(
       code,
       (entity) => this.buildAuthResult(entity),
@@ -68,10 +65,7 @@ export class AuthService {
     );
   }
 
-  async googleLogin(
-    code: string,
-    language?: 'ko' | 'en',
-  ): Promise<AuthResult> {
+  async googleLogin(code: string, language?: 'ko' | 'en'): Promise<AuthResult> {
     return this.authSocialService.googleLogin(
       code,
       (entity) => this.buildAuthResult(entity),
@@ -99,7 +93,7 @@ export class AuthService {
 
   // ========== 일반 회원가입/로그인 ==========
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, lang?: 'ko' | 'en') {
     await this.checkEmailAvailability(registerDto.email, true);
 
     const isEmailVerified = await this.emailVerificationService.isEmailVerified(
@@ -120,7 +114,7 @@ export class AuthService {
       password: hashedPassword,
       role: 'USER',
       name: registerDto.name,
-      preferredLanguage: registerDto.lang || 'ko',
+      preferredLanguage: lang || 'ko',
     });
 
     await this.userService.markEmailVerified(registerDto.email);
@@ -133,7 +127,7 @@ export class AuthService {
     try {
       await this.emailVerificationService.sendWelcomeEmail(
         user.id.toString(),
-        registerDto.lang,
+        lang,
       );
     } catch (error) {
       this.logger.warn(

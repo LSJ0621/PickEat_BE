@@ -12,6 +12,7 @@ export const GOOGLE_PLACES_CONFIG = {
     SEARCH_TEXT: '/places:searchText',
     DETAILS: (placeId: string) => `/places/${placeId}`,
     PHOTO: (photoName: string) => `/${photoName}/media`,
+    AUTOCOMPLETE: '/places:autocomplete',
   },
   FIELD_MASKS: {
     SEARCH:
@@ -20,6 +21,8 @@ export const GOOGLE_PLACES_CONFIG = {
       'id,displayName,formattedAddress,location,rating,userRatingCount,priceLevel,photos,reviews,currentOpeningHours.openNow',
     DETAILS_WITH_BUSINESS_STATUS:
       'id,displayName,formattedAddress,location,rating,userRatingCount,priceLevel,businessStatus,photos,reviews,currentOpeningHours.openNow',
+    ADDRESS_DETAILS: 'formattedAddress,location',
+    AUTOCOMPLETE: 'suggestions.placePrediction',
   },
   DEFAULTS: {
     LANGUAGE_CODE: 'ko',

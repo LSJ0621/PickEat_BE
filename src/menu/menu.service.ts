@@ -91,8 +91,18 @@ export class MenuService {
 
   // ========== 유틸리티 메서드 ==========
 
-  async searchRestaurantsWithGooglePlaces(textQuery: string) {
-    return this.placeService.searchRestaurantsWithGooglePlaces(textQuery);
+  async searchRestaurantsWithGooglePlaces(
+    textQuery: string,
+    latitude?: number,
+    longitude?: number,
+    languageCode?: 'ko' | 'en',
+  ) {
+    return this.placeService.searchRestaurantsWithGooglePlaces(
+      textQuery,
+      latitude,
+      longitude,
+      languageCode,
+    );
   }
 
   async getPlaceDetail(placeId: string) {

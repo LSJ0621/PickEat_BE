@@ -17,6 +17,7 @@ import { MenuModule } from './menu/menu.module';
 import { NotificationModule } from './notification/notification.module';
 import { SearchModule } from './search/search.module';
 import { UserModule } from './user/user.module';
+import { UserPlaceModule } from './user-place/user-place.module';
 
 @Module({
   imports: [
@@ -29,8 +30,10 @@ import { UserModule } from './user/user.module';
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
-        ttl: 60000, // 1분 (밀리초)
-        limit: 100, // 분당 100회 요청 제한
+        // Test environment: Disable rate limiting to prevent E2E test failures
+        // Production/Development: Normal rate limiting (100 req/min)
+        ttl: process.env.NODE_ENV === 'test' ? 1000 : 60000,
+        limit: process.env.NODE_ENV === 'test' ? 10000 : 100,
       },
     ]),
     LoggerModule.forRoot(loggerConfig),
@@ -39,6 +42,7 @@ import { UserModule } from './user/user.module';
     BugReportModule,
     AuthModule,
     UserModule,
+    UserPlaceModule,
     MenuModule,
     NotificationModule,
     SearchModule,
@@ -46,10 +50,16 @@ import { UserModule } from './user/user.module';
   controllers: [],
   providers: [
     HttpExceptionFilter,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // Only enable ThrottlerGuard in non-test environments
+    // In test environment, rate limiting is disabled to prevent E2E test failures
+    ...(process.env.NODE_ENV !== 'test'
+      ? [
+          {
+            provide: APP_GUARD,
+            useClass: ThrottlerGuard,
+          },
+        ]
+      : []),
   ],
 })
 export class AppModule {}

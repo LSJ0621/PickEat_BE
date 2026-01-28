@@ -3,6 +3,7 @@ import { MenuService } from '../menu.service';
 import { MenuRecommendationService } from '../services/menu-recommendation.service';
 import { MenuSelectionService } from '../services/menu-selection.service';
 import { PlaceService } from '../services/place.service';
+import { PlaceRecommendationSource } from '../enum/place-recommendation-source.enum';
 import {
   UserFactory,
   MenuRecommendationFactory,
@@ -267,7 +268,7 @@ describe('MenuService (Facade)', () => {
       const menuRecommendationId = 1;
 
       const expectedResult = {
-        recommendations: [{ placeId: 'place-1', reason: '평점이 높습니다' }],
+        recommendations: [{ placeId: 'place-1', name: '맛있는 식당', reason: '평점이 높습니다' }],
       };
 
       mockPlaceService.recommendRestaurants.mockResolvedValue(expectedResult);
@@ -325,6 +326,7 @@ describe('MenuService (Facade)', () => {
                 publishTime: '2024-01-01',
               },
             ],
+            source: PlaceRecommendationSource.GOOGLE,
           },
         ],
       };
@@ -358,7 +360,7 @@ describe('MenuService (Facade)', () => {
       const menuRecommendationId = 1;
 
       const expectedResult = {
-        recommendations: [{ placeId: 'place-1', reason: '평점이 높습니다' }],
+        recommendations: [{ placeId: 'place-1', name: '맛있는 식당', reason: '평점이 높습니다' }],
       };
 
       mockPlaceService.recommendRestaurants.mockResolvedValue(expectedResult);
@@ -404,7 +406,7 @@ describe('MenuService (Facade)', () => {
 
       expect(
         mockPlaceService.searchRestaurantsWithGooglePlaces,
-      ).toHaveBeenCalledWith(textQuery);
+      ).toHaveBeenCalledWith(textQuery, undefined, undefined, undefined);
       expect(result).toEqual(expectedPlaces);
     });
   });
@@ -425,6 +427,7 @@ describe('MenuService (Facade)', () => {
           openNow: true,
           photos: [],
           reviews: [],
+          source: PlaceRecommendationSource.GOOGLE,
         },
       };
 

@@ -20,8 +20,8 @@ export class AdminUserListQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsEnum(['createdAt', 'lastActiveAt', 'name'])
-  sortBy?: 'createdAt' | 'lastActiveAt' | 'name' = 'createdAt';
+  @IsEnum(['createdAt', 'lastActiveAt', 'name', 'email'])
+  sortBy?: 'createdAt' | 'lastActiveAt' | 'name' | 'email' = 'createdAt';
 
   @IsOptional()
   @IsEnum(['ASC', 'DESC'])
@@ -34,6 +34,10 @@ export class AdminUserListQueryDto {
   @IsOptional()
   @IsEnum(['active', 'deleted', 'deactivated'])
   status?: 'active' | 'deleted' | 'deactivated';
+
+  @IsOptional()
+  @IsEnum(['USER', 'ADMIN', 'SUPER_ADMIN'])
+  role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
 
   @IsOptional()
   @IsString()

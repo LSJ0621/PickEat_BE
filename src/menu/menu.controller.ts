@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -15,14 +16,21 @@ import {
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { ErrorCode } from '../common/constants/error-codes';
+import { parseLanguage } from '../common/utils/language.util';
 import { UserService } from '../user/user.service';
 import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
+import { RecommendCommunityPlacesDto } from './dto/recommend-community-places.dto';
 import { RecommendMenuDto } from './dto/recommend-menu.dto';
 import { RecommendationHistoryQueryDto } from './dto/recommendation-history-query.dto';
 import { SearchRestaurantBlogsDto } from './dto/search-restaurant-blogs.dto';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
 import { MenuSelection } from './entities/menu-selection.entity';
+import { PlaceRecommendationSource } from './enum/place-recommendation-source.enum';
+import { PlaceRecommendationResponse } from './interface/place-recommendation-response.interface';
 import { MenuService } from './menu.service';
+import { CommunityPlaceService } from './services/community-place.service';
+import { MenuRecommendationService } from './services/menu-recommendation.service';
+import { PlaceService } from './services/place.service';
 
 @Controller('menu')
 @UseGuards(JwtAuthGuard)
@@ -30,6 +38,9 @@ export class MenuController {
   constructor(
     private readonly menuService: MenuService,
     private readonly userService: UserService,
+    private readonly placeService: PlaceService,
+    private readonly communityPlaceService: CommunityPlaceService,
+    private readonly menuRecommendationService: MenuRecommendationService,
   ) {}
 
   @Post('recommend')
@@ -150,6 +161,93 @@ export class MenuController {
     );
   }
 
+  // 검색 기반 가게 추천 (Google Places)
+  @Get('recommend/places/search')
+  async recommendSearchPlaces(
+    @Query() dto: RecommendCommunityPlacesDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ): Promise<PlaceRecommendationResponse> {
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+
+    // Validate MenuRecommendation exists and belongs to user
+    await this.menuRecommendationService.findById(
+      dto.menuRecommendationId,
+      entity,
+    );
+
+    const textQuery = dto.menuName;
+
+    // Use existing PlaceService.recommendRestaurants with coordinates
+    const result = await this.placeService.recommendRestaurants(
+      entity,
+      textQuery,
+      dto.menuName,
+      dto.menuRecommendationId,
+      dto.latitude,
+      dto.longitude,
+    );
+
+    // Add source field to each recommendation
+    return {
+      recommendations: result.recommendations.map((rec) => ({
+        placeId: rec.placeId,
+        name: rec.name,
+        reason: rec.reason,
+        menuName: dto.menuName,
+        source: PlaceRecommendationSource.GOOGLE,
+      })),
+    };
+  }
+
+  // 커뮤니티 등록 가게 추천 (UserPlace)
+  @Get('recommend/places/community')
+  async recommendCommunityPlaces(
+    @Query() dto: RecommendCommunityPlacesDto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ): Promise<PlaceRecommendationResponse> {
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+
+    // Get MenuRecommendation
+    const menuRecommendation = await this.menuRecommendationService.findById(
+      dto.menuRecommendationId,
+      entity,
+    );
+
+    if (!menuRecommendation) {
+      throw new NotFoundException('Menu recommendation not found');
+    }
+
+    // Parse language
+    const language = parseLanguage(dto.language || entity.preferredLanguage);
+
+    // Call CommunityPlaceService
+    const placeRecommendations =
+      await this.communityPlaceService.recommendCommunityPlaces(
+        entity,
+        dto.latitude,
+        dto.longitude,
+        dto.menuName,
+        menuRecommendation,
+        language,
+      );
+
+    // Transform PlaceRecommendation[] to match frontend expected format
+    return {
+      recommendations: placeRecommendations.map((rec) => ({
+        placeId: rec.placeId,
+        name: rec.userPlace?.name || '',
+        reason: rec.reason,
+        menuName: rec.menuName || undefined,
+        source: rec.source,
+        userPlaceId: rec.userPlace?.id || undefined,
+      })),
+    };
+  }
+
   // 특정 추천 이력 1건 + 그 이력에서 생성된 AI 가게 추천 상세 조회
   // 예: GET /menu/recommendations/123
   @Get('recommendations/:id')
@@ -174,6 +272,24 @@ export class MenuController {
   @Get('places/:placeId/detail')
   async getPlaceDetail(@Param('placeId') placeId: string) {
     return this.menuService.getPlaceDetail(placeId);
+  }
+
+  // [TEST] Google Places 검색 결과만 확인 (OpenAI 추천 제외)
+  @Get('test/places/search')
+  async testGooglePlacesSearch(
+    @Query('query') query: string,
+    @Query('latitude') latitude?: string,
+    @Query('longitude') longitude?: string,
+    @Query('language') language?: 'ko' | 'en',
+  ) {
+    const lat = latitude ? parseFloat(latitude) : undefined;
+    const lng = longitude ? parseFloat(longitude) : undefined;
+    return this.placeService.searchRestaurantsWithGooglePlaces(
+      query,
+      lat,
+      lng,
+      language,
+    );
   }
 
   private buildSelectionResponse(selection: MenuSelection) {
