@@ -10,6 +10,8 @@ import { EmailVerification } from '@/auth/entities/email-verification.entity';
 import { BugReport } from '@/bug-report/entities/bug-report.entity';
 import { BugReportStatus } from '@/bug-report/enum/bug-report-status.enum';
 import { UserPreferences } from '@/user/interfaces/user-preferences.interface';
+import { UserPlace } from '@/user-place/entities/user-place.entity';
+import { UserPlaceStatus } from '@/user-place/enum/user-place-status.enum';
 
 /**
  * Factory function to create User entities for testing
@@ -265,5 +267,77 @@ export class UserPreferencesFactory {
       likes: overrides?.likes ?? ['한식', '중식', '일식'],
       dislikes: overrides?.dislikes ?? ['양식'],
     };
+  }
+}
+
+/**
+ * Factory function to create UserPlace entities for testing
+ */
+export class UserPlaceFactory {
+  static create(overrides?: Partial<UserPlace>): UserPlace {
+    const userPlace = new UserPlace();
+    userPlace.id = overrides?.id ?? 1;
+    userPlace.user = overrides?.user ?? UserFactory.create();
+    userPlace.name = overrides?.name ?? '테스트 식당';
+    userPlace.address = overrides?.address ?? '서울특별시 강남구 테헤란로 123';
+    userPlace.latitude = overrides?.latitude ?? 37.5012345;
+    userPlace.longitude = overrides?.longitude ?? 127.0398765;
+    userPlace.location = overrides?.location ?? {
+      type: 'Point',
+      coordinates: [
+        overrides?.longitude ?? 127.0398765,
+        overrides?.latitude ?? 37.5012345,
+      ],
+    };
+    userPlace.menuTypes = overrides?.menuTypes ?? ['한식', '찌개류'];
+    userPlace.photos = overrides?.photos ?? null;
+    userPlace.openingHours = overrides?.openingHours ?? null;
+    userPlace.phoneNumber = overrides?.phoneNumber ?? null;
+    userPlace.category = overrides?.category ?? null;
+    userPlace.description = overrides?.description ?? null;
+    userPlace.status = overrides?.status ?? UserPlaceStatus.PENDING;
+    userPlace.rejectionReason = overrides?.rejectionReason ?? null;
+    userPlace.rejectionCount = overrides?.rejectionCount ?? 0;
+    userPlace.lastRejectedAt = overrides?.lastRejectedAt ?? null;
+    userPlace.lastSubmittedAt = overrides?.lastSubmittedAt ?? new Date();
+    userPlace.version = overrides?.version ?? 1;
+    userPlace.createdAt = overrides?.createdAt ?? new Date();
+    userPlace.updatedAt = overrides?.updatedAt ?? new Date();
+    userPlace.deletedAt = overrides?.deletedAt ?? null;
+    return userPlace;
+  }
+
+  static createPending(user?: User): UserPlace {
+    return UserPlaceFactory.create({
+      user,
+      status: UserPlaceStatus.PENDING,
+    });
+  }
+
+  static createApproved(user?: User): UserPlace {
+    return UserPlaceFactory.create({
+      user,
+      status: UserPlaceStatus.APPROVED,
+    });
+  }
+
+  static createRejected(user?: User, reason?: string): UserPlace {
+    return UserPlaceFactory.create({
+      user,
+      status: UserPlaceStatus.REJECTED,
+      rejectionReason: reason ?? '테스트 거부 사유',
+      rejectionCount: 1,
+      lastRejectedAt: new Date(),
+    });
+  }
+
+  static createWithPhotos(user?: User, photoUrls?: string[]): UserPlace {
+    return UserPlaceFactory.create({
+      user,
+      photos: photoUrls ?? [
+        'https://example.com/photo1.jpg',
+        'https://example.com/photo2.jpg',
+      ],
+    });
   }
 }

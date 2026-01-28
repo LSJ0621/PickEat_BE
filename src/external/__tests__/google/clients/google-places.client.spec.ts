@@ -195,8 +195,144 @@ describe('GooglePlacesClient', () => {
       expect(httpService.post).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          maxResultCount: 10,
+          pageSize: 10,
           languageCode: 'en',
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should use pageSize instead of maxResultCount in request body', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.searchSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.searchByText(query, { maxResults: 15 });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          pageSize: 15,
+        }),
+        expect.any(Object),
+      );
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.not.objectContaining({
+          maxResultCount: expect.anything(),
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should include locationBias when provided in options', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.searchSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const locationBias = {
+        circle: {
+          center: { latitude: 37.5665, longitude: 126.978 },
+          radius: 2000,
+        },
+      };
+
+      await client.searchByText(query, { locationBias });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          textQuery: query,
+          locationBias: {
+            circle: {
+              center: { latitude: 37.5665, longitude: 126.978 },
+              radius: 2000,
+            },
+          },
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should include locationBias and languageCode when both provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.searchSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const locationBias = {
+        circle: {
+          center: { latitude: 37.5665, longitude: 126.978 },
+          radius: 2000,
+        },
+      };
+
+      await client.searchByText(query, {
+        locationBias,
+        languageCode: 'en',
+      });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          textQuery: query,
+          languageCode: 'en',
+          locationBias: {
+            circle: {
+              center: { latitude: 37.5665, longitude: 126.978 },
+              radius: 2000,
+            },
+          },
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should not include locationBias when not provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.searchSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.searchByText(query, { languageCode: 'ko' });
+
+      const callArgs = httpService.post.mock.calls[0];
+      const requestBody = callArgs[1];
+
+      expect(requestBody).not.toHaveProperty('locationBias');
+    });
+
+    it('should use default languageCode when not provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.searchSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.searchByText(query);
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          languageCode: 'ko',
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should use default pageSize when maxResults not provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.searchSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.searchByText(query);
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          pageSize: 10,
         }),
         expect.any(Object),
       );
@@ -300,6 +436,66 @@ describe('GooglePlacesClient', () => {
       expect(httpService.get).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Goog-FieldMask': expect.stringContaining('businessStatus'),
+          }),
+        }),
+      );
+    });
+
+    it('should pass languageCode parameter when provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      await client.getDetails(placeId, { languageCode: 'en' });
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          params: {
+            languageCode: 'en',
+          },
+        }),
+      );
+    });
+
+    it('should use default languageCode when not provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      await client.getDetails(placeId);
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          params: {
+            languageCode: 'ko',
+          },
+        }),
+      );
+    });
+
+    it('should support both includeBusinessStatus and languageCode options', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      await client.getDetails(placeId, {
+        includeBusinessStatus: true,
+        languageCode: 'en',
+      });
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          params: {
+            languageCode: 'en',
+          },
           headers: expect.objectContaining({
             'X-Goog-FieldMask': expect.stringContaining('businessStatus'),
           }),

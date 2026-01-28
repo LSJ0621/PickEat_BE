@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16
+    image: postgis/postgis:16-3.4
     container_name: postgres
     env_file:
       - .env.development
@@ -21,7 +21,7 @@ services:
       retries: 10
 
   postgres-test:
-    image: postgres:16
+    image: postgis/postgis:16-3.4
     container_name: postgres-test
     environment:
       POSTGRES_USER: ${POSTGRES_TEST_USER:-postgres}

@@ -4,6 +4,10 @@ import { MenuController } from '../menu.controller';
 import { MenuService } from '../menu.service';
 import { UserService } from '../../user/user.service';
 import { MenuSelectionStatus } from '../entities/menu-selection.entity';
+import { PlaceRecommendationSource } from '../enum/place-recommendation-source.enum';
+import { PlaceService } from '../services/place.service';
+import { CommunityPlaceService } from '../services/community-place.service';
+import { MenuRecommendationService } from '../services/menu-recommendation.service';
 import {
   UserFactory,
   MenuSelectionFactory,
@@ -16,6 +20,9 @@ describe('MenuController', () => {
   let controller: MenuController;
   let mockMenuService: jest.Mocked<MenuService>;
   let mockUserService: jest.Mocked<UserService>;
+  let mockPlaceService: jest.Mocked<PlaceService>;
+  let mockCommunityPlaceService: jest.Mocked<CommunityPlaceService>;
+  let mockMenuRecommendationService: jest.Mocked<MenuRecommendationService>;
 
   beforeEach(async () => {
     mockMenuService = {
@@ -36,6 +43,10 @@ describe('MenuController', () => {
       getAuthenticatedEntity: jest.fn(),
     } as unknown as jest.Mocked<UserService>;
 
+    mockPlaceService = {} as jest.Mocked<PlaceService>;
+    mockCommunityPlaceService = {} as jest.Mocked<CommunityPlaceService>;
+    mockMenuRecommendationService = {} as jest.Mocked<MenuRecommendationService>;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MenuController],
       providers: [
@@ -46,6 +57,18 @@ describe('MenuController', () => {
         {
           provide: UserService,
           useValue: mockUserService,
+        },
+        {
+          provide: PlaceService,
+          useValue: mockPlaceService,
+        },
+        {
+          provide: CommunityPlaceService,
+          useValue: mockCommunityPlaceService,
+        },
+        {
+          provide: MenuRecommendationService,
+          useValue: mockMenuRecommendationService,
         },
       ],
     }).compile();
@@ -521,9 +544,6 @@ describe('MenuController', () => {
       await expect(
         controller.updateSelection('invalid-id', updateDto, authUser),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.updateSelection('invalid-id', updateDto, authUser),
-      ).rejects.toThrow('유효하지 않은 선택 ID입니다.');
     });
 
     it('should handle cancel update', async () => {
@@ -742,7 +762,7 @@ describe('MenuController', () => {
       const user = UserFactory.create({ email: authUser.email });
 
       const expectedResult = {
-        recommendations: [{ placeId: 'place-1', reason: '평점이 높습니다' }],
+        recommendations: [{ placeId: 'place-1', name: '맛있는 식당', reason: '평점이 높습니다' }],
       };
 
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
@@ -781,14 +801,6 @@ describe('MenuController', () => {
           authUser,
         ),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.recommendRestaurantsWithGooglePlacesAndLlm(
-          '강남역 김치찌개',
-          '',
-          '1',
-          authUser,
-        ),
-      ).rejects.toThrow('menuName 쿼리 파라미터가 필요합니다.');
     });
 
     it('should handle undefined historyId', async () => {
@@ -882,6 +894,7 @@ describe('MenuController', () => {
                 publishTime: '2024-01-01',
               },
             ],
+            source: PlaceRecommendationSource.GOOGLE,
           },
         ],
       };
@@ -910,9 +923,6 @@ describe('MenuController', () => {
       await expect(
         controller.getRecommendationDetail('invalid-id', authUser),
       ).rejects.toThrow(BadRequestException);
-      await expect(
-        controller.getRecommendationDetail('invalid-id', authUser),
-      ).rejects.toThrow('유효하지 않은 추천 이력 ID입니다.');
     });
   });
 
@@ -933,6 +943,7 @@ describe('MenuController', () => {
           openNow: true,
           photos: ['https://example.com/photo1.jpg'],
           reviews: [],
+          source: PlaceRecommendationSource.GOOGLE,
         },
       };
 

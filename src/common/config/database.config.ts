@@ -13,6 +13,6 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     database: config.getOrThrow<string>('POSTGRES_DB'),
     autoLoadEntities: true,
     synchronize: config.getOrThrow<string>('POSTGRES_SYNCHRONIZE') === 'true',
-    dropSchema: true,
+    dropSchema: false,
   }),
 };

@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
+import { GOOGLE_PLACES_SEARCH } from '@/common/constants/business.constants';
 import { runPipeline } from '@/common/pipeline/pipeline';
 import { parseLanguage } from '@/common/utils/language.util';
 import { User } from '@/user/entities/user.entity';
@@ -9,9 +10,15 @@ import { GooglePlacesClient } from '@/external/google/clients/google-places.clie
 import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
 import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
 import { PlaceRecommendation } from '@/menu/entities/place-recommendation.entity';
-import { normalizePlaceIdForStorage } from '@/menu/place-id.util';
+import { PlaceRecommendationSource } from '@/menu/enum/place-recommendation-source.enum';
+import { PlaceRecommendationsResponse } from '@/menu/interface/openai-places.interface';
+import {
+  normalizePlaceIdForStorage,
+  parseUserPlaceId,
+} from '@/menu/place-id.util';
 import { MenuRecommendationService } from '@/menu/services/menu-recommendation.service';
 import { OpenAiPlacesService } from '@/menu/services/openai-places.service';
+import { UserPlace } from '@/user-place/entities/user-place.entity';
 
 /**
  * 가게/장소 관련 서비스
@@ -27,14 +34,38 @@ export class PlaceService {
   constructor(
     @InjectRepository(PlaceRecommendation)
     private readonly placeRecommendationRepository: Repository<PlaceRecommendation>,
+    @InjectRepository(UserPlace)
+    private readonly userPlaceRepository: Repository<UserPlace>,
     private readonly menuRecommendationService: MenuRecommendationService,
     private readonly openAiPlacesService: OpenAiPlacesService,
     private readonly googlePlacesClient: GooglePlacesClient,
     private readonly googleSearchClient: GoogleSearchClient,
   ) {}
 
-  async searchRestaurantsWithGooglePlaces(textQuery: string) {
-    const places = await this.googlePlacesClient.searchByText(textQuery);
+  async searchRestaurantsWithGooglePlaces(
+    textQuery: string,
+    latitude?: number,
+    longitude?: number,
+    languageCode?: 'ko' | 'en',
+  ) {
+    // Build options object properly with type safety
+    const options = {
+      ...(languageCode && { languageCode }),
+      ...(latitude !== undefined &&
+        longitude !== undefined && {
+          locationBias: {
+            circle: {
+              center: { latitude, longitude },
+              radius: GOOGLE_PLACES_SEARCH.LOCATION_BIAS_RADIUS_METERS,
+            },
+          },
+        }),
+    };
+
+    const places = await this.googlePlacesClient.searchByText(
+      textQuery,
+      Object.keys(options).length > 0 ? options : undefined,
+    );
 
     const result = places.map((place) => ({
       id: place.id,
@@ -55,6 +86,13 @@ export class PlaceService {
   }
 
   async getPlaceDetail(placeId: string) {
+    // UserPlace ID 체크
+    const userPlaceId = parseUserPlaceId(placeId);
+    if (userPlaceId !== null) {
+      return this.getUserPlaceDetail(userPlaceId);
+    }
+
+    // Google Places API 조회
     const place = await this.googlePlacesClient.getDetails(placeId, {
       includeBusinessStatus: true,
     });
@@ -86,6 +124,43 @@ export class PlaceService {
             authorName: review.authorAttribution?.displayName ?? null,
             publishTime: review.publishTime ?? null,
           })) ?? null,
+        source: PlaceRecommendationSource.GOOGLE,
+      },
+    };
+  }
+
+  private async getUserPlaceDetail(userPlaceId: number) {
+    const userPlace = await this.userPlaceRepository.findOne({
+      where: { id: userPlaceId },
+      withDeleted: false,
+    });
+
+    if (!userPlace) {
+      return { place: null };
+    }
+
+    return {
+      place: {
+        id: `user_place_${userPlace.id}`,
+        name: userPlace.name,
+        address: userPlace.address,
+        location: {
+          latitude: Number(userPlace.latitude),
+          longitude: Number(userPlace.longitude),
+        },
+        rating: null,
+        userRatingCount: null,
+        priceLevel: null,
+        businessStatus: null,
+        openNow: null,
+        photos: userPlace.photos ?? [],
+        reviews: null,
+        source: PlaceRecommendationSource.USER,
+        phoneNumber: userPlace.phoneNumber,
+        category: userPlace.category,
+        menuTypes: userPlace.menuTypes,
+        description: userPlace.description,
+        openingHours: userPlace.openingHours,
       },
     };
   }
@@ -107,7 +182,9 @@ export class PlaceService {
     textQuery: string,
     menuName: string,
     menuRecommendationId: number,
-  ) {
+    latitude?: number,
+    longitude?: number,
+  ): Promise<PlaceRecommendationsResponse> {
     this.validateRecommendInput(menuName, menuRecommendationId);
 
     const menuRecord = await this.menuRecommendationService.findById(
@@ -125,6 +202,8 @@ export class PlaceService {
       textQuery,
       menuName,
       language,
+      latitude,
+      longitude,
     );
   }
 
@@ -145,9 +224,53 @@ export class PlaceService {
       };
     }
 
+    // Pre-fetch all UserPlaces in a single query to avoid N+1 problem
+    const userPlaceIds = placeRecs
+      .map((pr) => parseUserPlaceId(pr.placeId))
+      .filter((id): id is number => id !== null);
+
+    const userPlacesMap = new Map<number, UserPlace>();
+    if (userPlaceIds.length > 0) {
+      const userPlaces = await this.userPlaceRepository.find({
+        where: { id: In(userPlaceIds) },
+        withDeleted: false,
+      });
+      userPlaces.forEach((up) => userPlacesMap.set(up.id, up));
+    }
+
     const places = await Promise.all(
       placeRecs.map(async (pr) => {
         try {
+          const userPlaceId = parseUserPlaceId(pr.placeId);
+
+          if (userPlaceId !== null) {
+            // UserPlace 처리
+            const userPlace = userPlacesMap.get(userPlaceId);
+
+            if (!userPlace) {
+              return this.buildEmptyPlaceResponse(pr);
+            }
+
+            return {
+              placeId: pr.placeId,
+              reason: pr.reason,
+              menuName: pr.menuName,
+              name: userPlace.name,
+              address: userPlace.address,
+              rating: null,
+              userRatingCount: null,
+              priceLevel: null,
+              businessStatus: null,
+              openNow: null,
+              photos: userPlace.photos ?? [],
+              reviews: null,
+              source: PlaceRecommendationSource.USER,
+              phoneNumber: userPlace.phoneNumber,
+              category: userPlace.category,
+            };
+          }
+
+          // Google Places 처리
           const detail = await this.googlePlacesClient.getDetails(pr.placeId);
           const resolvedPhotos = detail
             ? await this.googlePlacesClient.resolvePhotoUris(detail.photos)
@@ -172,22 +295,10 @@ export class PlaceService {
                 authorName: review.authorAttribution?.displayName ?? null,
                 publishTime: review.publishTime ?? null,
               })) ?? null,
+            source: PlaceRecommendationSource.GOOGLE,
           };
         } catch {
-          return {
-            placeId: pr.placeId,
-            reason: pr.reason,
-            menuName: pr.menuName,
-            name: null,
-            address: null,
-            rating: null,
-            userRatingCount: null,
-            priceLevel: null,
-            businessStatus: null,
-            openNow: null,
-            photos: [],
-            reviews: null,
-          };
+          return this.buildEmptyPlaceResponse(pr);
         }
       }),
     );
@@ -195,6 +306,24 @@ export class PlaceService {
     return {
       history: { ...base, hasPlaceRecommendations: places.length > 0 },
       places,
+    };
+  }
+
+  private buildEmptyPlaceResponse(pr: PlaceRecommendation) {
+    return {
+      placeId: pr.placeId,
+      reason: pr.reason,
+      menuName: pr.menuName,
+      name: null,
+      address: null,
+      rating: null,
+      userRatingCount: null,
+      priceLevel: null,
+      businessStatus: null,
+      openNow: null,
+      photos: [],
+      reviews: null,
+      source: PlaceRecommendationSource.GOOGLE,
     };
   }
 
@@ -233,6 +362,8 @@ export class PlaceService {
     textQuery: string,
     menuName: string,
     language: 'ko' | 'en',
+    latitude?: number,
+    longitude?: number,
   ) {
     const context: {
       places: Array<{
@@ -262,8 +393,12 @@ export class PlaceService {
         {
           name: 'googlePlacesSearch',
           run: async (ctx) => {
-            const { places } =
-              await this.searchRestaurantsWithGooglePlaces(textQuery);
+            const { places } = await this.searchRestaurantsWithGooglePlaces(
+              textQuery,
+              latitude,
+              longitude,
+              language,
+            );
 
             if (!places?.length) {
               throw new BadRequestException({

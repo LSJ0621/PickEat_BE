@@ -157,6 +157,7 @@ describe('AdminSettingsService', () => {
       // Act
       await service.promoteToAdmin(
         user.id,
+        undefined,
         ROLES.ADMIN,
         currentAdmin,
         ipAddress,
@@ -187,6 +188,7 @@ describe('AdminSettingsService', () => {
       // Act
       await service.promoteToAdmin(
         user.id,
+        undefined,
         ROLES.SUPER_ADMIN,
         currentAdmin,
         ipAddress,
@@ -208,7 +210,13 @@ describe('AdminSettingsService', () => {
 
       // Act & Assert
       await expect(
-        service.promoteToAdmin(999, ROLES.ADMIN, currentAdmin, ipAddress),
+        service.promoteToAdmin(
+          999,
+          undefined,
+          ROLES.ADMIN,
+          currentAdmin,
+          ipAddress,
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(userRepository.save).not.toHaveBeenCalled();
       expect(auditLogRepository.save).not.toHaveBeenCalled();
@@ -226,7 +234,13 @@ describe('AdminSettingsService', () => {
 
       // Act & Assert
       await expect(
-        service.promoteToAdmin(user.id, ROLES.ADMIN, currentAdmin, ipAddress),
+        service.promoteToAdmin(
+          user.id,
+          undefined,
+          ROLES.ADMIN,
+          currentAdmin,
+          ipAddress,
+        ),
       ).rejects.toThrow(
         new BadRequestException(`User is already ${ROLES.ADMIN}`),
       );
@@ -250,6 +264,7 @@ describe('AdminSettingsService', () => {
       // Act
       await service.promoteToAdmin(
         user.id,
+        undefined,
         ROLES.ADMIN,
         currentAdmin,
         ipAddress,
@@ -371,9 +386,29 @@ describe('AdminSettingsService', () => {
       });
     });
 
-    it('should demote SUPER_ADMIN to USER', async () => {
+    it('should throw ForbiddenException when trying to demote SUPER_ADMIN', async () => {
       // Arrange
       const user = UserFactory.create({ id: 1, role: ROLES.SUPER_ADMIN });
+      const currentAdmin = UserFactory.create({
+        id: 2,
+        role: ROLES.SUPER_ADMIN,
+      });
+      const ipAddress = '127.0.0.1';
+      userRepository.findOne.mockResolvedValue(user);
+
+      // Act & Assert
+      await expect(
+        service.demoteAdmin(user.id, currentAdmin, ipAddress),
+      ).rejects.toThrow(
+        new ForbiddenException('SUPER_ADMIN 역할은 강등할 수 없습니다'),
+      );
+      expect(userRepository.save).not.toHaveBeenCalled();
+      expect(auditLogRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should successfully demote regular ADMIN to USER', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1, role: ROLES.ADMIN });
       const currentAdmin = UserFactory.create({
         id: 2,
         role: ROLES.SUPER_ADMIN,
@@ -389,9 +424,10 @@ describe('AdminSettingsService', () => {
 
       // Assert
       expect(user.role).toBe(ROLES.USER);
+      expect(userRepository.save).toHaveBeenCalledWith(user);
       expect(auditLogRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          previousValue: { role: ROLES.SUPER_ADMIN },
+          previousValue: { role: ROLES.ADMIN },
           newValue: { role: ROLES.USER },
         }),
       );

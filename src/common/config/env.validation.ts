@@ -206,6 +206,9 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   DISCORD_BUG_REPORT_WEBHOOK_URL: string;
+
+  // Address Search Provider (optional, defaults to 'kakao')
+  ADDRESS_SEARCH_PROVIDER?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

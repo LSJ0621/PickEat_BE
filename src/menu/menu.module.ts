@@ -1,6 +1,7 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserPlace } from '../user-place/entities/user-place.entity';
 import { UserModule } from '../user/user.module';
 import { MenuRecommendation } from './entities/menu-recommendation.entity';
 import { MenuSelection } from './entities/menu-selection.entity';
@@ -10,8 +11,10 @@ import { Gpt51MenuService } from './gpt/gpt51-menu.service';
 import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
 import { PreferencesScheduler } from './preferences.scheduler';
+import { CommunityPlaceService } from './services/community-place.service';
 import { MenuRecommendationService } from './services/menu-recommendation.service';
 import { MenuSelectionService } from './services/menu-selection.service';
+import { OpenAiCommunityPlacesService } from './services/openai-community-places.service';
 import { OpenAiMenuService } from './services/openai-menu.service';
 import { OpenAiPlacesService } from './services/openai-places.service';
 import { PlaceService } from './services/place.service';
@@ -32,6 +35,7 @@ import { TwoStageMenuService } from './services/two-stage-menu.service';
       MenuRecommendation,
       PlaceRecommendation,
       MenuSelection,
+      UserPlace,
     ]),
     UserModule,
     HttpModule,
@@ -44,6 +48,8 @@ import { TwoStageMenuService } from './services/two-stage-menu.service';
     PlaceService,
     OpenAiMenuService,
     OpenAiPlacesService,
+    OpenAiCommunityPlacesService,
+    CommunityPlaceService,
     TwoStageMenuService,
     Gpt4oMiniValidationService,
     Gpt51MenuService,

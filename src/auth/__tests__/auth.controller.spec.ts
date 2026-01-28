@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { Repository } from 'typeorm';
 import { MessageCode } from '@/common/constants/message-codes';
@@ -236,12 +237,17 @@ describe('AuthController', () => {
         message: '회원가입이 완료되었습니다.',
         messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
       };
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ko-KR,ko;q=0.9',
+        },
+      } as Request;
 
       authService.register.mockResolvedValue(expectedResult);
 
-      const result = await controller.register(registerDto);
+      const result = await controller.register(registerDto, mockRequest);
 
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
+      expect(authService.register).toHaveBeenCalledWith(registerDto, 'ko');
       expect(result).toEqual(expectedResult);
     });
   });
@@ -294,15 +300,23 @@ describe('AuthController', () => {
         message: '인증번호가 발송되었습니다. 남은 재발송 횟수는 4회입니다.',
         messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       };
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ko-KR,ko;q=0.9',
+        },
+      } as Request;
 
       emailVerificationService.sendCode.mockResolvedValue(expectedResult);
 
-      const result = await controller.sendEmailCode(sendEmailCodeDto);
+      const result = await controller.sendEmailCode(
+        sendEmailCodeDto,
+        mockRequest,
+      );
 
       expect(emailVerificationService.sendCode).toHaveBeenCalledWith(
         sendEmailCodeDto.email,
         sendEmailCodeDto.purpose,
-        undefined,
+        'ko',
       );
       expect(result).toEqual({ success: true, ...expectedResult });
     });
@@ -328,7 +342,6 @@ describe('AuthController', () => {
       );
       expect(result).toEqual({
         success: true,
-        message: '이메일 인증이 완료되었습니다.',
         messageCode: MessageCode.AUTH_EMAIL_VERIFICATION_COMPLETED,
       });
     });
@@ -364,7 +377,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.verifyEmailCode(verifyEmailCodeDto),
-      ).rejects.toThrow('재가입할 수 있는 계정이 없습니다.');
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -376,16 +389,22 @@ describe('AuthController', () => {
         message: '인증번호가 발송되었습니다. 남은 재발송 횟수는 4회입니다.',
         messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       };
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ko-KR,ko;q=0.9',
+        },
+      } as Request;
 
       authService.sendResetPasswordCode.mockResolvedValue(expectedResult);
 
       const result = await controller.sendResetPasswordCode(
         sendResetPasswordCodeDto,
+        mockRequest,
       );
 
       expect(authService.sendResetPasswordCode).toHaveBeenCalledWith(
         sendResetPasswordCodeDto.email,
-        undefined,
+        'ko',
       );
       expect(result).toEqual({ success: true, ...expectedResult });
     });
@@ -426,7 +445,6 @@ describe('AuthController', () => {
       expect(authService.resetPassword).toHaveBeenCalledWith(resetPasswordDto);
       expect(result).toEqual({
         success: true,
-        message: '비밀번호가 성공적으로 변경되었습니다.',
         messageCode: MessageCode.AUTH_PASSWORD_RESET_COMPLETED,
       });
     });
@@ -517,7 +535,6 @@ describe('AuthController', () => {
         }),
       );
       expect(result).toEqual({
-        message: '로그아웃되었습니다.',
         messageCode: MessageCode.AUTH_LOGOUT_COMPLETED,
       });
     });

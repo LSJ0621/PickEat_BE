@@ -265,7 +265,6 @@ describe('AuthService', () => {
         }),
       );
       expect(result).toEqual({
-        message: '회원가입이 완료되었습니다.',
         messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
       });
     });
@@ -459,7 +458,6 @@ describe('AuthService', () => {
       userService.findByEmail.mockResolvedValue(mockUser);
       emailVerificationService.sendCode.mockResolvedValue({
         remainCount: 4,
-        message: '인증번호가 발송되었습니다. 남은 재발송 횟수는 4회입니다.',
         messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
       });
 
@@ -658,7 +656,6 @@ describe('AuthService', () => {
         email: 'newuser@example.com',
         password: 'password123',
         name: 'New User',
-        lang: 'ko',
       };
 
       userRepository.findOne.mockResolvedValue(null);
@@ -667,12 +664,12 @@ describe('AuthService', () => {
       (emailVerificationService as any).sendWelcomeEmail = jest.fn();
 
       // Act
-      await service.register(registerDto);
+      await service.register(registerDto, 'ko');
 
       // Assert
       expect(
         (emailVerificationService as any).sendWelcomeEmail,
-      ).toHaveBeenCalledWith(mockUser.id.toString(), registerDto.lang);
+      ).toHaveBeenCalledWith(mockUser.id.toString(), 'ko');
       expect(userService.markEmailVerified).toHaveBeenCalled();
       expect(
         (emailVerificationService as any).sendWelcomeEmail,
@@ -699,7 +696,6 @@ describe('AuthService', () => {
 
       // Assert
       expect(result).toEqual({
-        message: '회원가입이 완료되었습니다.',
         messageCode: MessageCode.AUTH_REGISTRATION_COMPLETED,
       });
     });
@@ -710,7 +706,6 @@ describe('AuthService', () => {
         email: 'english@example.com',
         password: 'password123',
         name: 'English User',
-        lang: 'en',
       };
 
       userRepository.findOne.mockResolvedValue(null);
@@ -719,7 +714,7 @@ describe('AuthService', () => {
       (emailVerificationService as any).sendWelcomeEmail = jest.fn();
 
       // Act
-      await service.register(registerDto);
+      await service.register(registerDto, 'en');
 
       // Assert
       expect(
