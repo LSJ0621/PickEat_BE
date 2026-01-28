@@ -1,5 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
-import { IsLanguage } from '@/common/validators/language.validator';
+import { IsEmail, IsEnum, IsOptional } from 'class-validator';
 
 export enum EmailPurpose {
   SIGNUP = 'SIGNUP',
@@ -14,9 +13,4 @@ export class SendEmailCodeDto {
   @IsOptional()
   @IsEnum(EmailPurpose)
   purpose?: EmailPurpose;
-
-  @IsOptional()
-  @IsString()
-  @IsLanguage()
-  lang?: 'ko' | 'en';
 }

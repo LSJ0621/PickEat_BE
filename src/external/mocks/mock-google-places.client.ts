@@ -1,7 +1,9 @@
+import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   GooglePlaceDetails,
   GooglePlaceSearchResult,
+  GooglePlacesAutocompleteSuggestion,
 } from '../google/google.types';
 import { mockGooglePlacesResponses } from './fixtures';
 
@@ -12,6 +14,43 @@ import { mockGooglePlacesResponses } from './fixtures';
 @Injectable()
 export class MockGooglePlacesClient {
   private readonly logger = new Logger(MockGooglePlacesClient.name);
+
+  createSessionToken(): string {
+    return randomUUID();
+  }
+
+  async autocomplete(
+    input: string,
+    _options?: {
+      sessionToken?: string;
+      languageCode?: string;
+      includedRegionCodes?: string[];
+    },
+  ): Promise<GooglePlacesAutocompleteSuggestion[]> {
+    this.logger.log(`[MOCK] Places autocomplete: input="${input}"`);
+    return [
+      {
+        placePrediction: {
+          placeId: 'mock-place-id-1',
+          text: { text: `${input} - Mock Address 1` },
+          structuredFormat: {
+            mainText: { text: 'Mock Address 1' },
+            secondaryText: { text: 'Seoul, South Korea' },
+          },
+        },
+      },
+      {
+        placePrediction: {
+          placeId: 'mock-place-id-2',
+          text: { text: `${input} - Mock Address 2` },
+          structuredFormat: {
+            mainText: { text: 'Mock Address 2' },
+            secondaryText: { text: 'Busan, South Korea' },
+          },
+        },
+      },
+    ];
+  }
 
   async searchByText(
     query: string,
@@ -25,7 +64,11 @@ export class MockGooglePlacesClient {
 
   async getDetails(
     placeId: string,
-    _options?: { includeBusinessStatus?: boolean },
+    _options?: {
+      includeBusinessStatus?: boolean;
+      languageCode?: string;
+      sessionToken?: string;
+    },
   ): Promise<GooglePlaceDetails | null> {
     this.logger.log(`[MOCK] Places getDetails: placeId="${placeId}"`);
     return {

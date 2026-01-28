@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -7,11 +9,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
+import { ROLES, Role } from '@/common/constants/roles.constants';
 import { User } from '@/user/entities/user.entity';
 import { UserAddress } from '@/user/entities/user-address.entity';
 import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
 import { MenuSelection } from '@/menu/entities/menu-selection.entity';
 import { BugReport } from '@/bug-report/entities/bug-report.entity';
+import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity';
+import { AUDIT_ACTIONS } from '@/admin/settings/constants/audit-action.constants';
 import { PaginatedResponse } from '@/common/interfaces/pagination.interface';
 import {
   AdminUserListQueryDto,
@@ -34,13 +39,24 @@ export class AdminUserService {
     private readonly menuSelectionRepository: Repository<MenuSelection>,
     @InjectRepository(BugReport)
     private readonly bugReportRepository: Repository<BugReport>,
+    @InjectRepository(AdminAuditLog)
+    private readonly auditLogRepository: Repository<AdminAuditLog>,
   ) {}
 
   async findAll(
     query: AdminUserListQueryDto,
+    requestUserRole: Role,
   ): Promise<PaginatedResponse<AdminUserListItemDto>> {
     const qb = this.userRepository.createQueryBuilder('user');
     qb.withDeleted();
+
+    // ADMIN인 경우 USER만 조회 가능
+    if (requestUserRole === ROLES.ADMIN) {
+      qb.andWhere('user.role = :role', { role: ROLES.USER });
+    } else if (query.role) {
+      // SUPER_ADMIN은 role 파라미터로 필터링 가능
+      qb.andWhere('user.role = :role', { role: query.role });
+    }
 
     // 검색 조건
     if (query.search) {
@@ -153,42 +169,106 @@ export class AdminUserService {
     );
   }
 
-  async deactivate(id: number): Promise<void> {
+  async deactivate(
+    id: number,
+    requestUserId: number,
+    requestUserRole: Role,
+    ipAddress: string,
+  ): Promise<void> {
+    // 자기 자신 비활성화 방지
+    if (id === requestUserId) {
+      throw new BadRequestException('자기 자신을 비활성화할 수 없습니다');
+    }
+
+    // 대상 사용자 조회
+    const targetUser = await this.userRepository.findOneBy({ id });
+    if (!targetUser) {
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
+    }
+
+    // SUPER_ADMIN 비활성화 방지
+    if (targetUser.role === ROLES.SUPER_ADMIN) {
+      throw new ForbiddenException('SUPER_ADMIN은 비활성화할 수 없습니다');
+    }
+
+    // ADMIN은 USER만 비활성화 가능
+    if (requestUserRole === ROLES.ADMIN && targetUser.role !== ROLES.USER) {
+      throw new ForbiddenException('ADMIN은 USER만 비활성화할 수 있습니다');
+    }
+
     const result = await this.userRepository.update(
       { id, isDeactivated: false },
       { isDeactivated: true, deactivatedAt: new Date(), refreshToken: null },
     );
 
     if (result.affected === 0) {
-      const user = await this.userRepository.findOneBy({ id });
-      if (!user) {
-        throw new NotFoundException({
-          errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
-        });
-      }
       throw new ConflictException({
         errorCode: ErrorCode.ADMIN_USER_ALREADY_DEACTIVATED,
       });
     }
+
+    // 감사 로그 생성
+    await this.auditLogRepository.save({
+      adminId: requestUserId,
+      action: AUDIT_ACTIONS.DEACTIVATE_USER,
+      target: `User ID: ${id} (${targetUser.email})`,
+      previousValue: { isDeactivated: false },
+      newValue: { isDeactivated: true },
+      ipAddress,
+    });
   }
 
-  async activate(id: number): Promise<void> {
+  async activate(
+    id: number,
+    requestUserId: number,
+    requestUserRole: Role,
+    ipAddress: string,
+  ): Promise<void> {
+    // 자기 자신 활성화 방지
+    if (id === requestUserId) {
+      throw new BadRequestException('자기 자신을 활성화할 수 없습니다');
+    }
+
+    // 대상 사용자 조회
+    const targetUser = await this.userRepository.findOneBy({ id });
+    if (!targetUser) {
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
+    }
+
+    // SUPER_ADMIN 활성화 방지
+    if (targetUser.role === ROLES.SUPER_ADMIN) {
+      throw new ForbiddenException('SUPER_ADMIN은 활성화할 수 없습니다');
+    }
+
+    // ADMIN은 USER만 활성화 가능
+    if (requestUserRole === ROLES.ADMIN && targetUser.role !== ROLES.USER) {
+      throw new ForbiddenException('ADMIN은 USER만 활성화할 수 있습니다');
+    }
+
     const result = await this.userRepository.update(
       { id, isDeactivated: true },
       { isDeactivated: false, deactivatedAt: null },
     );
 
     if (result.affected === 0) {
-      const user = await this.userRepository.findOneBy({ id });
-      if (!user) {
-        throw new NotFoundException({
-          errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
-        });
-      }
       throw new ConflictException({
         errorCode: ErrorCode.ADMIN_USER_ALREADY_ACTIVATED,
       });
     }
+
+    // 감사 로그 생성
+    await this.auditLogRepository.save({
+      adminId: requestUserId,
+      action: AUDIT_ACTIONS.ACTIVATE_USER,
+      target: `User ID: ${id} (${targetUser.email})`,
+      previousValue: { isDeactivated: true },
+      newValue: { isDeactivated: false },
+      ipAddress,
+    });
   }
 
   private async getUserStats(userId: number): Promise<{

@@ -12,6 +12,7 @@ import {
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
+import { ImageValidationPipe } from '../common/pipes/file-validation.pipe';
 import { BugReportService } from './bug-report.service';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
 
@@ -24,7 +25,7 @@ export class BugReportController {
   @UseInterceptors(FilesInterceptor('images', 5))
   async createBugReport(
     @Body() dto: CreateBugReportDto,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles(new ImageValidationPipe()) files: Express.Multer.File[],
     @CurrentUser() authUser: AuthUserPayload,
   ) {
     const bugReport = await this.bugReportService.createBugReport(

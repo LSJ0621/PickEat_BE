@@ -10,6 +10,7 @@ import { PlaceRecommendation } from '@/menu/entities/place-recommendation.entity
 import { EmailVerification } from '@/auth/entities/email-verification.entity';
 import { BugReport } from '@/bug-report/entities/bug-report.entity';
 import { BugReportNotification } from '@/bug-report/entities/bug-report-notification.entity';
+import { UserPlace } from '@/user-place/entities/user-place.entity';
 
 /**
  * All entities used in the application
@@ -17,6 +18,7 @@ import { BugReportNotification } from '@/bug-report/entities/bug-report-notifica
 export const ALL_ENTITIES = [
   User,
   UserAddress,
+  UserPlace,
   MenuRecommendation,
   MenuSelection,
   PlaceRecommendation,
@@ -111,6 +113,7 @@ export async function cleanDatabase(dataSource: DataSource): Promise<void> {
     'BugReportNotification', // Standalone (no FK)
     'BugReport', // References User
     'EmailVerification', // Standalone (no FK)
+    'UserPlace', // References User
     'UserAddress', // References User
     'User', // Parent table (referenced by multiple tables)
   ];

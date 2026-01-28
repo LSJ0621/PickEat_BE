@@ -11,6 +11,7 @@ import { User } from '@/user/entities/user.entity';
 import { ADMIN_ROLES, Role, ROLES } from '@/common/constants/roles.constants';
 import { AdminAuditLog } from './entities/admin-audit-log.entity';
 import { AdminListItemDto } from './dto/admin-list-item.dto';
+import { AUDIT_ACTIONS } from './constants/audit-action.constants';
 
 @Injectable()
 export class AdminSettingsService {
@@ -80,7 +81,7 @@ export class AdminSettingsService {
 
     await this.createAuditLog({
       adminId: currentAdmin.id,
-      action: 'PROMOTE_ADMIN',
+      action: AUDIT_ACTIONS.PROMOTE_ADMIN,
       target: `user:${user.id}`,
       previousValue: { role: previousRole },
       newValue: { role },
@@ -114,13 +115,17 @@ export class AdminSettingsService {
       throw new BadRequestException('User is not an admin');
     }
 
+    if (user.role === ROLES.SUPER_ADMIN) {
+      throw new ForbiddenException('SUPER_ADMIN 역할은 강등할 수 없습니다');
+    }
+
     const previousRole = user.role;
     user.role = ROLES.USER;
     await this.userRepository.save(user);
 
     await this.createAuditLog({
       adminId: currentAdmin.id,
-      action: 'DEMOTE_ADMIN',
+      action: AUDIT_ACTIONS.DEMOTE_ADMIN,
       target: `user:${userId}`,
       previousValue: { role: previousRole },
       newValue: { role: ROLES.USER },

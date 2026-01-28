@@ -894,7 +894,6 @@ describe('Auth (e2e)', () => {
         email: 'korean-welcome@example.com',
         password: 'Password123!',
         name: '한국 사용자',
-        lang: 'ko',
       };
 
       // Step 1: Send verification code
@@ -911,9 +910,10 @@ describe('Auth (e2e)', () => {
       verification!.used = true;
       await emailVerificationRepository.save(verification!);
 
-      // Step 3: Register user
+      // Step 3: Register user with Korean language header
       const response = await request(app.getHttpServer())
         .post('/auth/register')
+        .set('Accept-Language', 'ko-KR,ko;q=0.9')
         .send(registerDto)
         .expect(201);
 
@@ -937,7 +937,6 @@ describe('Auth (e2e)', () => {
         email: 'english-welcome@example.com',
         password: 'Password123!',
         name: 'English User',
-        lang: 'en',
       };
 
       // Step 1: Send verification code
@@ -954,9 +953,10 @@ describe('Auth (e2e)', () => {
       verification!.used = true;
       await emailVerificationRepository.save(verification!);
 
-      // Step 3: Register user
+      // Step 3: Register user with English language header
       const response = await request(app.getHttpServer())
         .post('/auth/register')
+        .set('Accept-Language', 'en-US,en;q=0.9')
         .send(registerDto)
         .expect(201);
 

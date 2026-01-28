@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { GoogleModule } from '@/external/google/google.module';
+import { KakaoModule } from '@/external/kakao/kakao.module';
 import { AdminInitializerService } from './services/admin-initializer.service';
 import { TestUserSeederService } from './services/test-user-seeder.service';
 import { UserAddress } from './entities/user-address.entity';
@@ -12,7 +14,11 @@ import { UserController } from './user.controller';
 import { UserService } from './user.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserAddress])],
+  imports: [
+    TypeOrmModule.forFeature([User, UserAddress]),
+    GoogleModule,
+    KakaoModule,
+  ],
   controllers: [UserController],
   providers: [
     UserService,

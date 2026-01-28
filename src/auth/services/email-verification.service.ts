@@ -65,7 +65,7 @@ export class EmailVerificationService {
       }
     }
 
-    const emailContent = EMAIL_CONTENT[selectedLang as 'ko' | 'en'];
+    const emailContent = EMAIL_CONTENT[selectedLang];
     const localizedContent = {
       emailTitle: emailContent.verification.emailTitle[normalizedPurpose],
       pageTitle: emailContent.verification.pageTitle,
@@ -140,6 +140,7 @@ export class EmailVerificationService {
       context: {
         ...localizedContent,
         verificationCode: code,
+        lang: selectedLang,
       },
     });
 
@@ -439,7 +440,7 @@ export class EmailVerificationService {
   private getTemplateName(lang: string): string {
     const supportedLangs = ['ko', 'en'];
     const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
-    return `email-verification.${selectedLang}`;
+    return `email-verification-${selectedLang}`;
   }
 
   /**
@@ -467,7 +468,7 @@ export class EmailVerificationService {
       const selectedLang = language || user.preferredLanguage || 'ko';
 
       // Build localized content
-      const content = EMAIL_CONTENT[selectedLang as 'ko' | 'en']?.welcome;
+      const content = EMAIL_CONTENT[selectedLang]?.welcome;
       const userName = user.name || user.email.split('@')[0];
       const loginLink =
         this.config.get<string>('FRONTEND_URL') || 'https://pickeat.com';
@@ -534,7 +535,7 @@ export class EmailVerificationService {
       }
 
       // Build localized content
-      const content = EMAIL_CONTENT[selectedLang as 'ko' | 'en']?.deactivation;
+      const content = EMAIL_CONTENT[selectedLang]?.deactivation;
       const userName = email.split('@')[0];
 
       // Format timestamp
@@ -590,12 +591,12 @@ export class EmailVerificationService {
   private getWelcomeTemplateName(lang: string): string {
     const supportedLangs = ['ko', 'en'];
     const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
-    return `welcome.${selectedLang}`;
+    return `welcome-${selectedLang}`;
   }
 
   private getAccountDeactivationTemplateName(lang: string): string {
     const supportedLangs = ['ko', 'en'];
     const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
-    return `account-deactivation.${selectedLang}`;
+    return `account-deactivation-${selectedLang}`;
   }
 }

@@ -409,6 +409,10 @@ export function createMockGooglePlacesClient() {
     getDetails: jest.fn(),
     getPhotoUri: jest.fn(),
     resolvePhotoUris: jest.fn(),
+    createSessionToken: jest
+      .fn()
+      .mockReturnValue('mock-session-token-12345678'),
+    autocomplete: jest.fn().mockResolvedValue([]),
   };
 }
 
@@ -465,6 +469,7 @@ export function createMockS3Client() {
   return {
     uploadFile: jest.fn(),
     uploadBugReportImage: jest.fn(),
+    uploadUserPlaceImage: jest.fn(),
     deleteFile: jest.fn(),
   };
 }

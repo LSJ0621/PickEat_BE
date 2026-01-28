@@ -1,4 +1,5 @@
 // NOTE: main.ts는 NestJS 컨텍스트 외부이므로 process.env 직접 사용 허용
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import * as cookieParser from 'cookie-parser';
 import { Logger } from 'nestjs-pino';
@@ -9,6 +10,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useLogger(app.get(Logger));
   app.useGlobalFilters(app.get(HttpExceptionFilter));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
   app.use(cookieParser());
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:8080',

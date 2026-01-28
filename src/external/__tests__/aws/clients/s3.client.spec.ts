@@ -9,7 +9,10 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createMockConfigService } from '../../../../../test/mocks/external-clients.mock';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
-import { AWS_S3_BUG_REPORT_CONFIG } from '../../../aws/aws.constants';
+import {
+  AWS_S3_BUG_REPORT_CONFIG,
+  AWS_S3_USER_PLACE_CONFIG,
+} from '../../../aws/aws.constants';
 
 // Mock AWS SDK modules
 jest.mock('@aws-sdk/client-s3');
@@ -430,6 +433,257 @@ describe('S3Client', () => {
         mockS3Send.mockRejectedValue(signatureError);
 
         await expect(client.uploadBugReportImage(mockFile)).rejects.toThrow(
+          ExternalApiException,
+        );
+      });
+    });
+  });
+
+  describe('uploadUserPlaceImage', () => {
+    describe('public bucket', () => {
+      it('should successfully upload image and return public URL', async () => {
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const result = await client.uploadUserPlaceImage(mockFile);
+
+        expect(mockS3Send).toHaveBeenCalledTimes(1);
+        expect(mockS3Send).toHaveBeenCalledWith(expect.any(PutObjectCommand));
+
+        expect(result).toMatch(
+          /^https:\/\/s3\.ap-northeast-2\.amazonaws\.com\/test-bucket\/user-places\/.+\.jpg$/,
+        );
+        expect(getSignedUrl).not.toHaveBeenCalled();
+      });
+
+      it('should use correct S3 prefix for user place images', async () => {
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const result = await client.uploadUserPlaceImage(mockFile);
+
+        expect(result).toContain(
+          AWS_S3_USER_PLACE_CONFIG.USER_PLACE_IMAGE_PREFIX,
+        );
+        expect(result).toMatch(/user-places\//);
+      });
+
+      it('should handle different file extensions correctly', async () => {
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const pngFile = {
+          ...mockFile,
+          originalname: 'restaurant.png',
+          mimetype: 'image/png',
+        };
+        const resultPng = await client.uploadUserPlaceImage(pngFile);
+
+        const webpFile = {
+          ...mockFile,
+          originalname: 'menu.webp',
+          mimetype: 'image/webp',
+        };
+        const resultWebp = await client.uploadUserPlaceImage(webpFile);
+
+        const heicFile = {
+          ...mockFile,
+          originalname: 'photo.heic',
+          mimetype: 'image/heic',
+        };
+        const resultHeic = await client.uploadUserPlaceImage(heicFile);
+
+        expect(resultPng).toMatch(/\.png$/);
+        expect(resultWebp).toMatch(/\.webp$/);
+        expect(resultHeic).toMatch(/\.heic$/);
+        expect(mockS3Send).toHaveBeenCalledTimes(3);
+      });
+
+      it('should generate unique keys for multiple uploads', async () => {
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const result1 = await client.uploadUserPlaceImage(mockFile);
+        const result2 = await client.uploadUserPlaceImage(mockFile);
+        const result3 = await client.uploadUserPlaceImage(mockFile);
+
+        expect(mockS3Send).toHaveBeenCalledTimes(3);
+        expect(result1).not.toBe(result2);
+        expect(result2).not.toBe(result3);
+        expect(result1).not.toBe(result3);
+      });
+
+      it('should use default extension when file has no extension', async () => {
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const noExtFile = { ...mockFile, originalname: 'image_file' };
+        const result = await client.uploadUserPlaceImage(noExtFile);
+
+        expect(result).toMatch(/\.image_file$/);
+      });
+
+      it('should handle file without mimetype gracefully', async () => {
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const noMimeFile = {
+          ...mockFile,
+          mimetype: undefined as unknown as string,
+        };
+        const result = await client.uploadUserPlaceImage(noMimeFile);
+
+        expect(mockS3Send).toHaveBeenCalledWith(expect.any(PutObjectCommand));
+        expect(result).toBeDefined();
+      });
+    });
+
+    describe('private bucket', () => {
+      async function createPrivateBucketClient() {
+        const privateConfigService = createMockConfigService({
+          AWS_S3_ACCESS_KEY_ID: 'test-access-key-id',
+          AWS_S3_SECRET_ACCESS_KEY: 'test-secret-access-key',
+          AWS_S3_BUCKET: 'test-bucket',
+          AWS_S3_REGION: 'ap-northeast-2',
+          AWS_S3_BUCKET_PUBLIC: 'false',
+        });
+
+        mockS3Send = jest.fn();
+        (AwsS3Client as jest.Mock).mockImplementation(() => ({
+          send: mockS3Send,
+        }));
+
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            S3Client,
+            { provide: ConfigService, useValue: privateConfigService },
+          ],
+        }).compile();
+
+        client = module.get<S3Client>(S3Client);
+        jest.clearAllMocks();
+      }
+
+      it('should successfully upload image and return presigned URL', async () => {
+        await createPrivateBucketClient();
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+
+        const presignedUrl =
+          'https://test-bucket.s3.amazonaws.com/user-places/file.jpg?signature=xyz';
+        (getSignedUrl as jest.Mock).mockResolvedValue(presignedUrl);
+
+        const result = await client.uploadUserPlaceImage(mockFile);
+
+        expect(mockS3Send).toHaveBeenCalledTimes(1);
+        expect(mockS3Send).toHaveBeenCalledWith(expect.any(PutObjectCommand));
+        expect(getSignedUrl).toHaveBeenCalledTimes(1);
+        expect(getSignedUrl).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.any(GetObjectCommand),
+          { expiresIn: 7 * 24 * 60 * 60 },
+        );
+
+        expect(result).toBe(presignedUrl);
+      });
+
+      it('should set presigned URL expiration to 7 days', async () => {
+        await createPrivateBucketClient();
+
+        mockS3Send.mockResolvedValue({
+          $metadata: { httpStatusCode: 200 },
+        });
+        (getSignedUrl as jest.Mock).mockResolvedValue(
+          'https://presigned-url.com',
+        );
+
+        await client.uploadUserPlaceImage(mockFile);
+
+        expect(getSignedUrl).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.anything(),
+          { expiresIn: 7 * 24 * 60 * 60 },
+        );
+      });
+    });
+
+    describe('error handling', () => {
+      it('should throw ExternalApiException on S3 upload failure', async () => {
+        const s3Error = new Error('S3 upload failed');
+        mockS3Send.mockRejectedValue(s3Error);
+
+        await expect(client.uploadUserPlaceImage(mockFile)).rejects.toThrow(
+          ExternalApiException,
+        );
+      });
+
+      it('should include provider info in exception', async () => {
+        const s3Error = new Error('S3 upload failed');
+        mockS3Send.mockRejectedValue(s3Error);
+
+        try {
+          await client.uploadUserPlaceImage(mockFile);
+          fail('Should have thrown');
+        } catch (e) {
+          expect(e).toBeInstanceOf(ExternalApiException);
+          expect((e as ExternalApiException).provider).toBe('S3');
+          expect((e as ExternalApiException).originalError).toBe(s3Error);
+        }
+      });
+
+      it('should throw ExternalApiException with custom message', async () => {
+        const s3Error = new Error('Network timeout');
+        mockS3Send.mockRejectedValue(s3Error);
+
+        try {
+          await client.uploadUserPlaceImage(mockFile);
+          fail('Should have thrown');
+        } catch (e) {
+          expect(e).toBeInstanceOf(ExternalApiException);
+          const response = e.getResponse();
+          expect(response.message).toBe('Failed to upload image');
+        }
+      });
+
+      it('should throw ExternalApiException on access denied', async () => {
+        const accessDeniedError = new Error('Access Denied') as Error & {
+          name: string;
+        };
+        accessDeniedError.name = 'AccessDenied';
+        mockS3Send.mockRejectedValue(accessDeniedError);
+
+        await expect(client.uploadUserPlaceImage(mockFile)).rejects.toThrow(
+          ExternalApiException,
+        );
+      });
+
+      it('should throw ExternalApiException on bucket not found', async () => {
+        const notFoundError = new Error('NoSuchBucket') as Error & {
+          name: string;
+        };
+        notFoundError.name = 'NoSuchBucket';
+        mockS3Send.mockRejectedValue(notFoundError);
+
+        await expect(client.uploadUserPlaceImage(mockFile)).rejects.toThrow(
+          ExternalApiException,
+        );
+      });
+
+      it('should throw ExternalApiException on invalid credentials', async () => {
+        const credentialsError = new Error('InvalidAccessKeyId') as Error & {
+          name: string;
+        };
+        credentialsError.name = 'InvalidAccessKeyId';
+        mockS3Send.mockRejectedValue(credentialsError);
+
+        await expect(client.uploadUserPlaceImage(mockFile)).rejects.toThrow(
           ExternalApiException,
         );
       });

@@ -92,8 +92,9 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+  async register(@Body() registerDto: RegisterDto, @Req() req: Request) {
+    const lang = this.extractLanguage(req);
+    return this.authService.register(registerDto, lang);
   }
 
   @Post('login')
@@ -112,11 +113,15 @@ export class AuthController {
   }
 
   @Post('email/send-code')
-  async sendEmailCode(@Body() sendEmailCodeDto: SendEmailCodeDto) {
+  async sendEmailCode(
+    @Body() sendEmailCodeDto: SendEmailCodeDto,
+    @Req() req: Request,
+  ) {
+    const lang = this.extractLanguage(req);
     const result = await this.emailVerificationService.sendCode(
       sendEmailCodeDto.email,
       sendEmailCodeDto.purpose,
-      sendEmailCodeDto.lang,
+      lang,
     );
     return { success: true, ...result };
   }
@@ -161,10 +166,12 @@ export class AuthController {
   @Post('password/reset/send-code')
   async sendResetPasswordCode(
     @Body() sendResetPasswordCodeDto: SendResetPasswordCodeDto,
+    @Req() req: Request,
   ) {
+    const lang = this.extractLanguage(req);
     const result = await this.authService.sendResetPasswordCode(
       sendResetPasswordCodeDto.email,
-      sendResetPasswordCodeDto.lang,
+      lang,
     );
     return { success: true, ...result };
   }

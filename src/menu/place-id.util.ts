@@ -13,3 +13,18 @@ export function normalizePlaceIdForStorage(placeId: string): string {
     ? placeId.replace(/^places\//, '')
     : placeId;
 }
+
+const USER_PLACE_PREFIX = 'user_place_';
+
+/**
+ * UserPlace ID 파싱
+ * user_place_ prefix가 있으면 숫자 ID를 반환, 없으면 null 반환
+ */
+export function parseUserPlaceId(placeId: string): number | null {
+  if (!placeId?.startsWith(USER_PLACE_PREFIX)) {
+    return null;
+  }
+  const idPart = placeId.substring(USER_PLACE_PREFIX.length);
+  const numericId = parseInt(idPart, 10);
+  return isNaN(numericId) ? null : numericId;
+}
