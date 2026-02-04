@@ -21,6 +21,7 @@ import { UserService } from '../user/user.service';
 import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
 import { RecommendCommunityPlacesDto } from './dto/recommend-community-places.dto';
 import { RecommendMenuDto } from './dto/recommend-menu.dto';
+import { RecommendPlacesV2Dto } from './dto/recommend-places-v2.dto';
 import { RecommendationHistoryQueryDto } from './dto/recommendation-history-query.dto';
 import { SearchRestaurantBlogsDto } from './dto/search-restaurant-blogs.dto';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
@@ -123,12 +124,15 @@ export class MenuController {
 
   // Google Custom Search(Programmable Search)를 이용한
   // 가게 이름 기반 블로그/웹 문서 검색 (썸네일, URL, 제목, 스니펫, 출처)
-  // 예: GET /menu/restaurant/blogs?query=부산시 해운대구 마라탕집&restaurantName=마라탕집
+  // 예: GET /menu/restaurant/blogs?query=부산시 해운대구 마라탕집&restaurantName=마라탕집&language=ko
   @Get('restaurant/blogs')
   async searchRestaurantBlogs(@Query() dto: SearchRestaurantBlogsDto) {
     return this.menuService.searchRestaurantBlogs(
       dto.query,
       dto.restaurantName,
+      dto.language,
+      dto.searchName,
+      dto.searchAddress,
     );
   }
 
@@ -161,7 +165,7 @@ export class MenuController {
     );
   }
 
-  // 검색 기반 가게 추천 (Google Places)
+  // 검색 기반 가게 추천 (Gemini with Google Search Grounding)
   @Get('recommend/places/search')
   async recommendSearchPlaces(
     @Query() dto: RecommendCommunityPlacesDto,
@@ -179,7 +183,7 @@ export class MenuController {
 
     const textQuery = dto.menuName;
 
-    // Use existing PlaceService.recommendRestaurants with coordinates
+    // Use Gemini-based place recommendation with coordinates
     const result = await this.placeService.recommendRestaurants(
       entity,
       textQuery,
@@ -189,14 +193,20 @@ export class MenuController {
       dto.longitude,
     );
 
-    // Add source field to each recommendation
+    // Map Gemini response (통합 Grounding: Search + Maps)
     return {
       recommendations: result.recommendations.map((rec) => ({
         placeId: rec.placeId,
         name: rec.name,
         reason: rec.reason,
-        menuName: dto.menuName,
-        source: PlaceRecommendationSource.GOOGLE,
+        menuName: rec.menuName,
+        source: PlaceRecommendationSource.GEMINI,
+        address: rec.address,
+        location: rec.location,
+        localizedName: rec.localizedName,
+        localizedAddress: rec.localizedAddress,
+        searchName: rec.searchName,
+        searchAddress: rec.searchAddress,
       })),
     };
   }
@@ -246,6 +256,18 @@ export class MenuController {
         userPlaceId: rec.userPlace?.id || undefined,
       })),
     };
+  }
+
+  // Gemini 기반 가게 추천 (V2)
+  @Get('recommend/places/v2')
+  async recommendPlacesV2(
+    @Query() dto: RecommendPlacesV2Dto,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+    return this.menuService.recommendPlacesWithGemini(dto, entity.id);
   }
 
   // 특정 추천 이력 1건 + 그 이력에서 생성된 AI 가게 추천 상세 조회

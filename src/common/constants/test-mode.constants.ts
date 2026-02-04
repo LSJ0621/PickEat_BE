@@ -28,7 +28,7 @@ export const TEST_MODE = {
       name: '테스트유저',
     },
     ADMIN: {
-      email: 'admin@example.com',
+      email: 'admin@pickeat.com',
       password: 'adminpassword',
       role: 'ADMIN',
       name: '관리자',

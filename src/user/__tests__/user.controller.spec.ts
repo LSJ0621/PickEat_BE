@@ -11,7 +11,7 @@ import {
 import { UpdatePreferencesDto } from '../dto/update-preferences.dto';
 import { SearchAddressDto } from '../dto/search-address.dto';
 import { UpdateSingleAddressDto } from '../dto/update-single-address.dto';
-import { UpdateUserNameDto } from '../dto/update-user-name.dto';
+import { UpdateUserDto } from '../dto/update-user.dto';
 import { CreateUserAddressDto } from '../dto/create-user-address.dto';
 import { UpdateUserAddressDto } from '../dto/update-user-address.dto';
 import { DeleteUserAddressesDto } from '../dto/delete-user-addresses.dto';
@@ -34,6 +34,7 @@ describe('UserController', () => {
       searchAddress: jest.fn(),
       updateEntitySingleAddress: jest.fn(),
       updateEntityName: jest.fn(),
+      updateProfile: jest.fn(),
       deleteUser: jest.fn(),
       getEntityDefaultAddress: jest.fn(),
       getEntityAddresses: jest.fn(),
@@ -275,29 +276,174 @@ describe('UserController', () => {
   });
 
   describe('updateUser', () => {
-    it('should update user name successfully', async () => {
+    it('should update user profile with valid data', async () => {
       // Arrange
       const user = UserFactory.create({
+        id: 1,
         email: mockAuthUser.email,
         name: 'Old Name',
+        birthYear: null,
+        gender: null,
       });
-      const updateDto: UpdateUserNameDto = { name: 'New Name' };
-      const updatedUser = { ...user, name: updateDto.name };
+      const updateDto: UpdateUserDto = {
+        name: 'New Name',
+        birthYear: 1990,
+        gender: 'male',
+      };
+      const updatedUser = {
+        ...user,
+        name: 'New Name',
+        birthYear: 1990,
+        gender: 'male' as const,
+      };
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateEntityName.mockResolvedValue(updatedUser);
+      mockUserService.updateProfile.mockResolvedValue(updatedUser);
 
       // Act
       const result = await controller.updateUser(updateDto, mockAuthUser);
 
       // Assert
-      expect(result).toEqual({ name: updateDto.name });
+      expect(result).toEqual({
+        name: 'New Name',
+        birthYear: 1990,
+        gender: 'male',
+      });
       expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
         mockAuthUser.email,
       );
-      expect(mockUserService.updateEntityName).toHaveBeenCalledWith(
-        user,
-        updateDto.name,
+      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, updateDto);
+    });
+
+    it('should update only name when only name is provided', async () => {
+      // Arrange
+      const user = UserFactory.create({
+        id: 1,
+        email: mockAuthUser.email,
+        name: 'Old Name',
+        birthYear: 1990,
+        gender: 'male',
+      });
+      const updateDto: UpdateUserDto = { name: 'New Name' };
+      const updatedUser = {
+        ...user,
+        name: 'New Name',
+      };
+      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
+      mockUserService.updateProfile.mockResolvedValue(updatedUser);
+
+      // Act
+      const result = await controller.updateUser(updateDto, mockAuthUser);
+
+      // Assert
+      expect(result).toEqual({
+        name: 'New Name',
+        birthYear: 1990,
+        gender: 'male',
+      });
+      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
+        name: 'New Name',
+      });
+    });
+
+    it('should update only birthYear when only birthYear is provided', async () => {
+      // Arrange
+      const user = UserFactory.create({
+        id: 1,
+        email: mockAuthUser.email,
+        name: 'Test User',
+        birthYear: null,
+        gender: null,
+      });
+      const updateDto: UpdateUserDto = { birthYear: 1995 };
+      const updatedUser = {
+        ...user,
+        birthYear: 1995,
+      };
+      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
+      mockUserService.updateProfile.mockResolvedValue(updatedUser);
+
+      // Act
+      const result = await controller.updateUser(updateDto, mockAuthUser);
+
+      // Assert
+      expect(result).toEqual({
+        name: 'Test User',
+        birthYear: 1995,
+        gender: null,
+      });
+      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
+        birthYear: 1995,
+      });
+    });
+
+    it('should update only gender when only gender is provided', async () => {
+      // Arrange
+      const user = UserFactory.create({
+        id: 1,
+        email: mockAuthUser.email,
+        name: 'Test User',
+        birthYear: null,
+        gender: null,
+      });
+      const updateDto: UpdateUserDto = { gender: 'female' };
+      const updatedUser = {
+        ...user,
+        gender: 'female' as const,
+      };
+      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
+      mockUserService.updateProfile.mockResolvedValue(updatedUser);
+
+      // Act
+      const result = await controller.updateUser(updateDto, mockAuthUser);
+
+      // Assert
+      expect(result).toEqual({
+        name: 'Test User',
+        birthYear: null,
+        gender: 'female',
+      });
+      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
+        gender: 'female',
+      });
+    });
+
+    it('should handle gender type other', async () => {
+      // Arrange
+      const user = UserFactory.create({
+        id: 1,
+        email: mockAuthUser.email,
+        gender: null,
+      });
+      const updateDto: UpdateUserDto = { gender: 'other' };
+      const updatedUser = {
+        ...user,
+        gender: 'other' as const,
+      };
+      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
+      mockUserService.updateProfile.mockResolvedValue(updatedUser);
+
+      // Act
+      const result = await controller.updateUser(updateDto, mockAuthUser);
+
+      // Assert
+      expect(result.gender).toBe('other');
+    });
+
+    it('should throw NotFoundException when user does not exist', async () => {
+      // Arrange
+      const updateDto: UpdateUserDto = { name: 'New Name' };
+      mockUserService.getAuthenticatedEntity.mockRejectedValue(
+        new NotFoundException('User not found'),
       );
+
+      // Act & Assert
+      await expect(
+        controller.updateUser(updateDto, mockAuthUser),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
+        mockAuthUser.email,
+      );
+      expect(mockUserService.updateProfile).not.toHaveBeenCalled();
     });
   });
 
@@ -310,7 +456,7 @@ describe('UserController', () => {
       const result = await controller.deleteCurrentUser(mockAuthUser);
 
       // Assert
-      expect(result).toEqual({ message: '회원 탈퇴가 완료되었습니다.' });
+      expect(result).toEqual({ messageCode: 'USER_WITHDRAWAL_COMPLETED' });
       expect(mockUserService.deleteUser).toHaveBeenCalledWith(
         mockAuthUser.email,
       );
@@ -574,7 +720,7 @@ describe('UserController', () => {
       const result = await controller.deleteUserAddresses(dto, mockAuthUser);
 
       // Assert
-      expect(result).toEqual({ message: '주소가 삭제되었습니다.' });
+      expect(result).toEqual({ messageCode: 'USER_ADDRESS_DELETED' });
       expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
         mockAuthUser.email,
       );
@@ -595,7 +741,7 @@ describe('UserController', () => {
       const result = await controller.deleteUserAddresses(dto, mockAuthUser);
 
       // Assert
-      expect(result).toEqual({ message: '주소가 삭제되었습니다.' });
+      expect(result).toEqual({ messageCode: 'USER_ADDRESS_DELETED' });
       expect(mockUserService.deleteEntityAddresses).toHaveBeenCalledWith(user, [
         1,
       ]);

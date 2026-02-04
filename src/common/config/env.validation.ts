@@ -49,6 +49,18 @@ class EnvironmentVariables {
   @IsNotEmpty()
   POSTGRES_SYNCHRONIZE: string;
 
+  // Redis
+  @IsString()
+  @IsNotEmpty()
+  REDIS_HOST: string;
+
+  @IsString()
+  @IsNotEmpty()
+  REDIS_PORT: string;
+
+  @IsString()
+  REDIS_PASSWORD: string;
+
   // JWT
   @IsString()
   @IsNotEmpty()

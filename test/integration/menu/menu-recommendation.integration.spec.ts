@@ -702,7 +702,6 @@ describe('Menu Recommendation Integration', () => {
         },
         status: MenuSelectionStatus.PENDING,
         selectedAt: new Date(),
-        lastTriedAt: null,
         retryCount: 0,
         menuRecommendation: null,
       });
@@ -718,7 +717,6 @@ describe('Menu Recommendation Integration', () => {
         },
         status: MenuSelectionStatus.SUCCEEDED,
         selectedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        lastTriedAt: null,
         retryCount: 0,
         menuRecommendation: null,
       });

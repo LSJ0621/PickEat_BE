@@ -3,10 +3,12 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { BatchJob } from '../../batch/entities/batch-job.entity';
 import { User } from '../../user/entities/user.entity';
 import { MenuSlotPayload } from '../interface/menu-selection.interface';
 import { MenuRecommendation } from './menu-recommendation.entity';
@@ -14,6 +16,7 @@ import { MenuRecommendation } from './menu-recommendation.entity';
 export enum MenuSelectionStatus {
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
+  BATCH_PROCESSING = 'BATCH_PROCESSING',
   SUCCEEDED = 'SUCCEEDED',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
@@ -41,11 +44,21 @@ export class MenuSelection {
   @Column({ type: 'date', default: () => 'CURRENT_DATE' })
   selectedDate: string;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  lastTriedAt: Date | null;
-
+  /**
+   * 배치 재시도 횟수 (최대 3회)
+   * PreferencesRetryBatchScheduler에서 FAILED 상태 selection 재시도에 사용
+   */
   @Column({ type: 'int', default: 0 })
   retryCount: number;
+
+  /** Batch 작업 참조 (BATCH_PROCESSING 상태일 때 설정됨) */
+  @Column({ type: 'int', nullable: true })
+  @Index('idx_menu_selection_batch_job_id')
+  batchJobId: number | null;
+
+  @ManyToOne(() => BatchJob, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'batchJobId' })
+  batchJob: BatchJob | null;
 
   @ManyToOne(() => User, (user) => user.menuSelections, {
     nullable: false,

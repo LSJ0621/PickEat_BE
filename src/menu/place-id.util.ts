@@ -5,10 +5,10 @@
 
 /**
  * placeId에서 places/ prefix를 제거하여 정규화
- * DB 저장 시 사용
+ * @param placeId - Google Place ID (places/ prefix 포함 가능)
+ * @returns 정규화된 placeId (places/ prefix 제거)
  */
-export function normalizePlaceIdForStorage(placeId: string): string {
-  if (!placeId) return placeId;
+export function normalizePlaceId(placeId: string): string {
   return placeId.startsWith('places/')
     ? placeId.replace(/^places\//, '')
     : placeId;

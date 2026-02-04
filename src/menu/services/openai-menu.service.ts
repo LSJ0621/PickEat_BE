@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { StructuredAnalysis } from '@/external/openai/prompts';
 import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 import { TwoStageMenuService } from './two-stage-menu.service';
 
@@ -23,6 +24,9 @@ export class OpenAiMenuService {
     dislikes: string[],
     analysis?: string,
     language: 'ko' | 'en' = 'ko',
+    userAddress?: string,
+    compactSummary?: string,
+    structuredAnalysis?: StructuredAnalysis,
   ): Promise<MenuRecommendationsResponse> {
     return this.twoStageMenuService.generateMenuRecommendations(
       prompt,
@@ -30,6 +34,11 @@ export class OpenAiMenuService {
       dislikes,
       analysis,
       language,
+      userAddress,
+      undefined, // userBirthYear
+      undefined, // userGender
+      compactSummary,
+      structuredAnalysis,
     );
   }
 }

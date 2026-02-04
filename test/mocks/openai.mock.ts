@@ -66,36 +66,6 @@ export function createMockOpenAIWithError(error: Error) {
 }
 
 /**
- * Mock preference analysis response for PreferenceUpdateAiService
- */
-export const mockPreferenceAnalysisResponse = {
-  id: 'chatcmpl-pref-123',
-  object: 'chat.completion',
-  created: 1677652288,
-  model: 'gpt-4o-mini',
-  choices: [
-    {
-      index: 0,
-      message: {
-        role: 'assistant',
-        content: JSON.stringify({
-          likes: ['한식', '매운 음식', '국물 요리'],
-          dislikes: ['느끼한 음식'],
-          analysis:
-            '사용자는 한식과 매운 음식을 선호하며, 특히 국물 요리를 좋아합니다.',
-        }),
-      },
-      finish_reason: 'stop',
-    },
-  ],
-  usage: {
-    prompt_tokens: 50,
-    completion_tokens: 100,
-    total_tokens: 150,
-  },
-};
-
-/**
  * Mock place recommendation response for OpenAiPlacesService
  */
 export const mockPlaceRecommendationResponse = {

@@ -30,7 +30,13 @@ export class MenuRecommendation {
   recommendations: string[];
 
   @Column({ type: 'text', default: '' })
-  reason: string;
+  intro: string;
+
+  @Column({ type: 'text', default: '' })
+  closing: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  recommendationDetails: { condition: string; menu: string }[] | null;
 
   @Column('text')
   prompt: string;

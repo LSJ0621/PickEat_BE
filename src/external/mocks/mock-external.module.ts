@@ -10,6 +10,7 @@ import { NaverSearchClient } from '../naver/clients/naver-search.client';
 import { NaverMapClient } from '../naver/clients/naver-map.client';
 import { S3Client } from '../aws/clients/s3.client';
 import { DiscordWebhookClient } from '../discord/clients/discord-webhook.client';
+import { GeminiClient } from '../gemini/clients/gemini.client';
 
 // Service imports (for E2E mock)
 import { TwoStageMenuService } from '@/menu/services/two-stage-menu.service';
@@ -27,6 +28,7 @@ import { MockDiscordWebhookClient } from './mock-discord-webhook.client';
 import { MockTwoStageMenuService } from './mock-two-stage-menu.service';
 import { MockOpenAiPlacesService } from './mock-openai-places.service';
 import { MockLocationService } from './mock-location.service';
+import { MockGeminiClient } from './mock-gemini.client';
 
 const logger = new Logger('MockExternalModule');
 
@@ -148,6 +150,11 @@ const logger = new Logger('MockExternalModule');
       provide: LocationService,
       useClass: MockLocationService,
     },
+    // Gemini Client - mock 사용
+    {
+      provide: GeminiClient,
+      useClass: MockGeminiClient,
+    },
   ],
   exports: [
     GooglePlacesClient,
@@ -162,6 +169,7 @@ const logger = new Logger('MockExternalModule');
     TwoStageMenuService,
     OpenAiPlacesService,
     LocationService,
+    GeminiClient,
   ],
 })
 export class MockExternalModule {

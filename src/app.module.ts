@@ -7,7 +7,9 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { BatchModule } from './batch/batch.module';
 import { BugReportModule } from './bug-report/bug-report.module';
+import { RedisCacheModule } from './common/cache/cache.module';
 import { databaseConfig } from './common/config/database.config';
 import { validate } from './common/config/env.validation';
 import { loggerConfig } from './common/config/logger.config';
@@ -37,6 +39,7 @@ import { UserPlaceModule } from './user-place/user-place.module';
       },
     ]),
     LoggerModule.forRoot(loggerConfig),
+    RedisCacheModule,
     ExternalModule.forRoot(),
     AdminModule,
     BugReportModule,
@@ -44,6 +47,7 @@ import { UserPlaceModule } from './user-place/user-place.module';
     UserModule,
     UserPlaceModule,
     MenuModule,
+    BatchModule,
     NotificationModule,
     SearchModule,
   ],

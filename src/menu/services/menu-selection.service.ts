@@ -163,7 +163,6 @@ export class MenuSelectionService {
     existing.selectedAt = now;
     existing.selectedDate = selectedDate;
     existing.status = MenuSelectionStatus.PENDING;
-    existing.lastTriedAt = null;
     existing.retryCount = 0;
 
     if (historyId !== undefined) {
@@ -187,7 +186,6 @@ export class MenuSelectionService {
       selectedAt: now,
       selectedDate,
       status: MenuSelectionStatus.PENDING,
-      lastTriedAt: null,
       retryCount: 0,
     });
 
@@ -211,7 +209,6 @@ export class MenuSelectionService {
         menuPayload: { breakfast: [], lunch: [], dinner: [], etc: [] },
         selectedAt: now,
         selectedDate,
-        lastTriedAt: null,
         retryCount: 0,
       });
     } else {
@@ -222,7 +219,6 @@ export class MenuSelectionService {
         status: MenuSelectionStatus.PENDING,
         selectedAt: now,
         selectedDate,
-        lastTriedAt: null,
         retryCount: 0,
       });
     }

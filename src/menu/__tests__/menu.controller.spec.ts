@@ -45,7 +45,8 @@ describe('MenuController', () => {
 
     mockPlaceService = {} as jest.Mocked<PlaceService>;
     mockCommunityPlaceService = {} as jest.Mocked<CommunityPlaceService>;
-    mockMenuRecommendationService = {} as jest.Mocked<MenuRecommendationService>;
+    mockMenuRecommendationService =
+      {} as jest.Mocked<MenuRecommendationService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MenuController],
@@ -762,7 +763,13 @@ describe('MenuController', () => {
       const user = UserFactory.create({ email: authUser.email });
 
       const expectedResult = {
-        recommendations: [{ placeId: 'place-1', name: '맛있는 식당', reason: '평점이 높습니다' }],
+        recommendations: [
+          {
+            placeId: 'place-1',
+            name: '맛있는 식당',
+            reason: '평점이 높습니다',
+          },
+        ],
       };
 
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);

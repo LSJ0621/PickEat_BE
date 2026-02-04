@@ -12,6 +12,7 @@ import { BugReportStatus } from '@/bug-report/enum/bug-report-status.enum';
 import { UserPreferences } from '@/user/interfaces/user-preferences.interface';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
 import { UserPlaceStatus } from '@/user-place/enum/user-place-status.enum';
+import { UserTasteAnalysis } from '@/user/entities/user-taste-analysis.entity';
 
 /**
  * Factory function to create User entities for testing
@@ -25,6 +26,8 @@ export class UserFactory {
     user.socialId = overrides?.socialId ?? null;
     user.socialType = overrides?.socialType ?? null;
     user.name = overrides?.name ?? 'Test User';
+    user.birthYear = overrides?.birthYear ?? null;
+    user.gender = overrides?.gender ?? null;
     user.role = overrides?.role ?? 'USER';
     user.preferredLanguage = overrides?.preferredLanguage ?? 'ko';
     user.preferences = overrides?.preferences ?? null;
@@ -111,8 +114,12 @@ export class MenuRecommendationFactory {
       '된장찌개',
       '순두부찌개',
     ];
-    recommendation.reason =
-      overrides?.reason ?? '한식을 좋아하시는 것 같아 추천드립니다.';
+    recommendation.intro =
+      overrides?.intro ?? '한식을 좋아하시는 것 같아 추천드립니다.';
+    recommendation.closing = overrides?.closing ?? '맛있게 드세요!';
+    recommendation.recommendationDetails =
+      overrides?.recommendationDetails ?? null;
+    recommendation.region = overrides?.region ?? null;
     recommendation.prompt = overrides?.prompt ?? '오늘 점심 추천해줘';
     recommendation.requestAddress =
       overrides?.requestAddress ?? '서울특별시 강남구 테헤란로 123';
@@ -142,7 +149,6 @@ export class MenuSelectionFactory {
     selection.selectedAt = overrides?.selectedAt ?? new Date();
     selection.selectedDate =
       overrides?.selectedDate ?? new Date().toISOString().split('T')[0];
-    selection.lastTriedAt = overrides?.lastTriedAt ?? null;
     selection.retryCount = overrides?.retryCount ?? 0;
     selection.user = overrides?.user ?? UserFactory.create();
     selection.menuRecommendation = overrides?.menuRecommendation ?? null;
@@ -338,6 +344,63 @@ export class UserPlaceFactory {
         'https://example.com/photo1.jpg',
         'https://example.com/photo2.jpg',
       ],
+    });
+  }
+}
+
+/**
+ * Factory function to create UserTasteAnalysis entities for testing
+ */
+export class UserTasteAnalysisFactory {
+  static create(overrides?: Partial<UserTasteAnalysis>): UserTasteAnalysis {
+    const analysis = new UserTasteAnalysis();
+    analysis.id = overrides?.id ?? 1;
+    analysis.userId = overrides?.userId ?? 1;
+    analysis.user = overrides?.user ?? UserFactory.create({ id: 1 });
+    analysis.stablePatterns = overrides?.stablePatterns ?? {
+      categories: ['한식', '중식'],
+      flavors: ['매운맛', '담백한맛'],
+      cookingMethods: ['찜', '볶음'],
+      confidence: 'medium',
+    };
+    analysis.recentSignals = overrides?.recentSignals ?? {
+      trending: ['일식'],
+      declining: ['양식'],
+    };
+    analysis.diversityHints = overrides?.diversityHints ?? {
+      explorationAreas: ['퓨전요리', '동남아요리'],
+      rotationSuggestions: ['이탈리안', '멕시칸'],
+    };
+    analysis.compactSummary =
+      overrides?.compactSummary ??
+      '한식 선호, 국물류 좋아함, 매운맛 OK, 최근 중식에 관심';
+    analysis.analysisVersion = overrides?.analysisVersion ?? 1;
+    analysis.lastAnalyzedAt = overrides?.lastAnalyzedAt ?? new Date();
+    analysis.createdAt = overrides?.createdAt ?? new Date();
+    analysis.updatedAt = overrides?.updatedAt ?? new Date();
+    return analysis;
+  }
+
+  static createWithNullFields(userId?: number): UserTasteAnalysis {
+    return UserTasteAnalysisFactory.create({
+      userId: userId ?? 1,
+      stablePatterns: null,
+      recentSignals: null,
+      diversityHints: null,
+      compactSummary: null,
+    });
+  }
+
+  static createHighConfidence(userId?: number): UserTasteAnalysis {
+    return UserTasteAnalysisFactory.create({
+      userId: userId ?? 1,
+      stablePatterns: {
+        categories: ['한식', '중식', '일식'],
+        flavors: ['매운맛', '감칠맛'],
+        cookingMethods: ['볶음', '구이'],
+        confidence: 'high',
+      },
+      analysisVersion: 5,
     });
   }
 }

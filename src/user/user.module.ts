@@ -6,16 +6,17 @@ import { AdminInitializerService } from './services/admin-initializer.service';
 import { TestUserSeederService } from './services/test-user-seeder.service';
 import { UserAddress } from './entities/user-address.entity';
 import { User } from './entities/user.entity';
-import { PreferenceUpdateAiService } from './preference-update-ai.service';
+import { UserTasteAnalysis } from './entities/user-taste-analysis.entity';
 import { AddressSearchService } from './services/address-search.service';
 import { UserAddressService } from './services/user-address.service';
 import { UserPreferenceService } from './services/user-preference.service';
+import { UserTasteAnalysisService } from './services/user-taste-analysis.service';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserAddress]),
+    TypeOrmModule.forFeature([User, UserAddress, UserTasteAnalysis]),
     GoogleModule,
     KakaoModule,
   ],
@@ -24,8 +25,8 @@ import { UserService } from './user.service';
     UserService,
     UserAddressService,
     UserPreferenceService,
+    UserTasteAnalysisService,
     AddressSearchService,
-    PreferenceUpdateAiService,
     AdminInitializerService,
     TestUserSeederService,
   ],
@@ -33,7 +34,7 @@ import { UserService } from './user.service';
     UserService,
     UserAddressService,
     UserPreferenceService,
-    PreferenceUpdateAiService,
+    UserTasteAnalysisService,
     TypeOrmModule,
   ],
 })

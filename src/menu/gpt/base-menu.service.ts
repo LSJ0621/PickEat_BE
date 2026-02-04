@@ -10,11 +10,13 @@ import {
   buildUserPromptWithValidation,
   getMenuRecommendationsJsonSchema,
   getSystemPrompt,
+  type StructuredAnalysis,
 } from '@/external/openai/prompts';
 import {
   OpenAIChatCompletionParams,
   OpenAIResponse,
 } from '@/external/openai/openai.types';
+import { normalizeMenuNames } from '@/common/utils/ai-response.util';
 
 /**
  * 공통 메뉴 추천 서비스 베이스 클래스
@@ -50,6 +52,8 @@ export abstract class BaseMenuService implements OnModuleInit {
     analysis?: string,
     validationContext?: ValidationContext,
     language: 'ko' | 'en' = 'ko',
+    compactSummary?: string,
+    structuredAnalysis?: StructuredAnalysis,
   ): Promise<MenuRecommendationsResponse> {
     if (!this.openai) {
       throw new ExternalApiException(
@@ -68,8 +72,18 @@ export abstract class BaseMenuService implements OnModuleInit {
           analysis,
           validationContext,
           language,
+          compactSummary,
+          structuredAnalysis,
         )
-      : buildUserPrompt(prompt, likes, dislikes, analysis, language);
+      : buildUserPrompt(
+          prompt,
+          likes,
+          dislikes,
+          analysis,
+          language,
+          compactSummary,
+          structuredAnalysis,
+        );
     const jsonSchema = getMenuRecommendationsJsonSchema(language);
 
     try {
@@ -114,25 +128,37 @@ export abstract class BaseMenuService implements OnModuleInit {
       }
 
       const parsed = JSON.parse(content) as MenuRecommendationsResponse;
-      const recommendations = parsed.recommendations || [];
-      const reason = parsed.reason?.trim() ?? '';
+      const intro = parsed.intro?.trim() ?? '';
+      const recommendationItems = parsed.recommendations || [];
+      const closing = parsed.closing?.trim() ?? '';
 
-      if (!recommendations.length) {
+      if (!recommendationItems.length) {
         throw new OpenAIResponseException('No recommendations found.', parsed);
       }
 
-      if (!reason) {
-        throw new OpenAIResponseException(
-          'Recommendation reason is missing.',
-          parsed,
-        );
+      if (!intro) {
+        throw new OpenAIResponseException('Intro text is missing.', parsed);
       }
 
-      const normalized = this.normalizeMenuNames(recommendations, language);
+      if (!closing) {
+        throw new OpenAIResponseException('Closing text is missing.', parsed);
+      }
 
-      this.logger.log(`[Menu recommendation] Count: ${normalized.length}`);
+      // Normalize menu names in recommendations
+      const normalizedRecommendations = recommendationItems.map((item) => ({
+        condition: item.condition,
+        menu: normalizeMenuNames([item.menu])[0],
+      }));
 
-      return { recommendations: normalized, reason };
+      this.logger.log(
+        `[Menu recommendation] Count: ${normalizedRecommendations.length}`,
+      );
+
+      return {
+        intro,
+        recommendations: normalizedRecommendations,
+        closing,
+      };
     } catch (error) {
       throw new ExternalApiException(
         'OpenAI',
@@ -155,39 +181,4 @@ export abstract class BaseMenuService implements OnModuleInit {
     userPrompt: string,
     jsonSchema: ReturnType<typeof getMenuRecommendationsJsonSchema>,
   ): OpenAIChatCompletionParams;
-
-  /**
-   * 메뉴명 정규화: 괄호, 불필요한 문자 제거, 한글/영어 메뉴명 지원
-   *
-   * Note: Normalization is character-based (detects Korean/English from menu names)
-   * rather than language parameter-based for more robust handling of mixed contexts.
-   */
-  protected normalizeMenuNames(
-    menuNames: string[],
-    _language: 'ko' | 'en' = 'ko',
-  ): string[] {
-    return menuNames
-      .map((name) => {
-        // Remove content in parentheses
-        let normalized = name.replace(/\([^)]*\)/g, '').trim();
-        // Remove extra whitespace
-        normalized = normalized.replace(/\s+/g, ' ').trim();
-
-        // Accept Korean-only or English-only menu names
-        const koreanMatch = normalized.match(/^[가-힣\s]+$/);
-        const englishMatch = normalized.match(/^[a-zA-Z\s]+$/);
-
-        if (koreanMatch) {
-          // Korean: remove all whitespace
-          return normalized.replace(/\s+/g, '');
-        } else if (englishMatch) {
-          // English: lowercase with spaces preserved
-          return normalized.toLowerCase();
-        }
-
-        return null; // Reject mixed or invalid names
-      })
-      .filter((name): name is string => name !== null && name.length > 0)
-      .filter((name, index, array) => array.indexOf(name) === index);
-  }
 }

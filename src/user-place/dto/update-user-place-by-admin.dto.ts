@@ -64,7 +64,7 @@ export class UpdateUserPlaceByAdminDto {
   @IsOptional()
   @IsString()
   @MaxLength(20)
-  @Matches(/^[0-9\-\+\s\(\)]*$/, { message: 'Invalid phone number format' })
+  @Matches(/^[0-9\-+\s()]*$/, { message: 'Invalid phone number format' })
   phoneNumber?: string;
 
   @IsOptional()

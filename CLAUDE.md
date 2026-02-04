@@ -94,10 +94,9 @@ menu/
 │   ├── base-menu.service.ts
 │   ├── gpt4o-mini-validation.service.ts
 │   └── gpt51-menu.service.ts
-├── utilities/                     # Helper utilities
-│   ├── menu-payload.util.ts
-│   └── place-id.util.ts
-└── preferences.scheduler.ts       # Cron-based scheduler
+└── utilities/                     # Helper utilities
+    ├── menu-payload.util.ts
+    └── place-id.util.ts
 ```
 
 ## Plan Mode Guide
@@ -197,6 +196,57 @@ import { AuthUserPayload } from '@/auth/interfaces/auth-user-payload.interface';
 
 - **AI Prompts**: Located in `src/external/openai/prompts/` (menu-recommendation, menu-validation, preference-update, google-places-recommendation)
 - **Scheduled Tasks**: Uses `@nestjs/schedule` with `@Cron()` decorators
-  - `PreferencesScheduler` (menu module) - User preference updates
+  - `BatchSchedulerService` (batch module) - OpenAI Batch API operations for menu recommendations
   - `BugReportSchedulerService` (bug-report module) - Bug report processing
+  - `NotificationSchedulerService` (notification module) - Notification delivery
 - **Email**: NestJS Mailer with Handlebars templates in `src/auth/templates/`
+
+---
+
+## Quick Start Templates
+
+### 새 Controller 엔드포인트
+```typescript
+@Post('new-endpoint')
+async newEndpoint(
+  @Body() dto: CreateDto,
+  @CurrentUser() authUser: AuthUserPayload,
+) {
+  const user = await this.service.getAuthenticatedEntity(authUser.email);
+  return this.service.newMethod(user, dto);
+}
+```
+
+### 새 Service 메소드
+```typescript
+async newMethod(user: User, dto: CreateDto): Promise<ResultType> {
+  // 비즈니스 로직
+  return result;
+}
+```
+
+### 새 DTO
+```typescript
+// src/{module}/dto/{operation}-{module}.dto.ts
+import { IsString, IsOptional } from 'class-validator';
+
+export class CreateSomethingDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
+```
+
+---
+
+## File Creation Checklist
+
+- [ ] 올바른 모듈 디렉토리
+- [ ] DTO validation decorators
+- [ ] Module에 provider 등록
+- [ ] @/ 경로 alias 사용
+- [ ] Logger 사용 (console.log 금지)
+- [ ] `pnpm run build` 성공

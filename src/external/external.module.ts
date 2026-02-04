@@ -1,6 +1,7 @@
 import { DynamicModule, Global, Logger, Module } from '@nestjs/common';
 import { AwsModule } from './aws/aws.module';
 import { DiscordModule } from './discord/discord.module';
+import { GeminiModule } from './gemini/gemini.module';
 import { GoogleModule } from './google/google.module';
 import { KakaoModule } from './kakao/kakao.module';
 import { NaverModule } from './naver/naver.module';
@@ -38,6 +39,7 @@ export class ExternalModule {
       module: ExternalModule,
       imports: [
         GoogleModule,
+        GeminiModule,
         KakaoModule,
         NaverModule.forRoot(),
         OpenAiModule,
@@ -46,6 +48,7 @@ export class ExternalModule {
       ],
       exports: [
         GoogleModule,
+        GeminiModule,
         KakaoModule,
         NaverModule,
         OpenAiModule,

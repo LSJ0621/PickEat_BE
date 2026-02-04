@@ -268,7 +268,13 @@ describe('MenuService (Facade)', () => {
       const menuRecommendationId = 1;
 
       const expectedResult = {
-        recommendations: [{ placeId: 'place-1', name: '맛있는 식당', reason: '평점이 높습니다' }],
+        recommendations: [
+          {
+            placeId: 'place-1',
+            name: '맛있는 식당',
+            reason: '평점이 높습니다',
+          },
+        ],
       };
 
       mockPlaceService.recommendRestaurants.mockResolvedValue(expectedResult);
@@ -360,7 +366,13 @@ describe('MenuService (Facade)', () => {
       const menuRecommendationId = 1;
 
       const expectedResult = {
-        recommendations: [{ placeId: 'place-1', name: '맛있는 식당', reason: '평점이 높습니다' }],
+        recommendations: [
+          {
+            placeId: 'place-1',
+            name: '맛있는 식당',
+            reason: '평점이 높습니다',
+          },
+        ],
       };
 
       mockPlaceService.recommendRestaurants.mockResolvedValue(expectedResult);

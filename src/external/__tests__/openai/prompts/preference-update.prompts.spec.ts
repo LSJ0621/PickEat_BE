@@ -15,7 +15,7 @@ describe('preference-update.prompts', () => {
       expect(typeof PREFERENCE_SYSTEM_PROMPT).toBe('string');
       expect(PREFERENCE_SYSTEM_PROMPT.length).toBeGreaterThan(0);
       expect(PREFERENCE_SYSTEM_PROMPT).toContain('음식 컨설턴트');
-      expect(PREFERENCE_SYSTEM_PROMPT).toContain('{"analysis": "분석 내용"}');
+      expect(PREFERENCE_SYSTEM_PROMPT).toContain('출력 형식: JSON');
     });
   });
 
@@ -393,46 +393,61 @@ describe('preference-update.prompts', () => {
         expect(result).toContain(
           "Update the preference analysis reflecting today's selections.",
         );
+        expect(result).toContain('Analyze from two perspectives:');
         expect(result).toContain(
-          'Focus on alignment/misalignment between registered preferences and actual choices, and changes compared to existing preference analysis.',
+          '1. STABLE: Patterns maintained consistently over 2+ weeks',
         );
         expect(result).toContain(
-          "Emphasize specific patterns useful for tomorrow's recommendations.",
+          '2. RECENT: New patterns or changes in the last week',
+        );
+        expect(result).toContain(
+          'Do NOT optimize analysis for recommendations.',
         );
       });
     });
   });
 
   describe('PREFERENCE_RESPONSE_SCHEMA', () => {
-    it('should define correct schema structure', () => {
-      expect(PREFERENCE_RESPONSE_SCHEMA).toEqual({
-        type: 'object',
-        properties: {
-          analysis: {
-            type: 'string',
-            maxLength: 500,
-            description: '선호도 분석 내용 (최대 500자)',
-          },
-        },
-        required: ['analysis'],
-        additionalProperties: false,
-      });
+    it('should be a ResponseFormatJSONSchema type', () => {
+      expect(PREFERENCE_RESPONSE_SCHEMA.type).toBe('json_schema');
+      expect(PREFERENCE_RESPONSE_SCHEMA.json_schema).toBeDefined();
+      expect(PREFERENCE_RESPONSE_SCHEMA.json_schema.name).toBe(
+        'preference_analysis',
+      );
+      expect(PREFERENCE_RESPONSE_SCHEMA.json_schema.strict).toBe(true);
     });
 
-    it('should have analysis property with maxLength 500', () => {
-      expect(PREFERENCE_RESPONSE_SCHEMA.properties.analysis).toEqual({
-        type: 'string',
-        maxLength: 500,
-        description: '선호도 분석 내용 (최대 500자)',
-      });
+    it('should have analysis property in schema', () => {
+      const schema = PREFERENCE_RESPONSE_SCHEMA.json_schema.schema as Record<
+        string,
+        unknown
+      >;
+      const properties = schema.properties as Record<string, unknown>;
+      const analysis = properties.analysis as Record<string, unknown>;
+
+      expect(analysis.type).toBe('string');
+      expect(analysis.description).toContain('300자 이내');
     });
 
-    it('should require analysis field', () => {
-      expect(PREFERENCE_RESPONSE_SCHEMA.required).toContain('analysis');
+    it('should require analysis and structured analysis fields', () => {
+      const schema = PREFERENCE_RESPONSE_SCHEMA.json_schema.schema as Record<
+        string,
+        unknown
+      >;
+      const required = schema.required as string[];
+
+      expect(required).toContain('analysis');
+      expect(required).toContain('stablePatterns');
+      expect(required).toContain('recentSignals');
+      expect(required).toContain('diversityHints');
     });
 
     it('should not allow additional properties', () => {
-      expect(PREFERENCE_RESPONSE_SCHEMA.additionalProperties).toBe(false);
+      const schema = PREFERENCE_RESPONSE_SCHEMA.json_schema.schema as Record<
+        string,
+        unknown
+      >;
+      expect(schema.additionalProperties).toBe(false);
     });
   });
 
@@ -456,7 +471,7 @@ describe('preference-update.prompts', () => {
 
       it('should contain Korean-specific instructions', () => {
         expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('존댓말');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('500자');
+        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('300자');
         expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('한국어');
       });
     });
@@ -482,7 +497,7 @@ describe('preference-update.prompts', () => {
 
       it('should contain English-specific instructions', () => {
         expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('polite language');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('500 characters');
+        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('300 characters');
         expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('Korean response');
         expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('English response');
       });
@@ -590,51 +605,87 @@ describe('preference-update.prompts', () => {
     });
 
     describe('getPreferenceResponseSchema', () => {
-      it('should return Korean schema when language is "ko"', () => {
-        const schema = getPreferenceResponseSchema('ko');
+      it('should return ResponseFormatJSONSchema type', () => {
+        const result = getPreferenceResponseSchema('ko');
 
-        expect(schema.properties.analysis.description).toBe(
-          '선호도 분석 내용 (최대 500자)',
+        expect(result.type).toBe('json_schema');
+        expect(result.json_schema).toBeDefined();
+        expect(result.json_schema.name).toBe('preference_analysis');
+        expect(result.json_schema.strict).toBe(true);
+      });
+
+      it('should return Korean schema when language is "ko"', () => {
+        const result = getPreferenceResponseSchema('ko');
+        const schema = result.json_schema.schema as Record<string, unknown>;
+        const properties = schema.properties as Record<string, unknown>;
+        const analysis = properties.analysis as Record<string, unknown>;
+
+        expect(analysis.description).toBe(
+          '사용자에게 보여줄 300자 이내 분석 텍스트',
         );
       });
 
       it('should return English schema when language is "en"', () => {
-        const schema = getPreferenceResponseSchema('en');
+        const result = getPreferenceResponseSchema('en');
+        const schema = result.json_schema.schema as Record<string, unknown>;
+        const properties = schema.properties as Record<string, unknown>;
+        const analysis = properties.analysis as Record<string, unknown>;
 
-        expect(schema.properties.analysis.description).toBe(
-          'Preference analysis content (max 500 characters)',
+        expect(analysis.description).toBe(
+          'Analysis text for user display (max 300 characters)',
         );
       });
 
       it('should default to Korean when no language parameter is provided', () => {
-        const schema = getPreferenceResponseSchema();
+        const result = getPreferenceResponseSchema();
+        const schema = result.json_schema.schema as Record<string, unknown>;
+        const properties = schema.properties as Record<string, unknown>;
+        const analysis = properties.analysis as Record<string, unknown>;
 
-        expect(schema.properties.analysis.description).toBe(
-          '선호도 분석 내용 (최대 500자)',
+        expect(analysis.description).toBe(
+          '사용자에게 보여줄 300자 이내 분석 텍스트',
         );
       });
 
       it('should have same structure for both languages', () => {
-        const koSchema = getPreferenceResponseSchema('ko');
-        const enSchema = getPreferenceResponseSchema('en');
+        const koResult = getPreferenceResponseSchema('ko');
+        const enResult = getPreferenceResponseSchema('en');
+        const koSchema = koResult.json_schema.schema as Record<string, unknown>;
+        const enSchema = enResult.json_schema.schema as Record<string, unknown>;
 
         expect(koSchema.type).toBe(enSchema.type);
         expect(koSchema.required).toEqual(enSchema.required);
-        expect(koSchema.properties.analysis.type).toBe(
-          enSchema.properties.analysis.type,
-        );
-        expect(koSchema.properties.analysis.maxLength).toBe(
-          enSchema.properties.analysis.maxLength,
-        );
+
+        const koProps = koSchema.properties as Record<string, unknown>;
+        const enProps = enSchema.properties as Record<string, unknown>;
+        const koAnalysis = koProps.analysis as Record<string, unknown>;
+        const enAnalysis = enProps.analysis as Record<string, unknown>;
+
+        expect(koAnalysis.type).toBe(enAnalysis.type);
+      });
+
+      it('should have required fields including structured analysis', () => {
+        const result = getPreferenceResponseSchema('ko');
+        const schema = result.json_schema.schema as Record<string, unknown>;
+        const required = schema.required as string[];
+
+        expect(required).toContain('analysis');
+        expect(required).toContain('stablePatterns');
+        expect(required).toContain('recentSignals');
+        expect(required).toContain('diversityHints');
       });
 
       it('should only differ in description field', () => {
-        const koSchema = getPreferenceResponseSchema('ko');
-        const enSchema = getPreferenceResponseSchema('en');
+        const koResult = getPreferenceResponseSchema('ko');
+        const enResult = getPreferenceResponseSchema('en');
+        const koSchema = koResult.json_schema.schema as Record<string, unknown>;
+        const enSchema = enResult.json_schema.schema as Record<string, unknown>;
+        const koProps = koSchema.properties as Record<string, unknown>;
+        const enProps = enSchema.properties as Record<string, unknown>;
+        const koAnalysis = koProps.analysis as Record<string, unknown>;
+        const enAnalysis = enProps.analysis as Record<string, unknown>;
 
-        expect(koSchema.properties.analysis.description).not.toBe(
-          enSchema.properties.analysis.description,
-        );
+        expect(koAnalysis.description).not.toBe(enAnalysis.description);
       });
     });
 

@@ -47,7 +47,7 @@ export class GoogleSearchClient {
   async searchBlogs(
     query: string,
     exactTerms?: string,
-    options?: { numResults?: number },
+    options?: { numResults?: number; lr?: string; hl?: string },
   ): Promise<BlogSearchResult[]> {
     if (!this.apiKey || !this.cseCx) {
       throw new ConfigMissingException(['GOOGLE_API_KEY', 'GOOGLE_CSE_CX']);
@@ -66,7 +66,8 @@ export class GoogleSearchClient {
             q: query,
             exactTerms: exactTerms,
             num: options?.numResults ?? SEARCH_DEFAULTS.GOOGLE_CSE_NUM_RESULTS,
-            hl: GOOGLE_CSE_CONFIG.DEFAULTS.LANGUAGE,
+            hl: options?.hl ?? GOOGLE_CSE_CONFIG.DEFAULTS.LANGUAGE,
+            ...(options?.lr && { lr: options.lr }),
           },
           headers: {
             Referer: this.appUrl,

@@ -4,6 +4,7 @@ import {
   DeleteDateColumn,
   Entity,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   VersionColumn,
@@ -12,6 +13,7 @@ import { MenuRecommendation } from '../../menu/entities/menu-recommendation.enti
 import { MenuSelection } from '../../menu/entities/menu-selection.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
 import { UserAddress } from './user-address.entity';
+import { UserTasteAnalysis } from './user-taste-analysis.entity';
 
 @Entity()
 export class User {
@@ -32,6 +34,12 @@ export class User {
 
   @Column({ type: 'varchar', nullable: true })
   name: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  birthYear: number | null;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  gender: 'male' | 'female' | 'other' | null;
 
   @Column({ default: 'USER' })
   role: string;
@@ -88,4 +96,7 @@ export class User {
     cascade: true,
   })
   addresses: UserAddress[];
+
+  @OneToOne(() => UserTasteAnalysis, (analysis) => analysis.user)
+  tasteAnalysis: UserTasteAnalysis | null;
 }

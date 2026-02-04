@@ -4,7 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { DeepPartial, In, Repository } from 'typeorm';
 import { PlaceService } from '../../services/place.service';
 import { MenuRecommendationService } from '../../services/menu-recommendation.service';
-import { OpenAiPlacesService } from '../../services/openai-places.service';
+import { GeminiPlacesService } from '../../services/gemini-places.service';
 import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
 import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
 import { PlaceRecommendation } from '../../entities/place-recommendation.entity';
@@ -25,7 +25,7 @@ describe('PlaceService', () => {
   >;
   let mockUserPlaceRepository: jest.Mocked<Repository<UserPlace>>;
   let mockMenuRecommendationService: jest.Mocked<MenuRecommendationService>;
-  let mockOpenAiPlacesService: jest.Mocked<OpenAiPlacesService>;
+  let mockGeminiPlacesService: jest.Mocked<GeminiPlacesService>;
   let mockGooglePlacesClient: jest.Mocked<GooglePlacesClient>;
   let mockGoogleSearchClient: jest.Mocked<GoogleSearchClient>;
 
@@ -36,9 +36,9 @@ describe('PlaceService', () => {
     mockMenuRecommendationService = {
       findById: jest.fn(),
     } as unknown as jest.Mocked<MenuRecommendationService>;
-    mockOpenAiPlacesService = {
-      recommendFromGooglePlaces: jest.fn(),
-    } as unknown as jest.Mocked<OpenAiPlacesService>;
+    mockGeminiPlacesService = {
+      recommendRestaurants: jest.fn(),
+    } as unknown as jest.Mocked<GeminiPlacesService>;
     mockGooglePlacesClient = {
       searchByText: jest.fn(),
       getDetails: jest.fn(),
@@ -64,8 +64,8 @@ describe('PlaceService', () => {
           useValue: mockMenuRecommendationService,
         },
         {
-          provide: OpenAiPlacesService,
-          useValue: mockOpenAiPlacesService,
+          provide: GeminiPlacesService,
+          useValue: mockGeminiPlacesService,
         },
         {
           provide: GooglePlacesClient,
@@ -455,7 +455,7 @@ describe('PlaceService', () => {
   });
 
   describe('searchRestaurantBlogs', () => {
-    it('should return blog search results', async () => {
+    it('should return blog search results without language parameter', async () => {
       const query = '강남역 맛집';
       const restaurantName = '맛있는 식당';
       const blogs = [
@@ -475,17 +475,136 @@ describe('PlaceService', () => {
       expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
         query,
         restaurantName,
+        {},
+      );
+      expect(result.blogs).toEqual(blogs);
+    });
+
+    it('should pass language restrict code for Korean (ko)', async () => {
+      const query = '강남역 맛집';
+      const restaurantName = '맛있는 식당';
+      const blogs = [
+        {
+          title: '맛집 리뷰',
+          url: 'https://blog.example.com/post1',
+          snippet: '정말 맛있는 식당이에요',
+          thumbnailUrl: 'https://example.com/thumb.jpg',
+          source: 'Example Blog',
+        },
+      ];
+
+      mockGoogleSearchClient.searchBlogs.mockResolvedValue(blogs);
+
+      const result = await service.searchRestaurantBlogs(
+        query,
+        restaurantName,
+        'ko',
+      );
+
+      expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
+        query,
+        restaurantName,
+        { lr: 'lang_ko', hl: 'ko' },
+      );
+      expect(result.blogs).toEqual(blogs);
+    });
+
+    it('should pass language restrict code for English (en)', async () => {
+      const query = 'restaurants near gangnam';
+      const restaurantName = 'Delicious Restaurant';
+      const blogs = [
+        {
+          title: 'Restaurant Review',
+          url: 'https://blog.example.com/post1',
+          snippet: 'Amazing restaurant',
+          thumbnailUrl: 'https://example.com/thumb.jpg',
+          source: 'Example Blog',
+        },
+      ];
+
+      mockGoogleSearchClient.searchBlogs.mockResolvedValue(blogs);
+
+      const result = await service.searchRestaurantBlogs(
+        query,
+        restaurantName,
+        'en',
+      );
+
+      expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
+        query,
+        restaurantName,
+        { lr: 'lang_en', hl: 'en' },
+      );
+      expect(result.blogs).toEqual(blogs);
+    });
+
+    it('should pass language restrict code for Japanese (ja)', async () => {
+      const query = '江南駅 レストラン';
+      const restaurantName = 'おいしいレストラン';
+      const blogs = [
+        {
+          title: 'レストランレビュー',
+          url: 'https://blog.example.com/post1',
+          snippet: '素晴らしいレストラン',
+          thumbnailUrl: 'https://example.com/thumb.jpg',
+          source: 'Example Blog',
+        },
+      ];
+
+      mockGoogleSearchClient.searchBlogs.mockResolvedValue(blogs);
+
+      const result = await service.searchRestaurantBlogs(
+        query,
+        restaurantName,
+        'ja',
+      );
+
+      expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
+        query,
+        restaurantName,
+        { lr: 'lang_ja', hl: 'ja' },
+      );
+      expect(result.blogs).toEqual(blogs);
+    });
+
+    it('should pass language restrict code for Chinese (zh)', async () => {
+      const query = '江南站 餐厅';
+      const restaurantName = '美味餐厅';
+      const blogs = [
+        {
+          title: '餐厅评论',
+          url: 'https://blog.example.com/post1',
+          snippet: '很棒的餐厅',
+          thumbnailUrl: 'https://example.com/thumb.jpg',
+          source: 'Example Blog',
+        },
+      ];
+
+      mockGoogleSearchClient.searchBlogs.mockResolvedValue(blogs);
+
+      const result = await service.searchRestaurantBlogs(
+        query,
+        restaurantName,
+        'zh',
+      );
+
+      expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
+        query,
+        restaurantName,
+        { lr: 'lang_zh-CN', hl: 'zh' },
       );
       expect(result.blogs).toEqual(blogs);
     });
   });
 
   describe('recommendRestaurants', () => {
-    it('should execute full recommendation pipeline and save results', async () => {
+    it('should execute full recommendation pipeline with Gemini and save results', async () => {
       const user = UserFactory.create({ id: 1 });
       const textQuery = '강남역 김치찌개';
       const menuName = '김치찌개';
       const menuRecommendationId = 1;
+      const latitude = 37.5012;
+      const longitude = 127.0396;
 
       const menuRecord = MenuRecommendationFactory.create({
         id: menuRecommendationId,
@@ -493,43 +612,35 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '김치찌개 전문점' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: 'PRICE_LEVEL_MODERATE',
-          reviews: [
-            {
-              rating: 5,
-              originalText: { text: '맛있어요' },
-              relativePublishTimeDescription: '1주일 전',
-            },
-          ],
-        },
-      ];
-
-      const aiRecommendations = {
+      const geminiRecommendations = {
         recommendations: [
           {
-            placeId: 'place-1',
+            placeId: 'gemini_12345678',
             name: '김치찌개 전문점',
             reason: '평점이 높고 리뷰가 좋습니다.',
+            menuName: '김치찌개',
+            source: 'GEMINI' as const,
+            rating: 4.5,
+            reviewCount: 100,
+            isOpen: true,
+            openingHours: '09:00-21:00',
+            address: '서울시 강남구',
+            location: { latitude: 37.5012, longitude: 127.0396 },
+            photoUrl: 'https://example.com/photo.jpg',
           },
         ],
+        searchEntryPointHtml: undefined,
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue(
-        aiRecommendations,
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiRecommendations,
       );
 
       const savedPlaceRecommendations = [
         PlaceRecommendationFactory.create({
           id: 1,
-          placeId: 'place-1',
+          placeId: 'gemini_12345678',
           reason: '평점이 높고 리뷰가 좋습니다.',
           menuName: '김치찌개',
         }),
@@ -548,52 +659,133 @@ describe('PlaceService', () => {
         textQuery,
         menuName,
         menuRecommendationId,
+        latitude,
+        longitude,
       );
 
       expect(mockMenuRecommendationService.findById).toHaveBeenCalledWith(
         menuRecommendationId,
         user,
       );
-      expect(mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        menuName,
         textQuery,
-        { languageCode: 'ko' },
-      );
-      expect(
-        mockOpenAiPlacesService.recommendFromGooglePlaces,
-      ).toHaveBeenCalledWith(
-        textQuery,
-        [
-          {
-            id: 'place-1',
-            name: '김치찌개 전문점',
-            rating: 4.5,
-            userRatingCount: 100,
-            priceLevel: 'PRICE_LEVEL_MODERATE',
-            reviews: [
-              {
-                rating: 5,
-                originalText: '맛있어요',
-                relativePublishTimeDescription: '1주일 전',
-              },
-            ],
-          },
-        ],
-        '김치찌개',
+        latitude,
+        longitude,
         'ko',
       );
       expect(mockPlaceRecommendationRepository.save).toHaveBeenCalled();
-      expect(result).toEqual(aiRecommendations);
+      expect(result).toEqual(geminiRecommendations);
+    });
+
+    it('should throw BadRequestException when latitude or longitude is missing', async () => {
+      const user = UserFactory.create({ id: 1 });
+      const menuRecord = MenuRecommendationFactory.create({
+        id: 1,
+        user,
+        placeRecommendations: [],
+      });
+
+      mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
+
+      await expect(
+        service.recommendRestaurants(user, 'query', '김치찌개', 1),
+      ).rejects.toThrow(BadRequestException);
+
+      try {
+        await service.recommendRestaurants(user, 'query', '김치찌개', 1);
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toEqual({
+          errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
+        });
+      }
+    });
+
+    it('should throw BadRequestException when only latitude is provided', async () => {
+      const user = UserFactory.create({ id: 1 });
+      const menuRecord = MenuRecommendationFactory.create({
+        id: 1,
+        user,
+        placeRecommendations: [],
+      });
+
+      mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
+
+      await expect(
+        service.recommendRestaurants(user, 'query', '김치찌개', 1, 37.5012),
+      ).rejects.toThrow(BadRequestException);
+
+      try {
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+        );
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toEqual({
+          errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
+        });
+      }
+    });
+
+    it('should throw BadRequestException when only longitude is provided', async () => {
+      const user = UserFactory.create({ id: 1 });
+      const menuRecord = MenuRecommendationFactory.create({
+        id: 1,
+        user,
+        placeRecommendations: [],
+      });
+
+      mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
+
+      await expect(
+        service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          undefined,
+          127.0396,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      try {
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          undefined,
+          127.0396,
+        );
+      } catch (error) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.getResponse()).toEqual({
+          errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
+        });
+      }
     });
 
     it('should throw BadRequestException when menuName is missing', async () => {
       const user = UserFactory.create({ id: 1 });
 
       await expect(
-        service.recommendRestaurants(user, 'query', '', 1),
+        service.recommendRestaurants(user, 'query', '', 1, 37.5012, 127.0396),
       ).rejects.toThrow(BadRequestException);
 
       try {
-        await service.recommendRestaurants(user, 'query', '', 1);
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '',
+          1,
+          37.5012,
+          127.0396,
+        );
       } catch (error) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toEqual({
@@ -610,8 +802,9 @@ describe('PlaceService', () => {
           user,
           'query',
           '김치찌개',
-
           undefined as unknown as number,
+          37.5012,
+          127.0396,
         ),
       ).rejects.toThrow(BadRequestException);
 
@@ -620,8 +813,9 @@ describe('PlaceService', () => {
           user,
           'query',
           '김치찌개',
-
           undefined as unknown as number,
+          37.5012,
+          127.0396,
         );
       } catch (error) {
         expect(error).toBeInstanceOf(BadRequestException);
@@ -644,11 +838,25 @@ describe('PlaceService', () => {
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
 
       await expect(
-        service.recommendRestaurants(user, 'query', '김치찌개', 1),
+        service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        ),
       ).rejects.toThrow(BadRequestException);
 
       try {
-        await service.recommendRestaurants(user, 'query', '김치찌개', 1);
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        );
       } catch (error) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toEqual({
@@ -657,7 +865,7 @@ describe('PlaceService', () => {
       }
     });
 
-    it('should throw BadRequestException when Google Places returns no results', async () => {
+    it('should throw BadRequestException when Gemini returns no recommendations', async () => {
       const user = UserFactory.create({ id: 1 });
       const menuRecord = MenuRecommendationFactory.create({
         id: 1,
@@ -666,53 +874,31 @@ describe('PlaceService', () => {
       });
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue([]);
-
-      await expect(
-        service.recommendRestaurants(user, 'query', '김치찌개', 1),
-      ).rejects.toThrow(BadRequestException);
-
-      try {
-        await service.recommendRestaurants(user, 'query', '김치찌개', 1);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getResponse()).toEqual({
-          errorCode: ErrorCode.PLACE_SEARCH_NO_RESULTS,
-        });
-      }
-    });
-
-    it('should throw BadRequestException when AI returns no recommendations', async () => {
-      const user = UserFactory.create({ id: 1 });
-      const menuRecord = MenuRecommendationFactory.create({
-        id: 1,
-        user,
-        placeRecommendations: [],
-      });
-
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '식당' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
-      mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue({
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue({
         recommendations: [],
+        searchEntryPointHtml: undefined,
       });
 
       await expect(
-        service.recommendRestaurants(user, 'query', '김치찌개', 1),
+        service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        ),
       ).rejects.toThrow(BadRequestException);
 
       try {
-        await service.recommendRestaurants(user, 'query', '김치찌개', 1);
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        );
       } catch (error) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toEqual({
@@ -1407,7 +1593,7 @@ describe('PlaceService', () => {
   });
 
   describe('recommendRestaurants - pipeline error handling', () => {
-    it('should throw error when AI returns null recommendations object', async () => {
+    it('should throw error when Gemini returns null recommendations object', async () => {
       const user = UserFactory.create({ id: 1 });
       const menuRecord = MenuRecommendationFactory.create({
         id: 1,
@@ -1415,33 +1601,38 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '식당' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue({
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue({
         recommendations: null as unknown as Array<{
           placeId: string;
           name: string;
           reason: string;
+          menuName: string;
+          source: 'GEMINI';
         }>,
+        searchEntryPointHtml: undefined,
       });
 
       await expect(
-        service.recommendRestaurants(user, 'query', '김치찌개', 1),
+        service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        ),
       ).rejects.toThrow(BadRequestException);
 
       try {
-        await service.recommendRestaurants(user, 'query', '김치찌개', 1);
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        );
       } catch (error) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toEqual({
@@ -1450,7 +1641,7 @@ describe('PlaceService', () => {
       }
     });
 
-    it('should throw error when AI returns undefined recommendations', async () => {
+    it('should throw error when Gemini returns undefined recommendations', async () => {
       const user = UserFactory.create({ id: 1 });
       const menuRecord = MenuRecommendationFactory.create({
         id: 1,
@@ -1458,33 +1649,38 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '식당' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue({
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue({
         recommendations: undefined as unknown as Array<{
           placeId: string;
           name: string;
           reason: string;
+          menuName: string;
+          source: 'GEMINI';
         }>,
+        searchEntryPointHtml: undefined,
       });
 
       await expect(
-        service.recommendRestaurants(user, 'query', '김치찌개', 1),
+        service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        ),
       ).rejects.toThrow(BadRequestException);
 
       try {
-        await service.recommendRestaurants(user, 'query', '김치찌개', 1);
+        await service.recommendRestaurants(
+          user,
+          'query',
+          '김치찌개',
+          1,
+          37.5012,
+          127.0396,
+        );
       } catch (error) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.getResponse()).toEqual({
@@ -1813,27 +2009,22 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '식당' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
-      const aiRecommendations = {
+      const geminiRecommendations = {
         recommendations: [
-          { placeId: 'place-1', name: '식당', reason: '좋아요' },
+          {
+            placeId: 'gemini_12345678',
+            name: '식당',
+            reason: '좋아요',
+            menuName: '김치찌개',
+            source: 'GEMINI' as const,
+          },
         ],
+        searchEntryPointHtml: undefined,
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue(
-        aiRecommendations,
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiRecommendations,
       );
       mockPlaceRecommendationRepository.create.mockImplementation(
         (data) => data as PlaceRecommendation,
@@ -1842,15 +2033,22 @@ describe('PlaceService', () => {
         [] as unknown as PlaceRecommendation & PlaceRecommendation[],
       );
 
-      await service.recommendRestaurants(user, 'query', '김치찌개', 1);
-
-      expect(mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
+      await service.recommendRestaurants(
+        user,
         'query',
-        { languageCode: 'ko' },
+        '김치찌개',
+        1,
+        37.5012,
+        127.0396,
       );
-      expect(
-        mockOpenAiPlacesService.recommendFromGooglePlaces,
-      ).toHaveBeenCalledWith('query', expect.any(Array), '김치찌개', 'ko');
+
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        '김치찌개',
+        'query',
+        37.5012,
+        127.0396,
+        'ko',
+      );
     });
 
     it('should extract and use user preferredLanguage as en when set to en', async () => {
@@ -1861,27 +2059,22 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: 'Restaurant' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
-      const aiRecommendations = {
+      const geminiRecommendations = {
         recommendations: [
-          { placeId: 'place-1', name: 'Restaurant', reason: 'Good' },
+          {
+            placeId: 'gemini_12345678',
+            name: 'Restaurant',
+            reason: 'Good',
+            menuName: 'kimchi',
+            source: 'GEMINI' as const,
+          },
         ],
+        searchEntryPointHtml: undefined,
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue(
-        aiRecommendations,
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiRecommendations,
       );
       mockPlaceRecommendationRepository.create.mockImplementation(
         (data) => data as PlaceRecommendation,
@@ -1890,18 +2083,25 @@ describe('PlaceService', () => {
         [] as unknown as PlaceRecommendation & PlaceRecommendation[],
       );
 
-      await service.recommendRestaurants(user, 'query', 'kimchi', 1);
-
-      expect(mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
+      await service.recommendRestaurants(
+        user,
         'query',
-        { languageCode: 'en' },
+        'kimchi',
+        1,
+        37.5012,
+        127.0396,
       );
-      expect(
-        mockOpenAiPlacesService.recommendFromGooglePlaces,
-      ).toHaveBeenCalledWith('query', expect.any(Array), 'kimchi', 'en');
+
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        'kimchi',
+        'query',
+        37.5012,
+        127.0396,
+        'en',
+      );
     });
 
-    it('should pass latitude and longitude to searchRestaurantsWithGooglePlaces when provided', async () => {
+    it('should pass latitude and longitude to Gemini service when provided', async () => {
       const user = UserFactory.create({ id: 1 });
       const menuRecord = MenuRecommendationFactory.create({
         id: 1,
@@ -1909,27 +2109,22 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '식당' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
-      const aiRecommendations = {
+      const geminiRecommendations = {
         recommendations: [
-          { placeId: 'place-1', name: '식당', reason: '좋아요' },
+          {
+            placeId: 'gemini_12345678',
+            name: '식당',
+            reason: '좋아요',
+            menuName: '김치찌개',
+            source: 'GEMINI' as const,
+          },
         ],
+        searchEntryPointHtml: undefined,
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue(
-        aiRecommendations,
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiRecommendations,
       );
       mockPlaceRecommendationRepository.create.mockImplementation(
         (data) => data as PlaceRecommendation,
@@ -1947,17 +2142,12 @@ describe('PlaceService', () => {
         126.978,
       );
 
-      expect(mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        '김치찌개',
         'query',
-        {
-          languageCode: 'ko',
-          locationBias: {
-            circle: {
-              center: { latitude: 37.5665, longitude: 126.978 },
-              radius: 500.0,
-            },
-          },
-        },
+        37.5665,
+        126.978,
+        'ko',
       );
     });
 
@@ -1972,27 +2162,22 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: '식당' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
-      const aiRecommendations = {
+      const geminiRecommendations = {
         recommendations: [
-          { placeId: 'place-1', name: '식당', reason: '좋아요' },
+          {
+            placeId: 'gemini_12345678',
+            name: '식당',
+            reason: '좋아요',
+            menuName: '김치찌개',
+            source: 'GEMINI' as const,
+          },
         ],
+        searchEntryPointHtml: undefined,
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue(
-        aiRecommendations,
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiRecommendations,
       );
       mockPlaceRecommendationRepository.create.mockImplementation(
         (data) => data as PlaceRecommendation,
@@ -2001,15 +2186,22 @@ describe('PlaceService', () => {
         [] as unknown as PlaceRecommendation & PlaceRecommendation[],
       );
 
-      await service.recommendRestaurants(user, 'query', '김치찌개', 1);
-
-      expect(mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
+      await service.recommendRestaurants(
+        user,
         'query',
-        { languageCode: 'ko' },
+        '김치찌개',
+        1,
+        37.5012,
+        127.0396,
       );
-      expect(
-        mockOpenAiPlacesService.recommendFromGooglePlaces,
-      ).toHaveBeenCalledWith('query', expect.any(Array), '김치찌개', 'ko');
+
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        '김치찌개',
+        'query',
+        37.5012,
+        127.0396,
+        'ko',
+      );
     });
 
     it('should pass both coordinates and language when all parameters provided', async () => {
@@ -2020,27 +2212,22 @@ describe('PlaceService', () => {
         placeRecommendations: [],
       });
 
-      const googlePlaces = [
-        {
-          id: 'place-1',
-          displayName: { text: 'Restaurant' },
-          rating: 4.5,
-          userRatingCount: 100,
-          priceLevel: undefined,
-          reviews: undefined,
-        },
-      ];
-
-      const aiRecommendations = {
+      const geminiRecommendations = {
         recommendations: [
-          { placeId: 'place-1', name: 'Restaurant', reason: 'Good' },
+          {
+            placeId: 'gemini_12345678',
+            name: 'Restaurant',
+            reason: 'Good',
+            menuName: 'kimchi',
+            source: 'GEMINI' as const,
+          },
         ],
+        searchEntryPointHtml: undefined,
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      mockGooglePlacesClient.searchByText.mockResolvedValue(googlePlaces);
-      mockOpenAiPlacesService.recommendFromGooglePlaces.mockResolvedValue(
-        aiRecommendations,
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiRecommendations,
       );
       mockPlaceRecommendationRepository.create.mockImplementation(
         (data) => data as PlaceRecommendation,
@@ -2058,21 +2245,13 @@ describe('PlaceService', () => {
         126.978,
       );
 
-      expect(mockGooglePlacesClient.searchByText).toHaveBeenCalledWith(
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        'kimchi',
         'query',
-        {
-          languageCode: 'en',
-          locationBias: {
-            circle: {
-              center: { latitude: 37.5665, longitude: 126.978 },
-              radius: 500.0,
-            },
-          },
-        },
+        37.5665,
+        126.978,
+        'en',
       );
-      expect(
-        mockOpenAiPlacesService.recommendFromGooglePlaces,
-      ).toHaveBeenCalledWith('query', expect.any(Array), 'kimchi', 'en');
     });
   });
 });

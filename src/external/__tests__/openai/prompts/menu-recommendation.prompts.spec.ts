@@ -57,10 +57,10 @@ describe('menu-recommendation.prompts', () => {
       expect(SYSTEM_PROMPT).toContain('빈 배열 []');
     });
 
-    it('should contain reason writing examples in Korean', () => {
-      expect(SYSTEM_PROMPT).toContain('<reason_writing_examples>');
-      expect(SYSTEM_PROMPT).toContain('좋은 예시:');
-      expect(SYSTEM_PROMPT).toContain('나쁜 예시:');
+    it('should contain reason writing guide in Korean', () => {
+      expect(SYSTEM_PROMPT).toContain('<reason_writing_guide>');
+      expect(SYSTEM_PROMPT).toContain('**reason 작성 가이드**');
+      expect(SYSTEM_PROMPT).toContain('금지 사항:');
     });
 
     it('should contain language rule', () => {
@@ -763,8 +763,10 @@ describe('menu-recommendation.prompts', () => {
     it('should have recommendations description in Korean', () => {
       const recommendations =
         MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.description).toContain('단순한 메뉴명만 사용');
-      expect(recommendations.description).toContain('토핑이나 수식어 제외');
+      expect(recommendations.description).toContain(
+        '구체적인 단일 요리명만 사용',
+      );
+      expect(recommendations.description).toContain('수식어 제외');
     });
 
     it('should define reason property as string', () => {
@@ -779,16 +781,16 @@ describe('menu-recommendation.prompts', () => {
       expect(reason.minLength).toBe(1);
     });
 
-    it('should define reason maxLength as 500', () => {
+    it('should define reason maxLength as 1000', () => {
       const reason = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason;
-      expect(reason.maxLength).toBe(500);
+      expect(reason.maxLength).toBe(1000);
     });
 
     it('should have reason description in Korean', () => {
       const reason = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason;
       expect(reason.description).toContain('추천 이유');
       expect(reason.description).toContain('존댓말');
-      expect(reason.description).toContain('500자');
+      expect(reason.description).toContain('700-800자');
     });
 
     it('should have required fields array', () => {
@@ -857,7 +859,7 @@ describe('menu-recommendation.prompts', () => {
       });
 
       it('should contain English-specific instructions', () => {
-        expect(SYSTEM_PROMPT_EN).toContain('polite language');
+        expect(SYSTEM_PROMPT_EN).toContain('polite tone');
         expect(SYSTEM_PROMPT_EN).toContain('menu names');
         expect(SYSTEM_PROMPT_EN).toContain('recommendation reasons');
       });
@@ -1000,10 +1002,10 @@ describe('menu-recommendation.prompts', () => {
         const schema = getMenuRecommendationsJsonSchema('ko');
 
         expect(schema.properties.recommendations.description).toContain(
-          '단순한 메뉴명만 사용',
+          '구체적인 단일 요리명만 사용',
         );
         expect(schema.properties.recommendations.description).toContain(
-          '토핑이나 수식어 제외',
+          '수식어 제외',
         );
         expect(schema.properties.reason.description).toContain('추천 이유');
         expect(schema.properties.reason.description).toContain('존댓말');
@@ -1013,10 +1015,10 @@ describe('menu-recommendation.prompts', () => {
         const schema = getMenuRecommendationsJsonSchema('en');
 
         expect(schema.properties.recommendations.description).toContain(
-          'Simple menu names only',
+          'Specific single dish names only',
         );
         expect(schema.properties.recommendations.description).toContain(
-          'no toppings or modifiers',
+          'no category names',
         );
         expect(schema.properties.reason.description).toContain(
           'recommendation rationale',
@@ -1028,7 +1030,7 @@ describe('menu-recommendation.prompts', () => {
         const schema = getMenuRecommendationsJsonSchema();
 
         expect(schema.properties.recommendations.description).toContain(
-          '단순한 메뉴명만 사용',
+          '구체적인 단일 요리명만 사용',
         );
       });
 

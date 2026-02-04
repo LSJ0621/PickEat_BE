@@ -88,7 +88,6 @@ describe('MenuSelectionService', () => {
         selectedAt: expect.any(Date),
         selectedDate: expect.any(String),
         status: MenuSelectionStatus.PENDING,
-        lastTriedAt: null,
         retryCount: 0,
       });
       expect(result).toEqual(createdSelection);
@@ -227,7 +226,6 @@ describe('MenuSelectionService', () => {
         user,
         status: MenuSelectionStatus.SUCCEEDED,
         retryCount: 3,
-        lastTriedAt: new Date(),
       });
 
       mockMenuSelectionRepository.findOne.mockResolvedValue(existingSelection);
@@ -235,14 +233,12 @@ describe('MenuSelectionService', () => {
         ...existingSelection,
         status: MenuSelectionStatus.PENDING,
         retryCount: 0,
-        lastTriedAt: null,
       });
 
       const result = await service.createSelection(user, menus);
 
       expect(result.status).toBe(MenuSelectionStatus.PENDING);
       expect(result.retryCount).toBe(0);
-      expect(result.lastTriedAt).toBeNull();
     });
 
     it('should link to menu recommendation when merging existing selection with historyId', async () => {
@@ -344,7 +340,6 @@ describe('MenuSelectionService', () => {
         status: MenuSelectionStatus.PENDING,
         selectedAt: expect.any(Date),
         selectedDate: expect.any(String),
-        lastTriedAt: null,
         retryCount: 0,
       });
     });
@@ -373,7 +368,6 @@ describe('MenuSelectionService', () => {
         menuPayload: { breakfast: [], lunch: [], dinner: [], etc: [] },
         selectedAt: expect.any(Date),
         selectedDate: expect.any(String),
-        lastTriedAt: null,
         retryCount: 0,
       });
       expect(result.status).toBe(MenuSelectionStatus.CANCELLED);
@@ -499,7 +493,6 @@ describe('MenuSelectionService', () => {
         status: MenuSelectionStatus.PENDING,
         selectedAt: expect.any(Date),
         selectedDate: expect.any(String),
-        lastTriedAt: null,
         retryCount: 0,
       });
       expect(result.menuPayload.lunch).toEqual(['불고기', '비빔밥']);
@@ -550,7 +543,6 @@ describe('MenuSelectionService', () => {
         status: MenuSelectionStatus.PENDING,
         selectedAt: expect.any(Date),
         selectedDate: expect.any(String),
-        lastTriedAt: null,
         retryCount: 0,
       });
       expect(result.menuPayload.dinner).toEqual(['순두부찌개', '삼겹살']);
@@ -601,7 +593,6 @@ describe('MenuSelectionService', () => {
         status: MenuSelectionStatus.PENDING,
         selectedAt: expect.any(Date),
         selectedDate: expect.any(String),
-        lastTriedAt: null,
         retryCount: 0,
       });
       expect(result.menuPayload.etc).toEqual(['커피', '케이크']);

@@ -36,6 +36,12 @@ export const GOOGLE_CSE_CONFIG = {
   BASE_URL: 'https://www.googleapis.com/customsearch/v1',
   DEFAULTS: {
     LANGUAGE: 'ko',
+    LANGUAGE_RESTRICT_CODES: {
+      ko: 'lang_ko',
+      en: 'lang_en',
+      ja: 'lang_ja',
+      zh: 'lang_zh-CN',
+    } as const,
   },
 } as const;
 

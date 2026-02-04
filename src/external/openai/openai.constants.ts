@@ -16,10 +16,10 @@ export const OPENAI_CONFIG = {
    * 모델별 최대 토큰
    */
   MAX_TOKENS: {
-    MENU_RECOMMENDATION: 500,
+    MENU_RECOMMENDATION: 800,
     MENU_VALIDATION: 200,
     PLACE_RECOMMENDATION: 800,
-    PREFERENCE_ANALYSIS: 500,
+    PREFERENCE_ANALYSIS: 1500,
   },
 } as const;
 
@@ -33,4 +33,14 @@ export const OPENAI_ENV_KEYS = {
   VALIDATION_MODEL: 'OPENAI_VALIDATION_MODEL',
   PREFERENCE_MODEL: 'OPENAI_PREFERENCE_MODEL',
   PLACES_MODEL: 'OPENAI_PLACES_MODEL',
+} as const;
+
+/**
+ * 웹 검색 설정
+ */
+export const WEB_SEARCH_CONFIG = {
+  /** 웹 검색용 모델 (Responses API 호환) */
+  MODEL: 'gpt-5.1',
+  /** 검색 컨텍스트 크기 */
+  CONTEXT_SIZE: 'low' as const,
 } as const;

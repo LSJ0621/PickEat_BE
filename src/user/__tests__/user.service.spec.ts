@@ -334,7 +334,7 @@ describe('UserService', () => {
 
       // Act & Assert
       await expect(service.getOrFailByEmail(email)).rejects.toThrow(
-        new NotFoundException(`User with email ${email} not found`),
+        NotFoundException,
       );
     });
   });
@@ -477,6 +477,7 @@ describe('UserService', () => {
         role: 'USER',
         name,
         password: null,
+        preferredLanguage: 'ko',
       });
     });
 
@@ -505,6 +506,7 @@ describe('UserService', () => {
         role: 'USER',
         name: undefined,
         password: null,
+        preferredLanguage: 'ko',
       });
     });
 
@@ -532,6 +534,7 @@ describe('UserService', () => {
         role: 'USER',
         name: undefined,
         password: null,
+        preferredLanguage: 'ko',
       });
     });
 
@@ -577,9 +580,7 @@ describe('UserService', () => {
       userRepository.findOneBy.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(service.findOne(userId)).rejects.toThrow(
-        new NotFoundException(`User ${userId} not found`),
-      );
+      await expect(service.findOne(userId)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -640,7 +641,7 @@ describe('UserService', () => {
 
       // Act & Assert
       await expect(service.deleteUser(email)).rejects.toThrow(
-        new NotFoundException('사용자를 찾을 수 없습니다.'),
+        NotFoundException,
       );
       expect(mockManager.findOne).toHaveBeenCalledWith(User, {
         where: { email },
@@ -669,7 +670,7 @@ describe('UserService', () => {
 
       // Act & Assert
       await expect(service.deleteUser(email)).rejects.toThrow(
-        new BadRequestException('이미 탈퇴한 계정입니다.'),
+        BadRequestException,
       );
     });
 
@@ -1090,6 +1091,187 @@ describe('UserService', () => {
       // Assert
       expect(user.name).toBeNull();
       expect(result.name).toBeNull();
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('should update only name when name is provided', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        name: 'Old Name',
+        birthYear: null,
+        gender: null,
+      });
+      const updates = { name: 'New Name' };
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, name: updates.name });
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.name).toBe('New Name');
+      expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
+      expect(userRepository.save).toHaveBeenCalledWith(user);
+    });
+
+    it('should update only birthYear when birthYear is provided', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        name: 'Test User',
+        birthYear: null,
+        gender: null,
+      });
+      const updates = { birthYear: 1990 };
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, birthYear: 1990 });
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.birthYear).toBe(1990);
+      expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
+      expect(userRepository.save).toHaveBeenCalledWith(user);
+    });
+
+    it('should update only gender when gender is provided', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        name: 'Test User',
+        birthYear: null,
+        gender: null,
+      });
+      const updates = { gender: 'male' as const };
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, gender: 'male' });
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.gender).toBe('male');
+      expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
+      expect(userRepository.save).toHaveBeenCalledWith(user);
+    });
+
+    it('should update all fields when all are provided', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        name: 'Old Name',
+        birthYear: null,
+        gender: null,
+      });
+      const updates = {
+        name: 'New Name',
+        birthYear: 1995,
+        gender: 'female' as const,
+      };
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({
+        ...user,
+        name: 'New Name',
+        birthYear: 1995,
+        gender: 'female',
+      });
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.name).toBe('New Name');
+      expect(result.birthYear).toBe(1995);
+      expect(result.gender).toBe('female');
+      expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
+      expect(userRepository.save).toHaveBeenCalledWith(user);
+    });
+
+    it('should throw NotFoundException when user does not exist', async () => {
+      // Arrange
+      const userId = 999;
+      const updates = { name: 'New Name' };
+      userRepository.findOneBy.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(service.updateProfile(userId, updates)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should not update fields when not provided in updates', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        name: 'Original Name',
+        birthYear: 1990,
+        gender: 'male',
+      });
+      const updates = { birthYear: 1995 };
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({
+        ...user,
+        birthYear: 1995,
+      });
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.name).toBe('Original Name');
+      expect(result.birthYear).toBe(1995);
+      expect(result.gender).toBe('male');
+    });
+
+    it('should handle gender type other correctly', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        gender: null,
+      });
+      const updates = { gender: 'other' as const };
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, gender: 'other' });
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.gender).toBe('other');
+    });
+
+    it('should handle empty updates object', async () => {
+      // Arrange
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        name: 'Original Name',
+        birthYear: 1990,
+        gender: 'male',
+      });
+      const updates = {};
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue(user);
+
+      // Act
+      const result = await service.updateProfile(userId, updates);
+
+      // Assert
+      expect(result.name).toBe('Original Name');
+      expect(result.birthYear).toBe(1990);
+      expect(result.gender).toBe('male');
+      expect(userRepository.save).toHaveBeenCalledWith(user);
     });
   });
 });

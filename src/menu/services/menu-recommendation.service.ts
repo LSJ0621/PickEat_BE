@@ -6,6 +6,7 @@ import { parseLanguage } from '@/common/utils/language.util';
 import { PageInfo } from '../../common/interfaces/pagination.interface';
 import { User } from '../../user/entities/user.entity';
 import { UserAddressService } from '../../user/services/user-address.service';
+import { UserTasteAnalysisService } from '../../user/services/user-taste-analysis.service';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import { OpenAiMenuService } from './openai-menu.service';
 
@@ -23,27 +24,50 @@ export class MenuRecommendationService {
     private readonly recommendationRepository: Repository<MenuRecommendation>,
     private readonly openAiMenuService: OpenAiMenuService,
     private readonly userAddressService: UserAddressService,
+    private readonly userTasteAnalysisService: UserTasteAnalysisService,
   ) {}
 
   /**
    * 메뉴 추천
    */
   async recommend(user: User, prompt: string) {
+    this.logger.log(`👤 [추천 요청] userId: ${user.id}`);
+
     const likes = user.preferences?.likes ?? [];
     const dislikes = user.preferences?.dislikes ?? [];
-    const analysis = user.preferences?.analysis;
+
+    // Fetch taste analysis from UserTasteAnalysis table (실패해도 추천은 계속 동작)
+    let tasteAnalysis: Awaited<
+      ReturnType<typeof this.userTasteAnalysisService.getByUserId>
+    > = null;
+    try {
+      tasteAnalysis = await this.userTasteAnalysisService.getByUserId(user.id);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch taste analysis for user ${user.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      // tasteAnalysis 없이도 메뉴 추천 계속 진행
+    }
+
+    // compactSummary 추출 (토큰 절감용)
+    const compactSummary = tasteAnalysis?.compactSummary ?? undefined;
+
+    // Use compactSummary as primary, fallback to user.preferences.analysis
+    // Trim and filter out empty strings to avoid passing "" as valid analysis
+    const analysis =
+      compactSummary?.trim() || user.preferences?.analysis?.trim() || undefined;
+
+    // Extract structured analysis data
+    const structuredAnalysis = tasteAnalysis
+      ? {
+          stablePatterns: tasteAnalysis.stablePatterns,
+          recentSignals: tasteAnalysis.recentSignals,
+          diversityHints: tasteAnalysis.diversityHints,
+        }
+      : undefined;
 
     // Determine language from user preference (default 'ko')
     const language = parseLanguage(user.preferredLanguage);
-
-    const { recommendations, reason } =
-      await this.openAiMenuService.generateMenuRecommendations(
-        prompt,
-        likes,
-        dislikes,
-        analysis,
-        language,
-      );
 
     // 기본 주소 조회 (필수)
     const defaultAddress =
@@ -54,11 +78,33 @@ export class MenuRecommendationService {
       });
     }
 
+    const userAddressString = defaultAddress.roadAddress;
+    this.logger.log(`📍 [기본 주소 조회] ${userAddressString}`);
+
+    const { intro, recommendations, closing } =
+      await this.openAiMenuService.generateMenuRecommendations(
+        prompt,
+        likes,
+        dislikes,
+        analysis,
+        language,
+        userAddressString,
+        compactSummary,
+        structuredAnalysis,
+      );
+
+    this.logger.log(`🎯 [추천 완료] ${recommendations.length}개 메뉴 추천됨`);
+
+    // Extract menu names for the recommendations array
+    const menuNames = recommendations.map((item) => item.menu);
+
     const record = this.recommendationRepository.create({
       user,
       prompt,
-      recommendations,
-      reason,
+      recommendations: menuNames,
+      intro,
+      closing,
+      recommendationDetails: recommendations,
       recommendedAt: new Date(),
       requestAddress: defaultAddress.roadAddress, // 서버에서 조회한 기본 주소 저장 (필수)
     });
@@ -157,8 +203,9 @@ export class MenuRecommendationService {
   private buildRecommendationResponse(record: MenuRecommendation) {
     return {
       id: record.id,
-      recommendations: record.recommendations,
-      reason: record.reason,
+      intro: record.intro,
+      recommendations: record.recommendationDetails, // 구조화된 데이터 반환 (condition + menu)
+      closing: record.closing,
       recommendedAt: record.recommendedAt,
       requestAddress: record.requestAddress,
     };
@@ -167,8 +214,9 @@ export class MenuRecommendationService {
   private mapHistoryItem(item: MenuRecommendation) {
     return {
       id: item.id,
-      recommendations: item.recommendations,
-      reason: item.reason,
+      intro: item.intro,
+      recommendations: item.recommendationDetails, // 구조화된 데이터 반환 (condition + menu)
+      closing: item.closing,
       prompt: item.prompt,
       recommendedAt: item.recommendedAt,
       requestAddress: item.requestAddress,

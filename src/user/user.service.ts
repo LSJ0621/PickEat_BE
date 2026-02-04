@@ -176,10 +176,27 @@ export class UserService {
   async updateEntityPreferencesAnalysis(
     entity: User,
     analysis: string,
+    structuredAnalysis?: {
+      stablePatterns?: {
+        categories: string[];
+        flavors: string[];
+        cookingMethods: string[];
+        confidence: 'low' | 'medium' | 'high';
+      };
+      recentSignals?: {
+        trending: string[];
+        declining: string[];
+      };
+      diversityHints?: {
+        explorationAreas: string[];
+        rotationSuggestions: string[];
+      };
+    },
   ): Promise<UserPreferences> {
     return this.userPreferenceService.updatePreferencesAnalysis(
       entity,
       analysis,
+      structuredAnalysis,
     );
   }
 
@@ -261,5 +278,30 @@ export class UserService {
   async updateEntityName(entity: User, name: string): Promise<User> {
     entity.name = name;
     return this.userRepository.save(entity);
+  }
+
+  // ========== User Profile Update (통합 메서드) ==========
+
+  async updateProfile(
+    userId: number,
+    updates: {
+      name?: string;
+      birthYear?: number;
+      gender?: 'male' | 'female' | 'other';
+    },
+  ): Promise<User> {
+    const user = await this.findOne(userId);
+
+    if (updates.name !== undefined) {
+      user.name = updates.name;
+    }
+    if (updates.birthYear !== undefined) {
+      user.birthYear = updates.birthYear;
+    }
+    if (updates.gender !== undefined) {
+      user.gender = updates.gender;
+    }
+
+    return this.userRepository.save(user);
   }
 }
