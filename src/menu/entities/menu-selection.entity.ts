@@ -13,7 +13,7 @@ import {
 } from 'typeorm';
 import { BatchJob } from '../../batch/entities/batch-job.entity';
 import { User } from '../../user/entities/user.entity';
-import { MenuSlotPayload } from '../interface/menu-selection.interface';
+import { MenuSlotPayload } from '../interfaces/menu-selection.interface';
 import { MenuRecommendation } from './menu-recommendation.entity';
 
 export enum MenuSelectionStatus {

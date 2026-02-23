@@ -77,26 +77,73 @@ src/
     ├── filters/, interceptors/, interfaces/, utils/
 ```
 
+### Standard Module Template
+
+All modules follow this unified structure:
+
+```
+src/{feature}/
+├── __tests__/              # ALL test files here (never next to source)
+│   ├── {feature}.service.spec.ts
+│   └── services/           # Sub-service tests
+├── controllers/            # Admin or specialized controllers
+├── dto/                    # {operation}-{feature}.dto.ts
+├── entities/               # {feature}.entity.ts
+├── interfaces/             # Response types (*.interface.ts) — always plural
+├── services/               # ALL services here (no sub-directories like gpt/)
+├── utils/                  # Utility files (not utilities/)
+├── {feature}.controller.ts
+├── {feature}.module.ts
+└── {feature}.service.ts
+```
+
+**Naming rules**:
+- Interfaces directory: `interfaces/` (plural, never `interface/`)
+- Utils directory: `utils/` (never `utilities/`)
+- All services in `services/` (no separate `gpt/` or similar sub-directories)
+- Tests always in `__tests__/` (never next to source files)
+
 ### Menu Module Structure (Complex Example)
 
 The menu module has a multi-layered service architecture:
 
 ```
 menu/
-├── services/                      # Core business logic
+├── services/                      # ALL services unified here
+│   ├── base-menu.service.ts       # GPT base service
+│   ├── gpt4o-mini-validation.service.ts
+│   ├── gpt51-menu.service.ts
+│   ├── gpt-web-search-menu.service.ts
+│   ├── web-search-summary.service.ts
 │   ├── menu-recommendation.service.ts
 │   ├── menu-selection.service.ts
 │   ├── openai-menu.service.ts     # OpenAI integration
 │   ├── openai-places.service.ts   # Place recommendations via OpenAI
 │   ├── place.service.ts           # Place data handling
 │   └── two-stage-menu.service.ts  # Orchestration service
-├── gpt/                           # GPT model-specific services
-│   ├── base-menu.service.ts
-│   ├── gpt4o-mini-validation.service.ts
-│   └── gpt51-menu.service.ts
-└── utilities/                     # Helper utilities
-    ├── menu-payload.util.ts
-    └── place-id.util.ts
+├── interfaces/                    # Unified (singular interface/ merged here)
+├── utils/                         # Unified (utilities/ + root utils merged here)
+│   ├── menu-payload.util.ts
+│   ├── place-id.util.ts
+│   └── menu-selection-state-machine.ts
+└── __tests__/
+    ├── services/                  # All service tests
+    └── utils/                     # Utility tests
+```
+
+### Auth Module Structure (Split Services)
+
+```
+auth/
+├── auth.service.ts                # Core auth (~200 lines): register, login, logout, refresh
+├── services/
+│   ├── auth-social.service.ts     # OAuth/social login (Kakao, Google)
+│   ├── auth-password.service.ts   # Password reset flow
+│   ├── auth-token.service.ts      # JWT token management
+│   ├── email-notification.service.ts
+│   └── email-verification.service.ts
+├── templates/                     # Handlebars email templates (hyphen-separator: *-en.hbs, *-ko.hbs)
+└── __tests__/
 ```
 
 ## Plan Mode Guide
@@ -127,7 +174,8 @@ Each provider has: `{provider}.constants.ts` (URLs, versions), `{provider}.types
 |----------|-------------|
 | AWS S3 | File uploads |
 | Discord | Bug report webhooks |
-| Google | Places API, OAuth |
+| Gemini | Place recommendations via Google AI |
+| Google | Places API, OAuth, Search |
 | Kakao | Login, address search |
 | Naver | Maps, search |
 | OpenAI | GPT recommendations (prompts in `src/external/openai/prompts/`) |
@@ -199,6 +247,7 @@ import { AuthUserPayload } from '@/auth/interfaces/auth-user-payload.interface';
   - `BatchSchedulerService` (batch module) - OpenAI Batch API operations for menu recommendations
   - `BugReportSchedulerService` (bug-report module) - Bug report processing
   - `NotificationSchedulerService` (notification module) - Notification delivery
+  - `RatingSchedulerService` (rating/services/) - Place rating updates
 - **Email**: NestJS Mailer with Handlebars templates in `src/auth/templates/`
 
 ---

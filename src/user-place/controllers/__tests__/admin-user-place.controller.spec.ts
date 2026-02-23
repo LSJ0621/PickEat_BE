@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminUserPlaceController } from '../admin-user-place.controller';
 import { AdminUserPlaceService } from '../../services/admin-user-place.service';
+import { AdminUserPlaceStatsService } from '../../services/admin-user-place-stats.service';
 import { UserService } from '@/user/user.service';
 import { createMockService } from '../../../../test/utils/test-helpers';
 import { UserFactory } from '../../../../test/factories/entity.factory';
@@ -44,6 +45,7 @@ const createMockUserPlace = (overrides = {}) =>
 describe('AdminUserPlaceController', () => {
   let controller: AdminUserPlaceController;
   let userPlaceService: jest.Mocked<AdminUserPlaceService>;
+  let userPlaceStatsService: jest.Mocked<AdminUserPlaceStatsService>;
   let userService: jest.Mocked<UserService>;
 
   const adminUser: AuthUserPayload = {
@@ -60,11 +62,13 @@ describe('AdminUserPlaceController', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     userPlaceService = createMockService<AdminUserPlaceService>([
-      'findAllForAdmin',
-      'findOneForAdmin',
       'approvePlace',
       'rejectPlace',
       'updatePlaceByAdmin',
+    ]);
+    userPlaceStatsService = createMockService<AdminUserPlaceStatsService>([
+      'findAllForAdmin',
+      'findOneForAdmin',
     ]);
     userService = createMockService<UserService>(['findByEmail']);
 
@@ -74,6 +78,10 @@ describe('AdminUserPlaceController', () => {
         {
           provide: AdminUserPlaceService,
           useValue: userPlaceService,
+        },
+        {
+          provide: AdminUserPlaceStatsService,
+          useValue: userPlaceStatsService,
         },
         {
           provide: UserService,

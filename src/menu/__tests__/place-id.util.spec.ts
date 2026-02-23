@@ -1,4 +1,4 @@
-import { normalizePlaceId, parseUserPlaceId } from '../place-id.util';
+import { normalizePlaceId, parseUserPlaceId } from '../utils/place-id.util';
 
 describe('place-id.util', () => {
   describe('normalizePlaceId', () => {

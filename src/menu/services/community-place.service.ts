@@ -8,7 +8,7 @@ import { UserPlaceStatus } from '@/user-place/enum/user-place-status.enum';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import { PlaceRecommendation } from '../entities/place-recommendation.entity';
 import { PlaceRecommendationSource } from '../enum/place-recommendation-source.enum';
-import { CommunityPlaceCandidate } from '../interface/community-places.interface';
+import { CommunityPlaceCandidate } from '../interfaces/community-places.interface';
 import { OpenAiCommunityPlacesService } from './openai-community-places.service';
 
 const SEARCH_RADIUS_METERS = 2000; // 2km

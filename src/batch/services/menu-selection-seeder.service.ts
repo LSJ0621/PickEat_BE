@@ -6,7 +6,7 @@ import {
   MenuSelection,
   MenuSelectionStatus,
 } from '@/menu/entities/menu-selection.entity';
-import { MenuSlotPayload } from '@/menu/interface/menu-selection.interface';
+import { MenuSlotPayload } from '@/menu/interfaces/menu-selection.interface';
 import { User } from '@/user/entities/user.entity';
 
 /**

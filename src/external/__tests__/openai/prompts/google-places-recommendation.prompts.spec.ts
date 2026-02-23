@@ -7,7 +7,7 @@ import {
   GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA,
   getGooglePlacesRecommendationsJsonSchema,
 } from '../../../openai/prompts/google-places-recommendation.prompts';
-import { PlaceCandidate } from '../../../../menu/interface/openai-places.interface';
+import { PlaceCandidate } from '../../../../menu/interfaces/openai-places.interface';
 
 describe('google-places-recommendation.prompts', () => {
   const mockCandidates: PlaceCandidate[] = [

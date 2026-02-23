@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { RatingSchedulerService } from '../rating-scheduler.service';
+import { RatingSchedulerService } from '../services/rating-scheduler.service';
 import { PlaceRating } from '../entities/place-rating.entity';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
 import {

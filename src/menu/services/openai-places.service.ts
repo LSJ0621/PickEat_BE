@@ -12,7 +12,7 @@ import { OpenAIResponseException } from '@/common/exceptions/openai-response.exc
 import {
   PlaceCandidate,
   PlaceRecommendationsResponse,
-} from '../interface/openai-places.interface';
+} from '../interfaces/openai-places.interface';
 import { logOpenAiTokenUsage } from '@/common/utils/openai-token-logger.util';
 import { BaseOpenAiService } from './base-openai.service';
 

@@ -4,7 +4,7 @@ import { buildUnifiedGroundingPrompt } from '@/external/gemini/prompts/place-rec
 import {
   GeminiPlaceRecommendation,
   GeminiPlaceRecommendationsResponse,
-} from '../interface/gemini-places.interface';
+} from '../interfaces/gemini-places.interface';
 
 @Injectable()
 export class GeminiPlacesService {

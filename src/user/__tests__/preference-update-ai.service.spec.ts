@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { PreferenceUpdateAiService } from '../preference-update-ai.service';
+import { PreferenceUpdateAiService } from '../services/preference-update-ai.service';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
 import { UserPreferencesFactory } from '../../../test/factories/entity.factory';

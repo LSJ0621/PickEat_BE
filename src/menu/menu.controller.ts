@@ -33,7 +33,7 @@ import { SearchRestaurantBlogsDto } from './dto/search-restaurant-blogs.dto';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
 import { MenuSelection } from './entities/menu-selection.entity';
 import { PlaceRecommendationSource } from './enum/place-recommendation-source.enum';
-import { PlaceRecommendationResponse } from './interface/place-recommendation-response.interface';
+import { PlaceRecommendationResponse } from './interfaces/place-recommendation-response.interface';
 import { MenuService } from './menu.service';
 import { CommunityPlaceService } from './services/community-place.service';
 import { MenuRecommendationService } from './services/menu-recommendation.service';

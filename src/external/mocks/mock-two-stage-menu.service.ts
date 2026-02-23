@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MenuRecommendationsResponse } from '@/menu/interface/menu-recommendation.interface';
+import { MenuRecommendationsResponse } from '@/menu/interfaces/menu-recommendation.interface';
 
 /**
  * TwoStageMenuService Mock 구현

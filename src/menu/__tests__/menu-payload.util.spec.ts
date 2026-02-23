@@ -3,11 +3,11 @@ import {
   buildMenuPayloadFromSlotInputs,
   mergeMenuPayload,
   normalizeMenuPayload,
-} from '../menu-payload.util';
+} from '../utils/menu-payload.util';
 import {
   MenuSlotPayload,
   SlotMenuInput,
-} from '../interface/menu-selection.interface';
+} from '../interfaces/menu-selection.interface';
 
 describe('menu-payload.util', () => {
   describe('normalizeMenuName', () => {

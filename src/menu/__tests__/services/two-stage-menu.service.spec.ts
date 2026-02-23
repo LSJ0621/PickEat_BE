@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TwoStageMenuService } from '../../services/two-stage-menu.service';
-import { Gpt4oMiniValidationService } from '../../gpt/gpt4o-mini-validation.service';
-import { Gpt51MenuService } from '../../gpt/gpt51-menu.service';
-import { GptWebSearchMenuService } from '../../gpt/gpt-web-search-menu.service';
+import { Gpt4oMiniValidationService } from '../../services/gpt4o-mini-validation.service';
+import { Gpt51MenuService } from '../../services/gpt51-menu.service';
+import { GptWebSearchMenuService } from '../../services/gpt-web-search-menu.service';
 import { InvalidMenuRequestException } from '@/common/exceptions/invalid-menu-request.exception';
 import { createMockService } from '../../../../test/utils/test-helpers';
 

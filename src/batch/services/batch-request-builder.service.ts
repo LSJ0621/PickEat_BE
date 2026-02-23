@@ -14,7 +14,7 @@ import {
 } from '@/external/openai/prompts';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { BATCH_CONFIG } from '@/common/constants/business.constants';
-import { normalizeMenuPayload } from '@/menu/menu-payload.util';
+import { normalizeMenuPayload } from '@/menu/utils/menu-payload.util';
 import {
   BatchRequest,
   PreferenceBatchRequest,

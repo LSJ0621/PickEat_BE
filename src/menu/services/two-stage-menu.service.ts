@@ -2,10 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InvalidMenuRequestException } from '@/common/exceptions/invalid-menu-request.exception';
 import { streamingAsyncLocalStorage } from '@/common/utils/retry-context';
 import type { StructuredAnalysis } from '@/external/openai/prompts';
-import { Gpt4oMiniValidationService } from '../gpt/gpt4o-mini-validation.service';
-import { Gpt51MenuService } from '../gpt/gpt51-menu.service';
-import { GptWebSearchMenuService } from '../gpt/gpt-web-search-menu.service';
-import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
+import { Gpt4oMiniValidationService } from './gpt4o-mini-validation.service';
+import { Gpt51MenuService } from './gpt51-menu.service';
+import { GptWebSearchMenuService } from './gpt-web-search-menu.service';
+import { MenuRecommendationsResponse } from '../interfaces/menu-recommendation.interface';
 import { ValidationContext } from '../interfaces/menu-validation.interface';
 
 /**

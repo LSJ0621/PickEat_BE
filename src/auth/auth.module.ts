@@ -14,6 +14,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailVerification } from './entities/email-verification.entity';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
+import { AuthPasswordService } from './services/auth-password.service';
 import { AuthSocialService } from './services/auth-social.service';
 import { AuthTokenService } from './services/auth-token.service';
 import { EmailNotificationService } from './services/email-notification.service';
@@ -72,6 +73,7 @@ import { LocalStrategy } from './strategy/local.strategy';
     AuthService,
     AuthTokenService,
     AuthSocialService,
+    AuthPasswordService,
     JwtStrategy,
     LocalStrategy,
     JwtTokenProvider,

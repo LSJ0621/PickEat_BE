@@ -8,7 +8,7 @@ import {
 import {
   normalizeMenuPayload,
   normalizeMenuName,
-} from '@/menu/menu-payload.util';
+} from '@/menu/utils/menu-payload.util';
 import { BATCH_CONFIG } from '@/common/constants/business.constants';
 import { UserSelectionGroup } from '../interfaces/preference-batch.interface';
 

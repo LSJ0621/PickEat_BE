@@ -11,7 +11,7 @@ import {
 import {
   CommunityPlaceCandidate,
   CommunityPlacesRecommendationResponse,
-} from '../interface/community-places.interface';
+} from '../interfaces/community-places.interface';
 import { logOpenAiTokenUsage } from '@/common/utils/openai-token-logger.util';
 import { BaseOpenAiService } from './base-openai.service';
 

@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 import { OpenAiCommunityPlacesService } from '../../services/openai-community-places.service';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
-import { CommunityPlaceCandidate } from '../../interface/community-places.interface';
+import { CommunityPlaceCandidate } from '../../interfaces/community-places.interface';
 
 describe('OpenAiCommunityPlacesService', () => {
   let service: OpenAiCommunityPlacesService;

@@ -9,6 +9,7 @@ import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthService } from '../auth.service';
 import { EmailPurpose } from '../dto/send-email-code.dto';
+import { AuthPasswordService } from '../services/auth-password.service';
 import { AuthSocialService } from '../services/auth-social.service';
 import { AuthTokenService } from '../services/auth-token.service';
 import { EmailVerificationService } from '../services/email-verification.service';
@@ -19,6 +20,7 @@ describe('AuthService', () => {
   let userService: jest.Mocked<UserService>;
   let authTokenService: jest.Mocked<AuthTokenService>;
   let authSocialService: jest.Mocked<AuthSocialService>;
+  let authPasswordService: jest.Mocked<AuthPasswordService>;
   let emailVerificationService: jest.Mocked<EmailVerificationService>;
   let userRepository: jest.Mocked<Repository<User>>;
   let cacheService: jest.Mocked<RedisCacheService>;
@@ -79,6 +81,13 @@ describe('AuthService', () => {
       reRegisterSocial: jest.fn(),
     };
 
+    const mockAuthPasswordService: jest.Mocked<Partial<AuthPasswordService>> =
+      {
+        sendResetPasswordCode: jest.fn(),
+        verifyResetPasswordCode: jest.fn(),
+        resetPassword: jest.fn(),
+      };
+
     const mockEmailVerificationService: jest.Mocked<
       Partial<EmailVerificationService>
     > = {
@@ -125,6 +134,10 @@ describe('AuthService', () => {
           useValue: mockAuthSocialService,
         },
         {
+          provide: AuthPasswordService,
+          useValue: mockAuthPasswordService,
+        },
+        {
           provide: EmailVerificationService,
           useValue: mockEmailVerificationService,
         },
@@ -160,6 +173,7 @@ describe('AuthService', () => {
     userService = module.get(UserService);
     authTokenService = module.get(AuthTokenService);
     authSocialService = module.get(AuthSocialService);
+    authPasswordService = module.get(AuthPasswordService);
     emailVerificationService = module.get(EmailVerificationService);
     userRepository = module.get(getRepositoryToken(User));
     cacheService = module.get(RedisCacheService);
@@ -507,95 +521,39 @@ describe('AuthService', () => {
   });
 
   describe('sendResetPasswordCode', () => {
-    it('should send reset password code when regular user requests it', async () => {
+    it('should delegate to authPasswordService when called', async () => {
       const email = 'test@example.com';
-      userService.findByEmail.mockResolvedValue(mockUser);
-      emailVerificationService.sendCode.mockResolvedValue({
+      const expectedResult = {
         remainCount: 4,
         messageCode: MessageCode.AUTH_VERIFICATION_CODE_SENT,
-      });
+      };
 
-      const result = await service.sendResetPasswordCode(email);
+      authPasswordService.sendResetPasswordCode.mockResolvedValue(
+        expectedResult,
+      );
 
-      expect(userService.findByEmail).toHaveBeenCalledWith(email);
-      expect(emailVerificationService.sendCode).toHaveBeenCalledWith(
+      const result = await service.sendResetPasswordCode(email, 'ko');
+
+      expect(authPasswordService.sendResetPasswordCode).toHaveBeenCalledWith(
         email,
-        EmailPurpose.RESET_PASSWORD,
-        undefined,
+        'ko',
       );
-      expect(result.remainCount).toBe(4);
-    });
-
-    it('should throw BadRequestException when social login account requests password reset', async () => {
-      const socialUser = { ...mockUser, password: null, socialId: 'kakao123' };
-      userService.findByEmail.mockResolvedValue(socialUser);
-
-      await expect(
-        service.sendResetPasswordCode('social@example.com'),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
-          }),
-        }),
-      );
-    });
-
-    it('should throw BadRequestException when non-existent email requests password reset', async () => {
-      userService.findByEmail.mockResolvedValue(null);
-
-      await expect(
-        service.sendResetPasswordCode('nonexistent@example.com'),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
-          }),
-        }),
-      );
+      expect(result).toEqual(expectedResult);
     });
   });
 
   describe('resetPassword', () => {
-    it('should reset password successfully when valid reset request is provided', async () => {
+    it('should delegate to authPasswordService when called', async () => {
       const resetDto = {
         email: 'test@example.com',
         newPassword: 'newpassword123',
       };
 
-      emailVerificationService.isEmailVerified.mockResolvedValue(true);
-      userService.findByEmail.mockResolvedValue(mockUser);
-      userService.updatePassword.mockResolvedValue(mockUser);
-      userService.markEmailVerified.mockResolvedValue(undefined);
-      emailVerificationService.expireVerification.mockResolvedValue(undefined);
+      authPasswordService.resetPassword.mockResolvedValue(undefined);
 
       await service.resetPassword(resetDto);
 
-      expect(userService.updatePassword).toHaveBeenCalledWith(
-        mockUser,
-        expect.any(String),
-      );
-      expect(emailVerificationService.expireVerification).toHaveBeenCalledWith(
-        resetDto.email,
-        EmailPurpose.RESET_PASSWORD,
-      );
-    });
-
-    it('should throw BadRequestException when email is not verified', async () => {
-      const resetDto = {
-        email: 'test@example.com',
-        newPassword: 'newpassword123',
-      };
-
-      emailVerificationService.isEmailVerified.mockResolvedValue(false);
-
-      await expect(service.resetPassword(resetDto)).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
-          }),
-        }),
-      );
+      expect(authPasswordService.resetPassword).toHaveBeenCalledWith(resetDto);
     });
   });
 
@@ -924,70 +882,6 @@ describe('AuthService', () => {
     });
   });
 
-  describe('resetPassword - rate limiting', () => {
-    it('should allow password change when user has never changed password', async () => {
-      const userWithoutPasswordChange = {
-        ...mockUser,
-        lastPasswordChangedAt: null,
-      };
-      userService.findByEmail.mockResolvedValue(userWithoutPasswordChange);
-      emailVerificationService.isEmailVerified.mockResolvedValue(true);
-      userService.updatePassword.mockResolvedValue(userWithoutPasswordChange);
-
-      const resetDto = {
-        email: 'test@example.com',
-        newPassword: 'newpassword123',
-      };
-
-      await service.resetPassword(resetDto);
-
-      expect(userService.updatePassword).toHaveBeenCalled();
-    });
-
-    it('should allow password change when more than 24 hours have passed', async () => {
-      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-      const userWithOldPasswordChange = {
-        ...mockUser,
-        lastPasswordChangedAt: twoDaysAgo,
-      };
-      userService.findByEmail.mockResolvedValue(userWithOldPasswordChange);
-      emailVerificationService.isEmailVerified.mockResolvedValue(true);
-      userService.updatePassword.mockResolvedValue(userWithOldPasswordChange);
-
-      const resetDto = {
-        email: 'test@example.com',
-        newPassword: 'newpassword123',
-      };
-
-      await service.resetPassword(resetDto);
-
-      expect(userService.updatePassword).toHaveBeenCalled();
-    });
-
-    it('should throw HttpException when user tries to change password within 24 hours', async () => {
-      const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
-      const userWithRecentPasswordChange = {
-        ...mockUser,
-        lastPasswordChangedAt: oneHourAgo,
-      };
-      userService.findByEmail.mockResolvedValue(userWithRecentPasswordChange);
-      emailVerificationService.isEmailVerified.mockResolvedValue(true);
-
-      const resetDto = {
-        email: 'test@example.com',
-        newPassword: 'newpassword123',
-      };
-
-      await expect(service.resetPassword(resetDto)).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_PASSWORD_CHANGE_LIMIT,
-          }),
-        }),
-      );
-      expect(userService.updatePassword).not.toHaveBeenCalled();
-    });
-  });
 
   describe('reRegister - error branches', () => {
     it('should throw BadRequestException when re-register update fails to restore user', async () => {
@@ -1052,48 +946,16 @@ describe('AuthService', () => {
   });
 
   describe('verifyResetPasswordCode', () => {
-    it('should verify reset password code when regular user provides valid code', async () => {
+    it('should delegate to authPasswordService when called', async () => {
       const email = 'test@example.com';
       const code = '123456';
-      userService.findByEmail.mockResolvedValue(mockUser);
-      emailVerificationService.verifyCode.mockResolvedValue(undefined);
+      authPasswordService.verifyResetPasswordCode.mockResolvedValue(undefined);
 
       await service.verifyResetPasswordCode(email, code);
 
-      expect(userService.findByEmail).toHaveBeenCalledWith(email);
-      expect(emailVerificationService.verifyCode).toHaveBeenCalledWith(
+      expect(authPasswordService.verifyResetPasswordCode).toHaveBeenCalledWith(
         email,
         code,
-        EmailPurpose.RESET_PASSWORD,
-      );
-    });
-
-    it('should throw BadRequestException when non-existent user tries to verify reset code', async () => {
-      userService.findByEmail.mockResolvedValue(null);
-
-      await expect(
-        service.verifyResetPasswordCode('nonexistent@example.com', '123456'),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
-          }),
-        }),
-      );
-    });
-
-    it('should throw BadRequestException when social login account tries to verify reset code', async () => {
-      const socialUser = { ...mockUser, password: null, socialId: 'kakao123' };
-      userService.findByEmail.mockResolvedValue(socialUser);
-
-      await expect(
-        service.verifyResetPasswordCode('social@example.com', '123456'),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
-          }),
-        }),
       );
     });
   });

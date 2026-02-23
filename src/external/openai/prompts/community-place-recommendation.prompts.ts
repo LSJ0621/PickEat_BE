@@ -1,4 +1,4 @@
-import { CommunityPlaceCandidate } from '../../../menu/interface/community-places.interface';
+import { CommunityPlaceCandidate } from '../../../menu/interfaces/community-places.interface';
 
 /**
  * Community Place based restaurant recommendation prompts

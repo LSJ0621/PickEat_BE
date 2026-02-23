@@ -4,7 +4,7 @@ import { UserModule } from '@/user/user.module';
 import { PlaceRating } from './entities/place-rating.entity';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
 import { RatingService } from './rating.service';
-import { RatingSchedulerService } from './rating-scheduler.service';
+import { RatingSchedulerService } from './services/rating-scheduler.service';
 import { RatingController } from './rating.controller';
 
 @Module({

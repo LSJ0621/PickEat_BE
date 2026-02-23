@@ -1,4 +1,4 @@
-import { PlaceCandidate } from '../../../menu/interface/openai-places.interface';
+import { PlaceCandidate } from '../../../menu/interfaces/openai-places.interface';
 
 /**
  * Google Places based restaurant recommendation prompts

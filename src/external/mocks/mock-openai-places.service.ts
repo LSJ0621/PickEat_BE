@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   PlaceCandidate,
   PlaceRecommendationsResponse,
-} from '@/menu/interface/openai-places.interface';
+} from '@/menu/interfaces/openai-places.interface';
 import { mockGooglePlacesResponses } from './fixtures';
 
 /**

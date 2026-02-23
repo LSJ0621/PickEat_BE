@@ -13,8 +13,8 @@ import {
   mergeMenuPayload,
   normalizeMenuName,
   normalizeMenuPayload,
-} from '../menu-payload.util';
-import { assertValidTransition } from '../utilities/menu-selection-state-machine';
+} from '../utils/menu-payload.util';
+import { assertValidTransition } from '../utils/menu-selection-state-machine';
 import { MenuRecommendationService } from './menu-recommendation.service';
 
 /**

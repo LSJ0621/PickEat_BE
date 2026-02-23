@@ -7,6 +7,7 @@ import { UserPlace } from './entities/user-place.entity';
 import { UserPlaceRejectionHistory } from './entities/user-place-rejection-history.entity';
 import { UserPlaceService } from './user-place.service';
 import { AdminUserPlaceService } from './services/admin-user-place.service';
+import { AdminUserPlaceStatsService } from './services/admin-user-place-stats.service';
 import { UserPlaceController } from './user-place.controller';
 import { AdminUserPlaceController } from './controllers/admin-user-place.controller';
 
@@ -21,7 +22,7 @@ import { AdminUserPlaceController } from './controllers/admin-user-place.control
     AwsModule,
   ],
   controllers: [UserPlaceController, AdminUserPlaceController],
-  providers: [UserPlaceService, AdminUserPlaceService],
+  providers: [UserPlaceService, AdminUserPlaceService, AdminUserPlaceStatsService],
   exports: [UserPlaceService],
 })
 export class UserPlaceModule {}

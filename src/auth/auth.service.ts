@@ -10,7 +10,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { DataSource, Repository } from 'typeorm';
-import { AUTH_TIMING } from '../common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { MessageCode } from '@/common/constants/message-codes';
 import { UserAddress } from '../user/entities/user-address.entity';
@@ -29,6 +28,7 @@ import {
   AuthResult,
 } from './interfaces/auth.interface';
 import { RedisCacheService } from '@/common/cache/cache.service';
+import { AuthPasswordService } from './services/auth-password.service';
 import { AuthSocialService } from './services/auth-social.service';
 import { AuthTokenService } from './services/auth-token.service';
 import { EmailVerificationService } from './services/email-verification.service';
@@ -41,6 +41,7 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly authTokenService: AuthTokenService,
     private readonly authSocialService: AuthSocialService,
+    private readonly authPasswordService: AuthPasswordService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly cacheService: RedisCacheService,
     @InjectRepository(User)
@@ -224,49 +225,21 @@ export class AuthService {
     return this.checkEmailAvailability(email, false);
   }
 
-  // ========== 비밀번호 관련 ==========
+  // ========== 비밀번호 관련 (위임) ==========
 
   async sendResetPasswordCode(
     email: string,
     lang?: 'ko' | 'en',
   ): Promise<{ remainCount: number; messageCode: MessageCode }> {
-    await this.ensureRegularUserAccount(email);
-    return this.emailVerificationService.sendCode(
-      email,
-      EmailPurpose.RESET_PASSWORD,
-      lang,
-    );
+    return this.authPasswordService.sendResetPasswordCode(email, lang);
   }
 
   async verifyResetPasswordCode(email: string, code: string): Promise<void> {
-    await this.ensureRegularUserAccount(email);
-    await this.emailVerificationService.verifyCode(
-      email,
-      code,
-      EmailPurpose.RESET_PASSWORD,
-    );
+    return this.authPasswordService.verifyResetPasswordCode(email, code);
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
-    const isEmailVerified = await this.emailVerificationService.isEmailVerified(
-      resetPasswordDto.email,
-      EmailPurpose.RESET_PASSWORD,
-    );
-    if (!isEmailVerified) {
-      throw new BadRequestException({
-        errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
-      });
-    }
-
-    const user = await this.ensureRegularUserAccount(resetPasswordDto.email);
-    this.ensurePasswordChangeAllowed(user);
-    const hashedPassword = await bcrypt.hash(resetPasswordDto.newPassword, 10);
-    await this.userService.updatePassword(user, hashedPassword);
-    await this.userService.markEmailVerified(resetPasswordDto.email);
-    await this.emailVerificationService.expireVerification(
-      resetPasswordDto.email,
-      EmailPurpose.RESET_PASSWORD,
-    );
+    return this.authPasswordService.resetPassword(resetPasswordDto);
   }
 
   // ========== 재가입 ==========
@@ -482,41 +455,6 @@ export class AuthService {
           : defaultAddress.longitude
         : null,
     };
-  }
-
-  private ensurePasswordChangeAllowed(user: User): void {
-    if (!user.lastPasswordChangedAt) {
-      return;
-    }
-
-    const now = Date.now();
-    const lastChanged = new Date(user.lastPasswordChangedAt).getTime();
-
-    if (now - lastChanged < AUTH_TIMING.ONE_DAY_MS) {
-      throw new HttpException(
-        {
-          errorCode: ErrorCode.AUTH_PASSWORD_CHANGE_LIMIT,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
-
-  private async ensureRegularUserAccount(email: string): Promise<User> {
-    const user = await this.userService.findByEmail(email);
-    if (!user) {
-      throw new BadRequestException({
-        errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
-      });
-    }
-
-    if (!user.password) {
-      throw new BadRequestException({
-        errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
-      });
-    }
-
-    return user;
   }
 
   private nullableString(value: string | null | undefined): string | null {

@@ -31,6 +31,7 @@ import { AdminUserPlaceListQueryDto } from '../dto/admin-user-place-list-query.d
 import { RejectUserPlaceDto } from '../dto/reject-user-place.dto';
 import { UpdateUserPlaceByAdminDto } from '../dto/update-user-place-by-admin.dto';
 import { AdminUserPlaceService } from '../services/admin-user-place.service';
+import { AdminUserPlaceStatsService } from '../services/admin-user-place-stats.service';
 
 @Controller('admin/user-places')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -39,6 +40,7 @@ import { AdminUserPlaceService } from '../services/admin-user-place.service';
 export class AdminUserPlaceController {
   constructor(
     private readonly adminUserPlaceService: AdminUserPlaceService,
+    private readonly adminUserPlaceStatsService: AdminUserPlaceStatsService,
     private readonly userService: UserService,
   ) {}
 
@@ -47,7 +49,7 @@ export class AdminUserPlaceController {
    */
   @Get()
   async findAll(@Query() query: AdminUserPlaceListQueryDto) {
-    return this.adminUserPlaceService.findAllForAdmin(query);
+    return this.adminUserPlaceStatsService.findAllForAdmin(query);
   }
 
   /**
@@ -55,7 +57,7 @@ export class AdminUserPlaceController {
    */
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.adminUserPlaceService.findOneForAdmin(id);
+    return this.adminUserPlaceStatsService.findOneForAdmin(id);
   }
 
   /**
