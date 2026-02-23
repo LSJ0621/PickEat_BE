@@ -81,6 +81,12 @@ export class UserPlace {
   @Column({ type: 'timestamptz', nullable: true })
   lastSubmittedAt: Date | null;
 
+  @Column({ type: 'decimal', precision: 2, scale: 1, default: 0 })
+  averageRating: number;
+
+  @Column({ type: 'int', default: 0 })
+  ratingCount: number;
+
   @VersionColumn()
   version: number;
 

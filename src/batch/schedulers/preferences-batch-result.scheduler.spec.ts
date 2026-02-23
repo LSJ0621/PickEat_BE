@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { PreferencesBatchResultScheduler } from './preferences-batch-result.scheduler';
 import { BatchJobService } from '../services/batch-job.service';
 import { PreferenceBatchService } from '../services/preference-batch.service';
@@ -33,6 +34,7 @@ describe('PreferencesBatchResultScheduler', () => {
     downloadErrors: jest.Mock;
   };
   let mockMenuSelectionRepository: ReturnType<typeof createMockRepository>;
+  let dataSource: jest.Mocked<DataSource>;
 
   const mockBatchJob: BatchJob = {
     id: 1,
@@ -73,6 +75,16 @@ describe('PreferencesBatchResultScheduler', () => {
 
     mockMenuSelectionRepository = createMockRepository<MenuSelection>();
 
+    const mockQueryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      release: jest.fn().mockResolvedValue(undefined),
+    };
+
+    dataSource = {
+      createQueryRunner: jest.fn(() => mockQueryRunner),
+    } as unknown as jest.Mocked<DataSource>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PreferencesBatchResultScheduler,
@@ -91,6 +103,10 @@ describe('PreferencesBatchResultScheduler', () => {
         {
           provide: getRepositoryToken(MenuSelection),
           useValue: mockMenuSelectionRepository,
+        },
+        {
+          provide: DataSource,
+          useValue: dataSource,
         },
       ],
     }).compile();

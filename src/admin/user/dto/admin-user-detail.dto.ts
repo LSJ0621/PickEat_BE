@@ -4,8 +4,9 @@ export class AdminUserDetailDto {
   name: string | null;
   socialType: string | null;
   emailVerified: boolean;
-  createdAt: Date;
-  deletedAt: Date | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
   isDeactivated: boolean;
   preferences: {
     likes: string[];
@@ -28,14 +29,14 @@ export class AdminUserDetailDto {
       id: number;
       recommendations: string[];
       requestAddress: string;
-      createdAt: Date;
+      createdAt: string;
     }>;
     bugReports: Array<{
       id: number;
       title: string;
       category: string;
       status: string;
-      createdAt: Date;
+      createdAt: string;
     }>;
   };
 }

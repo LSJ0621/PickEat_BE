@@ -3,6 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { LocalStrategy } from '../../strategy/local.strategy';
 import { AuthService } from '../../auth.service';
 import { UserFactory } from '../../../../test/factories/entity.factory';
+import { ErrorCode } from '../../../common/constants/error-codes';
 
 describe('LocalStrategy', () => {
   let strategy: LocalStrategy;
@@ -33,7 +34,10 @@ describe('LocalStrategy', () => {
       const password = 'password123';
       const user = UserFactory.create({ email });
 
-      mockAuthService.validateUser.mockResolvedValue(user);
+      mockAuthService.validateUser.mockResolvedValue({
+        user,
+        reason: 'success',
+      });
 
       // Act
       const result = await strategy.validate(email, password);
@@ -51,14 +55,18 @@ describe('LocalStrategy', () => {
       const email = 'test@example.com';
       const password = 'wrong-password';
 
-      mockAuthService.validateUser.mockResolvedValue(null);
+      mockAuthService.validateUser.mockResolvedValue({
+        user: null,
+        reason: 'wrong_password',
+      });
 
       // Act & Assert
       await expect(strategy.validate(email, password)).rejects.toThrow(
-        UnauthorizedException,
-      );
-      await expect(strategy.validate(email, password)).rejects.toThrow(
-        '이메일 또는 비밀번호가 올바르지 않습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_INVALID_CREDENTIALS,
+          }),
+        }),
       );
       expect(mockAuthService.validateUser).toHaveBeenCalledWith(
         email,
@@ -71,7 +79,10 @@ describe('LocalStrategy', () => {
       const email = 'nonexistent@example.com';
       const password = 'password123';
 
-      mockAuthService.validateUser.mockResolvedValue(null);
+      mockAuthService.validateUser.mockResolvedValue({
+        user: null,
+        reason: 'not_found',
+      });
 
       // Act & Assert
       await expect(strategy.validate(email, password)).rejects.toThrow(
@@ -94,7 +105,10 @@ describe('LocalStrategy', () => {
 
       for (const email of emails) {
         const user = UserFactory.create({ email });
-        mockAuthService.validateUser.mockResolvedValue(user);
+        mockAuthService.validateUser.mockResolvedValue({
+          user,
+          reason: 'success',
+        });
 
         // Act
         const result = await strategy.validate(email, 'password');
@@ -109,7 +123,10 @@ describe('LocalStrategy', () => {
       const email = 'test@example.com';
       const password = '';
 
-      mockAuthService.validateUser.mockResolvedValue(null);
+      mockAuthService.validateUser.mockResolvedValue({
+        user: null,
+        reason: 'no_password',
+      });
 
       // Act & Assert
       await expect(strategy.validate(email, password)).rejects.toThrow(
@@ -126,7 +143,10 @@ describe('LocalStrategy', () => {
       const email = '';
       const password = 'password123';
 
-      mockAuthService.validateUser.mockResolvedValue(null);
+      mockAuthService.validateUser.mockResolvedValue({
+        user: null,
+        reason: 'not_found',
+      });
 
       // Act & Assert
       await expect(strategy.validate(email, password)).rejects.toThrow(

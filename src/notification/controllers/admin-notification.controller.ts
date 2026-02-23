@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -43,7 +44,7 @@ export class AdminNotificationController {
   ) {
     const adminUser = await this.userService.findByEmail(user.email);
     if (!adminUser) {
-      throw new Error('관리자 사용자를 찾을 수 없습니다.');
+      throw new NotFoundException('관리자 사용자를 찾을 수 없습니다.');
     }
     return this.notificationService.create(dto, adminUser);
   }

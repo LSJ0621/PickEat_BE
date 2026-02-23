@@ -56,11 +56,18 @@ export class GeminiPlacesService {
     const recommendations = restaurants.map((restaurant) => {
       const recommendation: GeminiPlaceRecommendation = {
         placeId: restaurant.placeId,
-        name: restaurant.name,
+        nameKo: restaurant.nameKo,
+        nameEn: restaurant.nameEn,
+        nameLocal: restaurant.nameLocal ?? null,
         reason: restaurant.reason,
+        reasonTags: Array.isArray(restaurant.reasonTags)
+          ? restaurant.reasonTags
+          : [],
         menuName,
         source: 'GEMINI',
-        address: restaurant.address,
+        addressKo: restaurant.addressKo,
+        addressEn: restaurant.addressEn,
+        addressLocal: restaurant.addressLocal ?? null,
         location:
           restaurant.latitude !== undefined &&
           restaurant.longitude !== undefined
@@ -69,11 +76,8 @@ export class GeminiPlacesService {
                 longitude: restaurant.longitude,
               }
             : undefined,
-        // Multilingual support
-        searchName: restaurant.localizedName || restaurant.name, // 블로그 검색용 (현지 언어 우선)
-        searchAddress: restaurant.localizedAddress || restaurant.address, // 블로그 검색용 (현지 언어 우선)
-        localizedName: restaurant.localizedName, // 사용자 언어 (UI용)
-        localizedAddress: restaurant.localizedAddress, // 사용자 언어 (UI용)
+        searchName: restaurant.nameLocal || restaurant.nameKo,
+        searchAddress: restaurant.addressLocal || restaurant.addressKo,
       };
 
       return recommendation;
@@ -85,7 +89,7 @@ export class GeminiPlacesService {
 
     return {
       recommendations,
-      searchEntryPointHtml: undefined, // Google ToS: 현재는 undefined, 향후 필요시 구현
+      searchEntryPointHtml: undefined,
       googleMapsWidgetContextToken,
     };
   }

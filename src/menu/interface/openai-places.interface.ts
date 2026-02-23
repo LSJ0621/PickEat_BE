@@ -22,5 +22,6 @@ export interface PlaceRecommendationsResponse {
     placeId: string;
     name: string;
     reason: string;
+    reasonTags: string[];
   }>;
 }

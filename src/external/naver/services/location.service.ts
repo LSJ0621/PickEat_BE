@@ -22,7 +22,7 @@ export class LocationService {
     longitude: number,
     includeRoadAddress: boolean = false,
   ): Promise<string> {
-    this.logger.log(`🔍 [역지오코딩 요청] lat=${latitude}, lng=${longitude}`);
+    this.logger.log(`[역지오코딩 요청] lat=${latitude}, lng=${longitude}`);
 
     try {
       const results = await this.naverMapClient.reverseGeocode(
@@ -42,13 +42,13 @@ export class LocationService {
         });
       }
 
-      this.logger.log(`✅ [역지오코딩 응답] address="${address}"`);
+      this.logger.log(`[역지오코딩 응답] address="${address}"`);
 
       return address;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
       this.logger.error(
-        `❌ [역지오코딩 에러] lat=${latitude}, lng=${longitude}, error=${message}`,
+        `[역지오코딩 에러] lat=${latitude}, lng=${longitude}, error=${message}`,
         error instanceof Error ? error.stack : undefined,
       );
       if (error instanceof BadRequestException) {

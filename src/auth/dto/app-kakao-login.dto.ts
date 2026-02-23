@@ -1,7 +1,8 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class AppKakaoLoginDto {
   @IsString()
+  @MaxLength(500)
   accessToken: string;
 
   @IsOptional()

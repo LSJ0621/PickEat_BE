@@ -66,6 +66,8 @@ export interface ResponsesApiOptions {
   model: string;
   input: string;
   tools?: ResponsesApiTool[];
+  /** 도구 호출 최대 횟수 (웹 검색 횟수 제한) */
+  max_tool_calls?: number;
 }
 
 /**

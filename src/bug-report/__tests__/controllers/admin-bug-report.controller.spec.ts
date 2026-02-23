@@ -32,7 +32,6 @@ describe('AdminBugReportController', () => {
     bugReportService = createMockService<BugReportService>([
       'findAll',
       'findOne',
-      'updateStatus',
       'findOneWithDetails',
       'updateStatusWithHistory',
     ]);
@@ -188,13 +187,13 @@ describe('AdminBugReportController', () => {
         description: 'Test Description',
         images: null,
         status: 'UNCONFIRMED',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         user: {
           id: 1,
           email: 'test@example.com',
           name: 'Test User',
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         statusHistory: [],
       };
@@ -214,13 +213,13 @@ describe('AdminBugReportController', () => {
         description: 'Test Description',
         images: null,
         status: 'UNCONFIRMED',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         user: {
           id: 1,
           email: 'test@example.com',
           name: 'Test User',
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         statusHistory: [],
       };
@@ -240,13 +239,13 @@ describe('AdminBugReportController', () => {
         description: 'Test Description',
         images: null,
         status: 'UNCONFIRMED',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         user: {
           id: 1,
           email: 'test@example.com',
           name: 'Test User',
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         statusHistory: [],
       };
@@ -270,13 +269,13 @@ describe('AdminBugReportController', () => {
           'https://s3.amazonaws.com/bug-reports/image2.png',
         ],
         status: 'UNCONFIRMED',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         user: {
           id: 1,
           email: 'test@example.com',
           name: 'Test User',
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         },
         statusHistory: [],
       };

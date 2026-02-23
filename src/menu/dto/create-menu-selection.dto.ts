@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -22,6 +23,7 @@ class MenuItemDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   name: string;
 }
 
@@ -32,7 +34,6 @@ export class CreateMenuSelectionDto {
   menus: MenuItemDto[];
 
   @IsOptional()
-  @Type(() => Number)
   @IsPositive()
   historyId?: number;
 }

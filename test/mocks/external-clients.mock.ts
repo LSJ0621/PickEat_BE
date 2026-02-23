@@ -210,101 +210,6 @@ export const mockKakaoOAuthResponses = {
 };
 
 /**
- * Mock responses for Kakao Local API
- */
-export const mockKakaoLocalResponses = {
-  addressSearchSuccess: {
-    documents: [
-      {
-        address_name: '서울특별시 강남구 역삼동',
-        address_type: 'REGION',
-        address: {
-          address_name: '서울특별시 강남구 역삼동',
-          region_1depth_name: '서울특별시',
-          region_2depth_name: '강남구',
-          region_3depth_name: '역삼동',
-        },
-        road_address: {
-          address_name: '서울특별시 강남구 테헤란로 123',
-          region_1depth_name: '서울특별시',
-          region_2depth_name: '강남구',
-          region_3depth_name: '역삼동',
-          road_name: '테헤란로',
-          zone_no: '06234',
-        },
-        x: '127.0398765',
-        y: '37.5012345',
-      },
-    ],
-    meta: {
-      total_count: 1,
-      pageable_count: 1,
-      is_end: true,
-    },
-  },
-};
-
-/**
- * Mock responses for Naver Search API
- */
-export const mockNaverSearchResponses = {
-  localSearchSuccess: {
-    lastBuildDate: '2024-01-01',
-    total: 10,
-    start: 1,
-    display: 5,
-    items: [
-      {
-        title: '<b>맛있는</b> 식당',
-        link: 'https://example.com',
-        category: '음식점>한식',
-        description: '맛있는 한식 전문점',
-        telephone: '02-1234-5678',
-        address: '서울특별시 강남구 역삼동 123-45',
-        roadAddress: '서울특별시 강남구 테헤란로 123',
-        mapx: '1270398765',
-        mapy: '375012345',
-      },
-    ],
-  },
-};
-
-/**
- * Mock responses for Naver Map API
- */
-export const mockNaverMapResponses = {
-  reverseGeocodeSuccess: {
-    status: { code: 0, name: 'ok', message: 'done' },
-    results: [
-      {
-        name: 'legalcode',
-        code: {
-          id: '1168010600',
-          type: 'L',
-          mappingId: '09680106',
-        },
-        region: {
-          area0: { name: 'kr', coords: { center: { x: 0, y: 0 } } },
-          area1: {
-            name: '서울특별시',
-            coords: { center: { x: 127.0398765, y: 37.5012345 } },
-          },
-          area2: {
-            name: '강남구',
-            coords: { center: { x: 127.0398765, y: 37.5012345 } },
-          },
-          area3: {
-            name: '역삼동',
-            coords: { center: { x: 127.0398765, y: 37.5012345 } },
-          },
-          area4: { name: '', coords: { center: { x: 0, y: 0 } } },
-        },
-      },
-    ],
-  },
-};
-
-/**
  * Mock responses for OpenAI API
  */
 export const mockOpenAIResponses = {
@@ -432,33 +337,6 @@ export function createMockKakaoOAuthClient() {
   return {
     getAccessToken: jest.fn(),
     getUserProfile: jest.fn(),
-  };
-}
-
-/**
- * Mock Kakao Local Client
- */
-export function createMockKakaoLocalClient() {
-  return {
-    searchAddress: jest.fn(),
-  };
-}
-
-/**
- * Mock Naver Search Client
- */
-export function createMockNaverSearchClient() {
-  return {
-    searchLocal: jest.fn(),
-  };
-}
-
-/**
- * Mock Naver Map Client
- */
-export function createMockNaverMapClient() {
-  return {
-    reverseGeocode: jest.fn(),
   };
 }
 

@@ -1,4 +1,22 @@
 /**
+ * Parsed restaurant response from Gemini JSON output
+ */
+export interface ParsedRestaurantResponse {
+  restaurants: Array<{
+    nameKo: string;
+    nameEn: string;
+    nameLocal?: string | null;
+    addressKo?: string;
+    addressEn?: string;
+    addressLocal?: string | null;
+    reason: string;
+    reasonTags?: string[];
+    latitude?: number;
+    longitude?: number;
+  }>;
+}
+
+/**
  * Gemini 클라이언트 설정
  */
 export interface GeminiClientConfig {
@@ -12,13 +30,16 @@ export interface GeminiClientConfig {
  * - GeminiRestaurantSearchResult.restaurants 배열 아이템 타입
  */
 export interface GeminiRestaurantResult {
-  name: string;
+  nameKo: string;
+  nameEn: string;
+  nameLocal?: string | null;
   reason: string;
-  address?: string;
+  reasonTags?: string[];
+  addressKo?: string;
+  addressEn?: string;
+  addressLocal?: string | null;
   latitude?: number;
   longitude?: number;
-  localizedName?: string;
-  localizedAddress?: string;
 }
 
 /**
@@ -27,14 +48,17 @@ export interface GeminiRestaurantResult {
 export interface GeminiSearchResponse {
   success: boolean;
   restaurants: Array<{
-    name: string;
+    nameKo: string;
+    nameEn: string;
+    nameLocal?: string | null;
     reason: string;
+    reasonTags?: string[];
     placeId: string | null; // Maps Grounding에서 제공되지 않으면 null
-    address?: string;
+    addressKo?: string;
+    addressEn?: string;
+    addressLocal?: string | null;
     latitude?: number;
     longitude?: number;
-    localizedName?: string;
-    localizedAddress?: string;
   }>;
   token?: string;
   googleMapsWidgetContextToken?: string;

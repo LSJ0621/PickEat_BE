@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TwoStageMenuService } from '../../services/two-stage-menu.service';
 import { Gpt4oMiniValidationService } from '../../gpt/gpt4o-mini-validation.service';
 import { Gpt51MenuService } from '../../gpt/gpt51-menu.service';
+import { GptWebSearchMenuService } from '../../gpt/gpt-web-search-menu.service';
 import { InvalidMenuRequestException } from '@/common/exceptions/invalid-menu-request.exception';
 import { createMockService } from '../../../../test/utils/test-helpers';
 
@@ -9,6 +10,7 @@ describe('TwoStageMenuService', () => {
   let service: TwoStageMenuService;
   let mockValidationService: jest.Mocked<Gpt4oMiniValidationService>;
   let mockMenuService: jest.Mocked<Gpt51MenuService>;
+  let mockGptWebSearchMenuService: jest.Mocked<GptWebSearchMenuService>;
 
   beforeEach(async () => {
     mockValidationService = createMockService<Gpt4oMiniValidationService>([
@@ -16,6 +18,10 @@ describe('TwoStageMenuService', () => {
     ]);
 
     mockMenuService = createMockService<Gpt51MenuService>([
+      'generateMenuRecommendations',
+    ]);
+
+    mockGptWebSearchMenuService = createMockService<GptWebSearchMenuService>([
       'generateMenuRecommendations',
     ]);
 
@@ -29,6 +35,10 @@ describe('TwoStageMenuService', () => {
         {
           provide: Gpt51MenuService,
           useValue: mockMenuService,
+        },
+        {
+          provide: GptWebSearchMenuService,
+          useValue: mockGptWebSearchMenuService,
         },
       ],
     }).compile();
@@ -66,8 +76,13 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-        reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+        intro: '한식을 좋아하시는 것 같아 추천드립니다.',
+        recommendations: [
+          { condition: '조건1', menu: '김치찌개' },
+          { condition: '조건2', menu: '된장찌개' },
+          { condition: '조건3', menu: '순두부찌개' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -87,6 +102,7 @@ describe('TwoStageMenuService', () => {
         prompt,
         likes,
         dislikes,
+        'ko',
       );
       expect(mockMenuService.generateMenuRecommendations).toHaveBeenCalledWith(
         prompt,
@@ -102,6 +118,9 @@ describe('TwoStageMenuService', () => {
           },
           suggestedCategories: ['한식', '중식', '일식'],
         },
+        'ko',
+        undefined,
+        undefined,
       );
     });
 
@@ -146,8 +165,12 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['마라탕', '팟타이'],
-        reason: '매운 음식을 좋아하시는 것 같아 추천드립니다.',
+        intro: '매운 음식을 좋아하시는 것 같아 추천드립니다.',
+        recommendations: [
+          { condition: '조건1', menu: '마라탕' },
+          { condition: '조건2', menu: '팟타이' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -176,6 +199,9 @@ describe('TwoStageMenuService', () => {
           },
           suggestedCategories: ['중식', '태국식'],
         },
+        'ko',
+        undefined,
+        undefined,
       );
     });
 
@@ -193,8 +219,12 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['김밥', '떡볶이'],
-        reason: '저렴하고 빠른 음식 추천드립니다.',
+        intro: '저렴하고 빠른 음식 추천드립니다.',
+        recommendations: [
+          { condition: '조건1', menu: '김밥' },
+          { condition: '조건2', menu: '떡볶이' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -225,8 +255,13 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['김치찌개', '마파두부', '라멘'],
-        reason: '다양한 음식을 추천드립니다.',
+        intro: '다양한 음식을 추천드립니다.',
+        recommendations: [
+          { condition: '조건1', menu: '김치찌개' },
+          { condition: '조건2', menu: '마파두부' },
+          { condition: '조건3', menu: '라멘' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -257,8 +292,9 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -279,6 +315,9 @@ describe('TwoStageMenuService', () => {
         dislikes,
         undefined,
         expect.any(Object),
+        'ko',
+        undefined,
+        undefined,
       );
     });
 
@@ -299,15 +338,18 @@ describe('TwoStageMenuService', () => {
         validationResult,
       );
       mockMenuService.generateMenuRecommendations.mockResolvedValue({
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '맛있게 드세요!',
       });
 
       const loggerSpy = jest.spyOn(service['logger'], 'log');
 
       await service.generateMenuRecommendations(prompt, likes, dislikes);
 
-      expect(loggerSpy).toHaveBeenCalledWith('[Stage 1] 요청 검증 시작');
+      expect(loggerSpy).toHaveBeenCalledWith(
+        '[Stage 1: 검증 시작] GPT-4o-mini',
+      );
     });
 
     it('should log Stage 1 success and Stage 2 start', async () => {
@@ -327,21 +369,18 @@ describe('TwoStageMenuService', () => {
         validationResult,
       );
       mockMenuService.generateMenuRecommendations.mockResolvedValue({
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '맛있게 드세요!',
       });
 
       const loggerSpy = jest.spyOn(service['logger'], 'log');
 
       await service.generateMenuRecommendations(prompt, likes, dislikes);
 
+      expect(loggerSpy).toHaveBeenCalledWith('[Stage 1: 검증 완료]');
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[Stage 1 success]'),
-      );
-      expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[Stage 2] Menu recommendation generation started',
-        ),
+        '[Stage 2: 추천 시작] GPT-5.1 + web_search',
       );
     });
 
@@ -359,8 +398,13 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [
+          { condition: '조건1', menu: '김치찌개' },
+          { condition: '조건2', menu: '된장찌개' },
+          { condition: '조건3', menu: '순두부찌개' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -372,12 +416,7 @@ describe('TwoStageMenuService', () => {
 
       await service.generateMenuRecommendations(prompt, likes, dislikes);
 
-      expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[Stage 2 complete]'),
-      );
-      expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Recommendation count: 3'),
-      );
+      expect(loggerSpy).toHaveBeenCalledWith('[Stage 2: 추천 완료]');
     });
 
     it('should log warning when Stage 1 validation fails', async () => {
@@ -404,7 +443,7 @@ describe('TwoStageMenuService', () => {
       ).rejects.toThrow(InvalidMenuRequestException);
 
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[Stage 1 validation failed]'),
+        '[Stage 1 validation failed] reason=음식과 관련 없는 요청입니다.',
       );
     });
 
@@ -452,8 +491,9 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -483,6 +523,9 @@ describe('TwoStageMenuService', () => {
           },
           suggestedCategories: ['한식'],
         },
+        'ko',
+        undefined,
+        undefined,
       );
     });
 
@@ -500,8 +543,9 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['샐러드'],
-        reason: '채식 메뉴 추천',
+        intro: '채식 메뉴 추천',
+        recommendations: [{ condition: '조건', menu: '샐러드' }],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -530,6 +574,9 @@ describe('TwoStageMenuService', () => {
           },
           suggestedCategories: [],
         },
+        'ko',
+        undefined,
+        undefined,
       );
     });
 
@@ -543,8 +590,12 @@ describe('TwoStageMenuService', () => {
       };
 
       const menuResult = {
-        recommendations: ['비빔밥', '김치찌개'],
-        reason: '다양한 메뉴 추천',
+        intro: '다양한 메뉴 추천',
+        recommendations: [
+          { condition: '조건1', menu: '비빔밥' },
+          { condition: '조건2', menu: '김치찌개' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockValidationService.validateMenuRequest.mockResolvedValue(
@@ -573,6 +624,9 @@ describe('TwoStageMenuService', () => {
           },
           suggestedCategories: [],
         },
+        'ko',
+        undefined,
+        undefined,
       );
     });
   });

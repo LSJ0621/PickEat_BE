@@ -1,18 +1,29 @@
 import { GoogleGenAI } from '@google/genai';
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { GEMINI_CONFIG, GEMINI_LOGGING } from '../gemini.constants';
 import {
-  GeminiGroundingMetadata,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  retryWithExponentialBackoff,
+  RetryOptions,
+} from '@/common/utils/retry.util';
+import { GEMINI_CONFIG } from '../gemini.constants';
+import {
   GeminiSearchResponse,
   GeminiApiResponse,
-  GeminiRestaurantResult,
+  ParsedRestaurantResponse,
 } from '../gemini.types';
 
 @Injectable()
 export class GeminiClient {
   private readonly logger = new Logger(GeminiClient.name);
-  private readonly genAI: GoogleGenAI;
+  private readonly genAI: GoogleGenAI | null = null;
+
+  private readonly retryOptions: RetryOptions = {
+    retryableStatusCodes: [429, 500, 502, 503, 504],
+  };
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('GOOGLE_GEMINI_API_KEY', '');
@@ -21,19 +32,17 @@ export class GeminiClient {
       this.logger.warn(
         'GOOGLE_GEMINI_API_KEY가 설정되지 않았습니다. Gemini 기능이 비활성화됩니다.',
       );
+      return;
     }
 
-    this.genAI = new GoogleGenAI({
-      apiKey: apiKey || 'dummy-key-for-initialization',
-    });
+    this.genAI = new GoogleGenAI({ apiKey });
   }
 
   /**
    * Gemini API 사용 가능 여부 확인
    */
   private isEnabled(): boolean {
-    const apiKey = this.config.get<string>('GOOGLE_GEMINI_API_KEY', '');
-    return !!apiKey;
+    return this.genAI !== null;
   }
 
   /**
@@ -48,28 +57,39 @@ export class GeminiClient {
     longitude: number,
     _language: 'ko' | 'en',
   ): Promise<GeminiSearchResponse> {
-    this.logger.log(`🚀 [Unified Search] 시작`);
-    this.logger.log(`  📍 좌표: (${latitude}, ${longitude})`);
+    if (!this.genAI) {
+      this.logger.warn('[Unified Search] Gemini 비활성화 상태. 빈 결과 반환.');
+      return { success: false, restaurants: [] };
+    }
+
+    const genAI = this.genAI;
+    this.logger.log(`[Unified Search] 시작`);
+    this.logger.log(`  좌표: (${latitude}, ${longitude})`);
 
     // 1️⃣ Gemini API 호출 (Search + Maps Grounding 동시 활성화)
     // maxOutputTokens 미설정: 기본값 65,535 사용 (Grounding 메타데이터 공간 확보)
-    const response = (await this.genAI.models.generateContent({
-      model: GEMINI_CONFIG.MODEL,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }, { googleMaps: {} }],
-        toolConfig: {
-          retrievalConfig: {
-            latLng: { latitude, longitude },
+    const response = (await retryWithExponentialBackoff(
+      () =>
+        genAI.models.generateContent({
+          model: GEMINI_CONFIG.MODEL,
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }, { googleMaps: {} }],
+            toolConfig: {
+              retrievalConfig: {
+                latLng: { latitude, longitude },
+              },
+            },
           },
-        },
-      },
-    })) as GeminiApiResponse;
+        }),
+      this.retryOptions,
+      this.logger,
+    )) as GeminiApiResponse;
 
     // 2️⃣ 토큰 사용량 로깅
     const usageMetadata = response.usageMetadata;
     if (usageMetadata) {
-      this.logger.log(`📊 [Unified Search] 토큰 사용량:`);
+      this.logger.log(`[Unified Search] 토큰 사용량:`);
       this.logger.log(
         `  입력: ${usageMetadata.promptTokenCount}, 출력: ${usageMetadata.candidatesTokenCount}`,
       );
@@ -94,25 +114,21 @@ export class GeminiClient {
     const token = groundingMetadata?.googleMapsWidgetContextToken;
 
     // 5️⃣ JSON 응답 파싱
-    const rawText = response.text;
+    const rawText =
+      response.text ?? response.candidates?.[0]?.content?.parts?.[0]?.text;
     const finishReason = response.candidates?.[0]?.finishReason;
-    this.logger.log(
-      `📦 [Unified Search] Gemini 응답 원본 (finishReason: ${finishReason}):\n${rawText}`,
+    this.logger.debug(
+      `[Unified Search] Gemini 응답 원본 (finishReason: ${finishReason}):\n${rawText}`,
     );
-    const jsonText = this.extractJsonFromText(rawText);
-
-    // 파싱 결과를 위한 명시적 타입 정의
-    interface ParsedRestaurantResponse {
-      restaurants: Array<{
-        name: string;
-        localizedName?: string;
-        address?: string;
-        localizedAddress?: string;
-        reason: string;
-        latitude?: number;
-        longitude?: number;
-      }>;
+    if (!rawText) {
+      this.logger.warn('[Unified Search] Gemini 응답 텍스트가 비어있습니다');
+      return {
+        success: false,
+        restaurants: [],
+        googleMapsWidgetContextToken: token,
+      };
     }
+    const jsonText = this.extractJsonFromText(rawText);
 
     let parsed: ParsedRestaurantResponse;
 
@@ -120,13 +136,13 @@ export class GeminiClient {
       parsed = JSON.parse(jsonText) as ParsedRestaurantResponse;
       // 유효성 검증: restaurants 필드가 배열인지 확인
       if (!parsed.restaurants || !Array.isArray(parsed.restaurants)) {
-        throw new Error(
+        throw new InternalServerErrorException(
           'Invalid response structure: restaurants is not an array',
         );
       }
     } catch (parseError) {
       this.logger.error(
-        `❌ [Unified Search] JSON 파싱 실패\n` +
+        `[Unified Search] JSON 파싱 실패\n` +
           `Error: ${parseError instanceof Error ? parseError.message : String(parseError)}\n` +
           `JSON preview: "${jsonText.substring(0, 300)}..."`,
       );
@@ -134,19 +150,20 @@ export class GeminiClient {
     }
 
     // 5-1️⃣ 파싱된 레스토랑 데이터 로깅 (디버깅용)
-    this.logger.log(`📝 [Unified Search] Gemini 응답 데이터:`);
+    this.logger.log(`[Unified Search] Gemini 응답 데이터:`);
     parsed.restaurants.forEach((r, index) => {
-      this.logger.log(`  [${index + 1}] ${r.name}`);
-      this.logger.log(`      - localizedName: ${r.localizedName}`);
-      this.logger.log(`      - address: ${r.address}`);
-      this.logger.log(`      - localizedAddress: ${r.localizedAddress}`);
+      this.logger.log(`  [${index + 1}] ${r.nameKo} / ${r.nameEn}`);
+      this.logger.log(`      - nameLocal: ${r.nameLocal}`);
+      this.logger.log(`      - addressKo: ${r.addressKo}`);
+      this.logger.log(`      - addressEn: ${r.addressEn}`);
+      this.logger.log(`      - addressLocal: ${r.addressLocal}`);
       this.logger.log(`      - reason: ${r.reason?.substring(0, 50)}...`);
       this.logger.log(`      - 좌표: (${r.latitude}, ${r.longitude})`);
     });
 
     // 5-2️⃣ Grounding Chunks 로깅 (placeId 매핑 확인용)
     if (groundingMetadata?.groundingChunks) {
-      this.logger.log(`📍 [Unified Search] Grounding Chunks (placeId 매핑):`);
+      this.logger.log(`[Unified Search] Grounding Chunks (placeId 매핑):`);
       groundingMetadata.groundingChunks.forEach((chunk, index) => {
         if (chunk.maps) {
           this.logger.log(`  [Maps ${index + 1}] ${chunk.maps.title}`);
@@ -159,34 +176,38 @@ export class GeminiClient {
       });
     }
 
-    // 6️⃣ placeId 매칭 (이름 기반 - localizedName 우선)
+    // 6️⃣ placeId 매칭 (이름 기반 - nameLocal 우선 → nameKo → nameEn)
     const restaurants = parsed.restaurants.map((r) => {
-      // localizedName이 있으면 우선 사용, 없으면 name 사용
-      // localizedName이 객체인 경우 문자열로 변환하지 않고 undefined 처리
-      const localizedNameLower =
-        typeof r.localizedName === 'string'
-          ? r.localizedName.toLowerCase()
-          : '';
-      const nameLower = r.name.toLowerCase();
+      const nameLocalLower =
+        typeof r.nameLocal === 'string' ? r.nameLocal.toLowerCase() : '';
+      const nameKoLower = r.nameKo.toLowerCase();
+      const nameEnLower = r.nameEn?.toLowerCase() ?? '';
       let placeId: string | null = null;
 
-      // localizedName으로 먼저 매칭 시도
-      if (localizedNameLower) {
+      // 1. nameLocal로 매칭 (Google Maps 등록명 = 현지 언어)
+      if (nameLocalLower) {
         for (const [key, value] of placeIdMap.entries()) {
-          if (
-            localizedNameLower.includes(key) ||
-            key.includes(localizedNameLower)
-          ) {
+          if (nameLocalLower.includes(key) || key.includes(nameLocalLower)) {
             placeId = value;
             break;
           }
         }
       }
 
-      // localizedName으로 매칭 실패 시 name으로 fallback
+      // 2. nameKo로 fallback (한국 가게는 nameLocal=null → 여기서 매칭)
       if (!placeId) {
         for (const [key, value] of placeIdMap.entries()) {
-          if (nameLower.includes(key) || key.includes(nameLower)) {
+          if (nameKoLower.includes(key) || key.includes(nameKoLower)) {
+            placeId = value;
+            break;
+          }
+        }
+      }
+
+      // 3. nameEn으로 최종 fallback
+      if (!placeId && nameEnLower) {
+        for (const [key, value] of placeIdMap.entries()) {
+          if (nameEnLower.includes(key) || key.includes(nameEnLower)) {
             placeId = value;
             break;
           }
@@ -194,26 +215,45 @@ export class GeminiClient {
       }
 
       return {
-        name: r.name,
-        localizedName: r.localizedName,
+        nameKo: r.nameKo,
+        nameEn: r.nameEn,
+        nameLocal: r.nameLocal,
         reason: r.reason,
+        reasonTags: Array.isArray(r.reasonTags) ? r.reasonTags : [],
         placeId,
-        address: r.address,
-        localizedAddress: r.localizedAddress,
+        addressKo: r.addressKo,
+        addressEn: r.addressEn,
+        addressLocal: r.addressLocal,
         latitude: r.latitude,
         longitude: r.longitude,
       };
     });
 
+    // 6-1️⃣ 단일 배치 내 placeId 중복 제거
+    const seenPlaceIds = new Set<string>();
+    const deduplicatedRestaurants = restaurants.filter((r) => {
+      if (!r.placeId) return true;
+      if (seenPlaceIds.has(r.placeId)) {
+        this.logger.warn(
+          `[Unified Search] 중복 placeId 제거: ${r.placeId} (${r.nameKo})`,
+        );
+        return false;
+      }
+      seenPlaceIds.add(r.placeId);
+      return true;
+    });
+
     // 7️⃣ 결과 로깅
-    const successCount = restaurants.filter((r) => r.placeId).length;
+    const successCount = deduplicatedRestaurants.filter(
+      (r) => r.placeId,
+    ).length;
     this.logger.log(
-      `✅ [Unified Search] 결과: ${successCount}/${restaurants.length}개 placeId 획득`,
+      `[Unified Search] 결과: ${successCount}/${deduplicatedRestaurants.length}개 placeId 획득`,
     );
 
     return {
       success: true,
-      restaurants,
+      restaurants: deduplicatedRestaurants,
       googleMapsWidgetContextToken: token,
     };
   }
@@ -266,7 +306,7 @@ export class GeminiClient {
 
     if (completeObjects.length > 0) {
       this.logger.warn(
-        `⚠️ [Gemini JSON 복구] ${completeObjects.length}개 레스토랑 복구 성공`,
+        `[Gemini JSON 복구] ${completeObjects.length}개 레스토랑 복구 성공`,
       );
       return JSON.stringify({ restaurants: completeObjects });
     }
@@ -287,7 +327,7 @@ export class GeminiClient {
       // Log warning if multiple code blocks detected
       if (allMatches.length > 1) {
         this.logger.warn(
-          `⚠️ [Gemini JSON 추출] 여러 개의 코드블록이 감지되었습니다 (count=${allMatches.length}). 유효한 JSON을 찾습니다.`,
+          `[Gemini JSON 추출] 여러 개의 코드블록이 감지되었습니다 (count=${allMatches.length}). 유효한 JSON을 찾습니다.`,
         );
       }
 
@@ -318,7 +358,7 @@ export class GeminiClient {
       }
 
       this.logger.warn(
-        `⚠️ [Gemini JSON 추출] 유효한 JSON 블록을 찾지 못했습니다. 가장 긴 블록을 반환합니다 (length=${longestMatch[1].length}).`,
+        `[Gemini JSON 추출] 유효한 JSON 블록을 찾지 못했습니다. 가장 긴 블록을 반환합니다 (length=${longestMatch[1].length}).`,
       );
       return longestMatch[1].trim();
     }
@@ -356,228 +396,5 @@ export class GeminiClient {
     }
 
     return text;
-  }
-
-  /**
-   * Grounding 분석 상세 로깅
-   */
-  private logGroundingAnalysis(
-    response: GeminiApiResponse,
-    parsedRestaurants: GeminiRestaurantResult[],
-    placeIdMap: Map<string, string>,
-    restaurants?: GeminiSearchResponse['restaurants'],
-  ): void {
-    const verbosity =
-      (process.env.GEMINI_LOG_VERBOSITY as
-        | 'minimal'
-        | 'normal'
-        | 'debug'
-        | undefined) || GEMINI_LOGGING.DEFAULT_VERBOSITY;
-
-    // minimal 모드는 로깅 생략 (성능 최적화)
-    if (verbosity === 'minimal') {
-      return;
-    }
-
-    // 공통으로 사용할 데이터 한 번만 추출
-    const groundingChunks =
-      response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    // Maps 또는 retrievedContext 데이터가 있는 chunk만 필터
-    // retrievedContext는 하위 호환성을 위해 유지 (deprecated)
-    const mapsChunks = groundingChunks.filter(
-      (chunk) => chunk.maps || chunk.retrievedContext,
-    );
-    const searchChunks = groundingChunks.filter((chunk) => chunk.web);
-
-    // debug 모드일 때만 상세 로그
-    if (verbosity === 'debug') {
-      // 1. Raw Response Preview
-      const rawText = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      this.logger.debug('[GEMINI:RESPONSE] 📄 Raw response preview', {
-        length: rawText.length,
-        preview: rawText.substring(
-          0,
-          GEMINI_LOGGING.RAW_RESPONSE_PREVIEW_LENGTH,
-        ),
-      });
-
-      // 2. Web Search Queries
-      const searchQueries =
-        response.candidates?.[0]?.groundingMetadata?.webSearchQueries || [];
-      this.logger.debug('[GEMINI:QUERIES] 🔎 Web search queries used', {
-        count: searchQueries.length,
-        queries: searchQueries,
-      });
-
-      // 3. Search Grounding chunks
-      this.logger.debug('[GEMINI:SEARCH_GROUNDING] 🌐 Web grounding chunks', {
-        count: searchChunks.length,
-        chunks: searchChunks.map((c) => ({
-          title: c.web?.title,
-          uri: c.web?.uri,
-        })),
-      });
-
-      // 4. Maps Grounding chunks
-      this.logger.debug('[GEMINI:MAPS_GROUNDING] 📍 Maps grounding chunks', {
-        count: mapsChunks.length,
-        chunks: mapsChunks.map((c) => ({
-          title: c.maps?.title ?? c.retrievedContext?.title,
-          placeId: c.maps?.placeId?.replace(/^places\//, '') ?? null,
-          uri: c.maps?.uri ?? c.retrievedContext?.uri,
-        })),
-      });
-
-      // 5. Grounding Supports
-      const supports =
-        response.candidates?.[0]?.groundingMetadata?.groundingSupports || [];
-      this.logger.debug('[GEMINI:SUPPORTS] 📊 Grounding supports analysis', {
-        totalCount: supports.length,
-        samples: supports
-          .slice(0, GEMINI_LOGGING.MAX_SUPPORTS_TO_LOG)
-          .map((s) => ({
-            segment: s.segment?.text?.substring(0, 100),
-            avgConfidence:
-              s.groundingChunkIndices?.length && s.confidenceScores?.length
-                ? s.confidenceScores.reduce((a, b) => a + b, 0) /
-                  s.confidenceScores.length
-                : null,
-          })),
-      });
-
-      // 6. Parsed Restaurants (Full JSON)
-      this.logger.debug(
-        '[GEMINI:PARSED_RESTAURANTS] 📥 Parsed restaurants from JSON',
-        {
-          count: parsedRestaurants.length,
-          restaurants: parsedRestaurants,
-        },
-      );
-
-      // 7. PlaceId Map
-      this.logger.debug(
-        '[GEMINI:PLACE_ID_MAP] 📍 Maps Grounding placeId mapping',
-        {
-          chunksCount: mapsChunks.length,
-          placeIdMap: Object.fromEntries(placeIdMap),
-        },
-      );
-
-      // 8. Individual Restaurant Matching
-      if (restaurants) {
-        restaurants.forEach((r, i) => {
-          this.logger.debug(
-            `[GEMINI:MATCHING:${i + 1}] 🍽️ Restaurant matching result`,
-            {
-              name: r.name,
-              placeId: r.placeId ?? 'null',
-              matched: r.placeId !== null,
-            },
-          );
-        });
-      }
-    }
-
-    // 6. PlaceId Matching Summary (normal, debug 모드)
-    const matched = Array.from(placeIdMap.values()).filter((v) => v).length;
-    const unmatched = parsedRestaurants
-      .filter((r) => !placeIdMap.get(r.name))
-      .map((r) => r.name);
-
-    this.logger.log('[GEMINI:MATCHING] 🔗 PlaceId matching summary', {
-      parsedRestaurants: parsedRestaurants.length,
-      mapsChunks: mapsChunks.length,
-      matched,
-      unmatched: unmatched.length,
-    });
-
-    if (unmatched.length > 0) {
-      this.logger.warn(
-        '[GEMINI:MATCHING] ⚠️ Unmatched restaurants (possible hallucinations)',
-        {
-          names: unmatched,
-        },
-      );
-    }
-
-    // 7. Result Count Analysis
-    this.logger.log('[GEMINI:RESULT] 📈 Count analysis', {
-      parsedFromJSON: parsedRestaurants.length,
-      webChunks: searchChunks.length,
-      mapsChunks: mapsChunks.length,
-      placeIdsMapped: matched,
-    });
-  }
-
-  /**
-   * groundingMetadata에서 placeId 추출 (통합 Grounding)
-   */
-  private extractGroundingData(metadata: GeminiGroundingMetadata | undefined): {
-    placeIdMap: Map<string, string>;
-  } {
-    const placeIdMap = new Map<string, string>();
-
-    if (!metadata?.groundingChunks) {
-      return { placeIdMap };
-    }
-
-    for (const chunk of metadata.groundingChunks) {
-      // Maps placeId 추출 (공식 문서: chunk.maps 사용)
-      if (chunk.maps?.placeId && chunk.maps?.title) {
-        // "places/ChIJ..." 와 "ChIJ..." 모두 처리
-        const placeId = chunk.maps.placeId.startsWith('places/')
-          ? chunk.maps.placeId.slice(7) // "places/" 제거 (7글자)
-          : chunk.maps.placeId;
-        // 대소문자 무관 매칭을 위해 소문자로 저장
-        placeIdMap.set(chunk.maps.title.toLowerCase(), placeId);
-      }
-    }
-
-    return { placeIdMap };
-  }
-
-  /**
-   * Rate Limit 에러 확인
-   */
-  private isRateLimitError(error: unknown): boolean {
-    if (typeof error === 'object' && error !== null) {
-      const errorMessage = (error as { message?: string }).message || '';
-      return (
-        errorMessage.includes('rate limit') ||
-        errorMessage.includes('quota exceeded') ||
-        errorMessage.includes('429')
-      );
-    }
-    return false;
-  }
-
-  /**
-   * Service Unavailable 에러 확인
-   */
-  private isServiceUnavailableError(error: unknown): boolean {
-    if (typeof error === 'object' && error !== null) {
-      const errorMessage = (error as { message?: string }).message || '';
-      return (
-        errorMessage.includes('service unavailable') ||
-        errorMessage.includes('503') ||
-        errorMessage.includes('500')
-      );
-    }
-    return false;
-  }
-
-  /**
-   * 에러 로깅
-   */
-  private logError(operation: string, prompt: string, error: unknown): void {
-    const message = error instanceof Error ? error.message : 'unknown error';
-
-    this.logger.error(
-      `❌ [${operation} 에러] prompt="${prompt.substring(0, 100)}...", error=${message}`,
-    );
-
-    if (error instanceof Error && error.stack) {
-      this.logger.error(`스택 트레이스: ${error.stack}`);
-    }
   }
 }

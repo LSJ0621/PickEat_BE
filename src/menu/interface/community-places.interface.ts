@@ -19,6 +19,7 @@ export interface CommunityPlaceRecommendationResult {
   name: string;
   address: string;
   matchReason: string;
+  matchReasonTags: string[];
   matchScore: number;
 }
 

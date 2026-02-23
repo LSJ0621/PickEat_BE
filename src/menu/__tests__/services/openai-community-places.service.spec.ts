@@ -438,7 +438,7 @@ describe('OpenAiCommunityPlacesService', () => {
         expect.stringContaining('[OpenAI 커뮤니티 장소 추천 요청 시작]'),
       );
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[OpenAI 토큰 사용량]'),
+        expect.stringContaining('[OpenAI token usage]'),
       );
       expect(loggerSpy).toHaveBeenCalledWith(
         expect.stringContaining('[OpenAI 커뮤니티 장소 추천 완료]'),

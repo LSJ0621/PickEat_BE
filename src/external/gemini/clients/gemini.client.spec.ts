@@ -54,13 +54,15 @@ describe('GeminiClient', () => {
         const jsonData = {
           restaurants: [
             {
-              name: '맛집1',
+              nameKo: '맛집1',
+              nameEn: 'Restaurant 1',
               reason: '맛있음',
-              address: '서울시',
+              addressKo: '서울시',
+              addressEn: 'Seoul',
               latitude: 37.5,
               longitude: 127.0,
-              localizedName: '맛집1',
-              localizedAddress: '서울시',
+              nameLocal: null,
+              addressLocal: null,
             },
           ],
         };
@@ -98,9 +100,9 @@ That's all!`;
 
         expect(result.restaurants).toHaveLength(1);
         expect(result.restaurants[0]).toMatchObject({
-          name: '맛집1',
+          nameKo: '맛집1',
           reason: '맛있음',
-          address: '서울시',
+          addressKo: '서울시',
         });
       });
 
@@ -108,13 +110,15 @@ That's all!`;
         const jsonData = {
           restaurants: [
             {
-              name: '식당A',
+              nameKo: '식당A',
+              nameEn: 'Restaurant A',
               reason: '신선함',
-              address: '부산시',
+              addressKo: '부산시',
+              addressEn: 'Busan',
               latitude: 35.1,
               longitude: 129.0,
-              localizedName: '식당A',
-              localizedAddress: '부산시',
+              nameLocal: null,
+              addressLocal: null,
             },
           ],
         };
@@ -149,20 +153,22 @@ ${JSON.stringify(jsonData)}
         );
 
         expect(result.restaurants).toHaveLength(1);
-        expect(result.restaurants[0].name).toBe('식당A');
+        expect(result.restaurants[0].nameKo).toBe('식당A');
       });
 
       it('should extract JSON object directly without code block', async () => {
         const jsonData = {
           restaurants: [
             {
-              name: '레스토랑1',
+              nameKo: '레스토랑1',
+              nameEn: 'Restaurant 1',
               reason: '분위기 좋음',
-              address: '대전시',
+              addressKo: '대전시',
+              addressEn: 'Daejeon',
               latitude: 36.3,
               longitude: 127.4,
-              localizedName: '레스토랑1',
-              localizedAddress: '대전시',
+              nameLocal: null,
+              addressLocal: null,
             },
           ],
         };
@@ -195,7 +201,7 @@ ${JSON.stringify(jsonData)}
         );
 
         expect(result.restaurants).toHaveLength(1);
-        expect(result.restaurants[0].name).toBe('레스토랑1');
+        expect(result.restaurants[0].nameKo).toBe('레스토랑1');
       });
     });
 
@@ -203,8 +209,8 @@ ${JSON.stringify(jsonData)}
       it('should recover truncated JSON with complete first object', async () => {
         const truncatedJson = `{
   "restaurants": [
-    {"name": "맛집1", "reason": "맛있음", "address": "서울시 강남구", "latitude": 37.5, "longitude": 127.0, "localizedName": "맛집1", "localizedAddress": "서울시 강남구"},
-    {"name": "맛집2", "reason": "신선함", "address": "서울시 서초구", "lat`;
+    {"nameKo": "맛집1", "nameEn": "Restaurant 1", "reason": "맛있음", "addressKo": "서울시 강남구", "addressEn": "Gangnam-gu, Seoul", "latitude": 37.5, "longitude": 127.0, "nameLocal": null, "addressLocal": null},
+    {"nameKo": "맛집2", "nameEn": "Restaurant 2", "reason": "신선함", "addressKo": "서울시 서초구", "lat`;
 
         const mockResponse: GeminiApiResponse = {
           text: truncatedJson,
@@ -234,9 +240,9 @@ ${JSON.stringify(jsonData)}
         // 첫 번째 완전한 객체만 복구되어야 함
         expect(result.restaurants).toHaveLength(1);
         expect(result.restaurants[0]).toMatchObject({
-          name: '맛집1',
+          nameKo: '맛집1',
           reason: '맛있음',
-          address: '서울시 강남구',
+          addressKo: '서울시 강남구',
         });
       });
 
@@ -244,8 +250,8 @@ ${JSON.stringify(jsonData)}
         const truncatedMarkdown = `\`\`\`json
 {
   "restaurants": [
-    {"name": "식당A", "reason": "깔끔함", "address": "부산 해운대", "latitude": 35.1, "longitude": 129.0, "localizedName": "식당A", "localizedAddress": "부산 해운대"},
-    {"name": "식당B", "reason": "저렴함", "address": "부산 남`;
+    {"nameKo": "식당A", "nameEn": "Restaurant A", "reason": "깔끔함", "addressKo": "부산 해운대", "addressEn": "Haeundae, Busan", "latitude": 35.1, "longitude": 129.0, "nameLocal": null, "addressLocal": null},
+    {"nameKo": "식당B", "nameEn": "Restaurant B", "reason": "저렴함", "addressKo": "부산 남`;
 
         const mockResponse: GeminiApiResponse = {
           text: truncatedMarkdown,
@@ -276,15 +282,15 @@ ${JSON.stringify(jsonData)}
         );
 
         expect(result.restaurants).toHaveLength(1);
-        expect(result.restaurants[0].name).toBe('식당A');
+        expect(result.restaurants[0].nameKo).toBe('식당A');
       });
 
       it('should recover multiple complete objects from truncated JSON', async () => {
         const truncatedJson = `{
   "restaurants": [
-    {"name": "A식당", "reason": "이유1", "address": "주소1", "latitude": 37.5, "longitude": 127.0, "localizedName": "A식당", "localizedAddress": "주소1"},
-    {"name": "B식당", "reason": "이유2", "address": "주소2", "latitude": 37.5, "longitude": 127.0, "localizedName": "B식당", "localizedAddress": "주소2"},
-    {"name": "C식당", "reason": "이유`;
+    {"nameKo": "A식당", "nameEn": "Restaurant A", "reason": "이유1", "addressKo": "주소1", "addressEn": "Address 1", "latitude": 37.5, "longitude": 127.0, "nameLocal": null, "addressLocal": null},
+    {"nameKo": "B식당", "nameEn": "Restaurant B", "reason": "이유2", "addressKo": "주소2", "addressEn": "Address 2", "latitude": 37.5, "longitude": 127.0, "nameLocal": null, "addressLocal": null},
+    {"nameKo": "C식당", "nameEn": "Restaurant C", "reason": "이유`;
 
         const mockResponse: GeminiApiResponse = {
           text: truncatedJson,
@@ -313,26 +319,29 @@ ${JSON.stringify(jsonData)}
 
         // 완전한 두 객체만 복구되어야 함
         expect(result.restaurants).toHaveLength(2);
-        expect(result.restaurants[0].name).toBe('A식당');
-        expect(result.restaurants[1].name).toBe('B식당');
+        expect(result.restaurants[0].nameKo).toBe('A식당');
+        expect(result.restaurants[1].nameKo).toBe('B식당');
       });
 
       it('should handle truncated JSON with nested objects', async () => {
         const truncatedJson = `{
   "restaurants": [
     {
-      "name": "복잡한식당",
+      "nameKo": "복잡한식당",
+      "nameEn": "Complex Restaurant",
       "reason": "좋아요",
-      "address": "서울 종로구",
+      "addressKo": "서울 종로구",
+      "addressEn": "Jongno-gu, Seoul",
       "latitude": 37.5,
       "longitude": 127.0,
-      "localizedName": {"ko": "복잡한식당", "en": "Complex Restaurant"},
-      "localizedAddress": {"ko": "서울 종로구", "en": "Jongno-gu, Seoul"}
+      "nameLocal": {"ko": "복잡한식당", "en": "Complex Restaurant"},
+      "addressLocal": {"ko": "서울 종로구", "en": "Jongno-gu, Seoul"}
     },
     {
-      "name": "다음식당",
+      "nameKo": "다음식당",
+      "nameEn": "Next Restaurant",
       "reason": "맛있음",
-      "address": "서울`;
+      "addressKo": "서울`;
 
         const mockResponse: GeminiApiResponse = {
           text: truncatedJson,
@@ -360,8 +369,8 @@ ${JSON.stringify(jsonData)}
         );
 
         expect(result.restaurants).toHaveLength(1);
-        expect(result.restaurants[0].name).toBe('복잡한식당');
-        expect(result.restaurants[0].localizedName).toEqual({
+        expect(result.restaurants[0].nameKo).toBe('복잡한식당');
+        expect(result.restaurants[0].nameLocal).toEqual({
           ko: '복잡한식당',
           en: 'Complex Restaurant',
         });
@@ -550,7 +559,7 @@ Now the actual data:
 \`\`\`json
 {
   "restaurants": [
-    {"name": "정상식당", "reason": "맛있음", "address": "서울시", "latitude": 37.5, "longitude": 127.0, "localizedName": "정상식당", "localizedAddress": "서울시"}
+    {"nameKo": "정상식당", "nameEn": "Normal Restaurant", "reason": "맛있음", "addressKo": "서울시", "addressEn": "Seoul", "latitude": 37.5, "longitude": 127.0, "nameLocal": null, "addressLocal": null}
   ]
 }
 \`\`\`
@@ -583,15 +592,15 @@ And some more text.`;
         );
 
         expect(result.restaurants).toHaveLength(1);
-        expect(result.restaurants[0].name).toBe('정상식당');
+        expect(result.restaurants[0].nameKo).toBe('정상식당');
       });
 
       it('should recover from truncated JSON in multiple code blocks', async () => {
         const multipleCodeBlocks = `\`\`\`json
 {
   "restaurants": [
-    {"name": "복구식당", "reason": "좋음", "address": "부산시", "latitude": 35.1, "longitude": 129.0, "localizedName": "복구식당", "localizedAddress": "부산시"},
-    {"name": "잘린식당", "reason": "맛있`;
+    {"nameKo": "복구식당", "nameEn": "Recovery Restaurant", "reason": "좋음", "addressKo": "부산시", "addressEn": "Busan", "latitude": 35.1, "longitude": 129.0, "nameLocal": null, "addressLocal": null},
+    {"nameKo": "잘린식당", "nameEn": "Truncated Restaurant", "reason": "맛있`;
 
         const mockResponse: GeminiApiResponse = {
           text: multipleCodeBlocks,
@@ -619,7 +628,7 @@ And some more text.`;
         );
 
         expect(result.restaurants).toHaveLength(1);
-        expect(result.restaurants[0].name).toBe('복구식당');
+        expect(result.restaurants[0].nameKo).toBe('복구식당');
       });
     });
   });
@@ -629,22 +638,26 @@ And some more text.`;
       const jsonData = {
         restaurants: [
           {
-            name: '맛집A',
+            nameKo: '맛집A',
+            nameEn: 'Restaurant A',
             reason: '맛있음',
-            address: '서울시',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: '맛집A',
-            localizedAddress: '서울시',
+            nameLocal: null,
+            addressLocal: null,
           },
           {
-            name: '맛집B',
+            nameKo: '맛집B',
+            nameEn: 'Restaurant B',
             reason: '분위기좋음',
-            address: '서울시',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: '맛집B',
-            localizedAddress: '서울시',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
       };
@@ -717,13 +730,15 @@ And some more text.`;
       const jsonData = {
         restaurants: [
           {
-            name: '매핑안됨식당',
+            nameKo: '매핑안됨식당',
+            nameEn: 'Unmapped Restaurant',
             reason: '맛있음',
-            address: '서울시',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: '매핑안됨식당',
-            localizedAddress: '서울시',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
       };
@@ -773,13 +788,15 @@ And some more text.`;
       const jsonData = {
         restaurants: [
           {
-            name: '식당1',
+            nameKo: '식당1',
+            nameEn: 'Restaurant 1',
             reason: '맛있음',
-            address: '서울시',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: '식당1',
-            localizedAddress: '서울시',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
       };
@@ -823,13 +840,15 @@ And some more text.`;
       const jsonData = {
         restaurants: [
           {
-            name: '식당1',
+            nameKo: '식당1',
+            nameEn: 'Restaurant 1',
             reason: '맛있음',
-            address: '서울시',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: '식당1',
-            localizedAddress: '서울시',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
       };

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { PreferencesRetryBatchScheduler } from './preferences-retry-batch.scheduler';
 import { PreferenceBatchService } from '../services/preference-batch.service';
 import {
@@ -20,6 +21,7 @@ describe('PreferencesRetryBatchScheduler', () => {
     submitRetryBatch: jest.Mock;
   };
   let mockMenuSelectionRepository: ReturnType<typeof createMockRepository>;
+  let dataSource: jest.Mocked<DataSource>;
 
   beforeEach(async () => {
     mockPreferenceBatchService = {
@@ -27,6 +29,16 @@ describe('PreferencesRetryBatchScheduler', () => {
     };
 
     mockMenuSelectionRepository = createMockRepository<MenuSelection>();
+
+    const mockQueryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      release: jest.fn().mockResolvedValue(undefined),
+    };
+
+    dataSource = {
+      createQueryRunner: jest.fn(() => mockQueryRunner),
+    } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +50,10 @@ describe('PreferencesRetryBatchScheduler', () => {
         {
           provide: getRepositoryToken(MenuSelection),
           useValue: mockMenuSelectionRepository,
+        },
+        {
+          provide: DataSource,
+          useValue: dataSource,
         },
       ],
     }).compile();

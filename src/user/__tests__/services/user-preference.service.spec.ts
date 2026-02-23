@@ -8,14 +8,26 @@ import {
   UserFactory,
   UserPreferencesFactory,
 } from '../../../../test/factories/entity.factory';
+import { RedisCacheService } from '@/common/cache/cache.service';
+import { UserTasteAnalysisService } from '../../services/user-taste-analysis.service';
 
 describe('UserPreferenceService', () => {
   let service: UserPreferenceService;
   let mockUserRepository: ReturnType<typeof createMockRepository<User>>;
+  let mockCacheService: Partial<RedisCacheService>;
+  let mockTasteAnalysisService: Partial<UserTasteAnalysisService>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
     mockUserRepository = createMockRepository<User>();
+    mockCacheService = {
+      getUserPreferences: jest.fn().mockResolvedValue(null),
+      setUserPreferences: jest.fn().mockResolvedValue(undefined),
+      invalidateUserPreferences: jest.fn().mockResolvedValue(undefined),
+    };
+    mockTasteAnalysisService = {
+      getByUserId: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -23,6 +35,14 @@ describe('UserPreferenceService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: mockUserRepository,
+        },
+        {
+          provide: RedisCacheService,
+          useValue: mockCacheService,
+        },
+        {
+          provide: UserTasteAnalysisService,
+          useValue: mockTasteAnalysisService,
         },
       ],
     }).compile();

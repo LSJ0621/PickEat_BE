@@ -4,10 +4,14 @@ import { Repository } from 'typeorm';
 import { UserPreferenceService } from './user-preference.service';
 import { User } from '../entities/user.entity';
 import { defaultUserPreferences } from '../interfaces/user-preferences.interface';
+import { RedisCacheService } from '@/common/cache/cache.service';
+import { UserTasteAnalysisService } from './user-taste-analysis.service';
 
 describe('UserPreferenceService', () => {
   let service: UserPreferenceService;
   let mockUserRepository: jest.Mocked<Repository<User>>;
+  let mockCacheService: Partial<RedisCacheService>;
+  let mockTasteAnalysisService: Partial<UserTasteAnalysisService>;
 
   const createMockUser = (preferences?: any): User => {
     return {
@@ -26,6 +30,14 @@ describe('UserPreferenceService', () => {
     mockUserRepository = {
       save: jest.fn(),
     } as any;
+    mockCacheService = {
+      getUserPreferences: jest.fn().mockResolvedValue(null),
+      setUserPreferences: jest.fn().mockResolvedValue(undefined),
+      invalidateUserPreferences: jest.fn().mockResolvedValue(undefined),
+    };
+    mockTasteAnalysisService = {
+      getByUserId: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -33,6 +45,14 @@ describe('UserPreferenceService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: mockUserRepository,
+        },
+        {
+          provide: RedisCacheService,
+          useValue: mockCacheService,
+        },
+        {
+          provide: UserTasteAnalysisService,
+          useValue: mockTasteAnalysisService,
         },
       ],
     }).compile();
@@ -321,32 +341,14 @@ describe('UserPreferenceService', () => {
       mockUserRepository.save.mockResolvedValue(user);
 
       // Act
-      const result = await service.updatePreferencesAnalysis(
-        user,
-        newAnalysis,
-        structuredAnalysis,
-      );
+      const result = await service.updatePreferencesAnalysis(user, newAnalysis);
 
       // Assert
       expect(user.preferences!.analysis).toBe(
         '한식, 특히 국물요리를 좋아하십니다.',
       );
-      expect(user.preferences!.structuredAnalysis).toEqual({
-        stablePatterns: {
-          categories: ['한식', '국물요리'],
-          flavors: ['담백한'],
-          cookingMethods: ['찌개', '국'],
-          confidence: 'high',
-        },
-        recentSignals: {
-          trending: ['중식'],
-          declining: [],
-        },
-        diversityHints: {
-          explorationAreas: ['일식'],
-          rotationSuggestions: ['양식'],
-        },
-      });
+      // structuredAnalysis is not saved by updatePreferencesAnalysis
+      expect(user.preferences!.structuredAnalysis).toBeUndefined();
       expect(user.preferences!.analysisVersion).toBe(3);
       expect(user.preferences!.lastAnalyzedAt).toBeDefined();
       expect(mockUserRepository.save).toHaveBeenCalledWith(user);
@@ -449,11 +451,7 @@ describe('UserPreferenceService', () => {
       mockUserRepository.save.mockResolvedValue(user);
 
       // Act
-      await service.updatePreferencesAnalysis(
-        user,
-        '새 분석',
-        incompleteStructured as any,
-      );
+      await service.updatePreferencesAnalysis(user, '새 분석');
 
       // Assert
       expect(user.preferences!.structuredAnalysis).toEqual({
@@ -543,18 +541,14 @@ describe('UserPreferenceService', () => {
       mockUserRepository.save.mockResolvedValue(user);
 
       // Act
-      await service.updatePreferencesAnalysis(
-        user,
-        '첫 분석',
-        structuredAnalysis,
-      );
+      await service.updatePreferencesAnalysis(user, '첫 분석');
 
       // Assert
       expect(user.preferences).toEqual({
         likes: [],
         dislikes: [],
         analysis: '첫 분석',
-        structuredAnalysis,
+        structuredAnalysis: undefined, // deprecated parameter is ignored
         lastAnalyzedAt: expect.any(String),
         analysisVersion: 1,
       });
@@ -584,28 +578,12 @@ describe('UserPreferenceService', () => {
       mockUserRepository.save.mockResolvedValue(user);
 
       // Act
-      await service.updatePreferencesAnalysis(
-        user,
-        '상세 분석',
-        structuredAnalysis,
-      );
+      await service.updatePreferencesAnalysis(user, '상세 분석');
 
       // Assert
-      expect(user.preferences!.structuredAnalysis).toEqual(structuredAnalysis);
-      expect(user.preferences!.structuredAnalysis!.stablePatterns).toEqual({
-        categories: ['한식', '중식'],
-        flavors: ['매운맛', '담백한맛'],
-        cookingMethods: ['찌개', '볶음'],
-        confidence: 'high',
-      });
-      expect(user.preferences!.structuredAnalysis!.recentSignals).toEqual({
-        trending: ['일식', '양식'],
-        declining: ['분식'],
-      });
-      expect(user.preferences!.structuredAnalysis!.diversityHints).toEqual({
-        explorationAreas: ['태국음식', '베트남음식'],
-        rotationSuggestions: ['이탈리안', '멕시칸'],
-      });
+      // structuredAnalysis parameter is deprecated and ignored (not saved)
+      expect(user.preferences!.structuredAnalysis).toBeUndefined();
+      expect(user.preferences!.analysis).toBe('상세 분석');
     });
   });
 

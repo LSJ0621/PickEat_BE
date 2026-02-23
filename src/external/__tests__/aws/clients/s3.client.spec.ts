@@ -169,7 +169,7 @@ describe('S3Client', () => {
         const result = await client.uploadBugReportImage(noExtFile);
 
         expect(mockS3Send).toHaveBeenCalledWith(expect.any(PutObjectCommand));
-        expect(result).toMatch(/\.testfile$/);
+        expect(result).toMatch(/\.jpg$/);
       });
 
       it('should generate unique key with timestamp and random string', async () => {
@@ -525,7 +525,7 @@ describe('S3Client', () => {
         const noExtFile = { ...mockFile, originalname: 'image_file' };
         const result = await client.uploadUserPlaceImage(noExtFile);
 
-        expect(result).toMatch(/\.image_file$/);
+        expect(result).toMatch(/\.jpg$/);
       });
 
       it('should handle file without mimetype gracefully', async () => {

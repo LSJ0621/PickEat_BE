@@ -110,6 +110,7 @@ describe('GoogleSearchClient', () => {
           headers: {
             Referer: mockConfig.APP_URL,
           },
+          timeout: 10000,
         },
       );
 

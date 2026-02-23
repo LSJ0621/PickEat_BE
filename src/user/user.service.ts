@@ -5,7 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import {
+  DataSource,
+  IsNull,
+  Not,
+  OptimisticLockVersionMismatchError,
+  Repository,
+} from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
@@ -18,6 +24,7 @@ import {
   AddressSearchResult,
 } from './interfaces/address-search-result.interface';
 import { UserPreferences } from './interfaces/user-preferences.interface';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import { AddressSearchService } from './services/address-search.service';
 import { UserAddressService } from './services/user-address.service';
 import { UserPreferenceService } from './services/user-preference.service';
@@ -33,6 +40,7 @@ export class UserService {
     private readonly addressSearchService: AddressSearchService,
     private readonly userAddressService: UserAddressService,
     private readonly userPreferenceService: UserPreferenceService,
+    private readonly cacheService: RedisCacheService,
   ) {}
 
   // ========== User CRUD ==========
@@ -58,10 +66,72 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  async findByEmailWithSelect(
+    email: string,
+    select: (keyof User)[],
+  ): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { email },
+      select,
+    });
+  }
+
+  async findByIdWithSelect(
+    id: number,
+    select: (keyof User)[],
+  ): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { id },
+      select,
+    });
+  }
+
+  async findByEmailWithPassword(email: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { email, password: Not(IsNull()) },
+    });
+  }
+
+  async findBySocialEmailWithDeleted(email: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { email, socialId: Not(IsNull()) },
+      withDeleted: true,
+    });
+  }
+
+  async updateRefreshTokenById(
+    id: number,
+    hashedToken: string | null,
+  ): Promise<void> {
+    await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ refreshToken: hashedToken })
+      .where('id = :id', { id })
+      .execute();
+  }
+
+  async restoreSocialUser(email: string): Promise<void> {
+    await this.userRepository.update(
+      { email },
+      { refreshToken: null, deletedAt: null },
+    );
+  }
+
   async updatePassword(user: User, hashedPassword: string): Promise<User> {
     user.password = hashedPassword;
     user.lastPasswordChangedAt = new Date();
-    return this.userRepository.save(user);
+
+    try {
+      return await this.userRepository.save(user);
+    } catch (error) {
+      if (error instanceof OptimisticLockVersionMismatchError) {
+        throw new BadRequestException({
+          errorCode: ErrorCode.USER_OPTIMISTIC_LOCK_FAILED,
+        });
+      }
+      throw error;
+    }
   }
 
   async markEmailVerified(email: string): Promise<void> {
@@ -152,6 +222,15 @@ export class UserService {
       user.reRegisterEmailVerified = false;
       await manager.save(user);
       await manager.softRemove(user);
+
+      // 사용자 관련 캐시 전체 무효화
+      Promise.allSettled([
+        this.cacheService.invalidateUserProfile(user.id),
+        this.cacheService.invalidateUserAddresses(user.id),
+        this.cacheService.invalidateUserPreferences(user.id),
+      ]).catch((err) => {
+        this.logger.warn(`사용자 캐시 무효화 실패: ${err}`);
+      });
     });
   }
 
@@ -159,6 +238,24 @@ export class UserService {
 
   async getEntityPreferences(entity: User): Promise<UserPreferences> {
     return this.userPreferenceService.getPreferences(entity);
+  }
+
+  async getEntityPreferencesByUserIds(
+    userIds: number[],
+  ): Promise<Map<number, UserPreferences>> {
+    if (userIds.length === 0) return new Map();
+
+    const users = await this.userRepository.findByIds(userIds);
+    const result = new Map<number, UserPreferences>();
+
+    await Promise.all(
+      users.map(async (user) => {
+        const prefs = await this.userPreferenceService.getPreferences(user);
+        result.set(user.id, prefs);
+      }),
+    );
+
+    return result;
   }
 
   async updateEntityPreferences(
@@ -176,38 +273,38 @@ export class UserService {
   async updateEntityPreferencesAnalysis(
     entity: User,
     analysis: string,
-    structuredAnalysis?: {
-      stablePatterns?: {
-        categories: string[];
-        flavors: string[];
-        cookingMethods: string[];
-        confidence: 'low' | 'medium' | 'high';
-      };
-      recentSignals?: {
-        trending: string[];
-        declining: string[];
-      };
-      diversityHints?: {
-        explorationAreas: string[];
-        rotationSuggestions: string[];
-      };
-    },
   ): Promise<UserPreferences> {
     return this.userPreferenceService.updatePreferencesAnalysis(
       entity,
       analysis,
-      structuredAnalysis,
     );
   }
 
   // ========== Language 관련 ==========
 
   async updateEntityLanguage(
-    entity: User,
+    email: string,
     language: 'ko' | 'en',
   ): Promise<void> {
-    entity.preferredLanguage = language;
-    await this.userRepository.save(entity);
+    const result = await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ preferredLanguage: language })
+      .where('email = :email', { email })
+      .returning('id')
+      .execute();
+
+    const raw = result.raw as Array<{ id: number }>;
+    if (!result.affected || result.affected === 0 || raw.length === 0) {
+      throw new NotFoundException({
+        errorCode: ErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    const userId = raw[0].id;
+    this.cacheService.invalidateUserProfile(userId).catch((err: Error) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
   }
 
   // ========== Address Search (위임) ==========
@@ -277,7 +374,24 @@ export class UserService {
 
   async updateEntityName(entity: User, name: string): Promise<User> {
     entity.name = name;
-    return this.userRepository.save(entity);
+
+    try {
+      const saved = await this.userRepository.save(entity);
+
+      // 프로필 캐시 무효화
+      this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+        this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+      });
+
+      return saved;
+    } catch (error) {
+      if (error instanceof OptimisticLockVersionMismatchError) {
+        throw new BadRequestException({
+          errorCode: ErrorCode.USER_OPTIMISTIC_LOCK_FAILED,
+        });
+      }
+      throw error;
+    }
   }
 
   // ========== User Profile Update (통합 메서드) ==========
@@ -286,7 +400,7 @@ export class UserService {
     userId: number,
     updates: {
       name?: string;
-      birthYear?: number;
+      birthDate?: string;
       gender?: 'male' | 'female' | 'other';
     },
   ): Promise<User> {
@@ -295,13 +409,29 @@ export class UserService {
     if (updates.name !== undefined) {
       user.name = updates.name;
     }
-    if (updates.birthYear !== undefined) {
-      user.birthYear = updates.birthYear;
+    if (updates.birthDate !== undefined) {
+      user.birthDate = updates.birthDate;
     }
     if (updates.gender !== undefined) {
       user.gender = updates.gender;
     }
 
-    return this.userRepository.save(user);
+    try {
+      const saved = await this.userRepository.save(user);
+
+      // 프로필 캐시 무효화
+      this.cacheService.invalidateUserProfile(userId).catch((err) => {
+        this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+      });
+
+      return saved;
+    } catch (error) {
+      if (error instanceof OptimisticLockVersionMismatchError) {
+        throw new BadRequestException({
+          errorCode: ErrorCode.USER_OPTIMISTIC_LOCK_FAILED,
+        });
+      }
+      throw error;
+    }
   }
 }

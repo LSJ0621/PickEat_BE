@@ -6,6 +6,7 @@ import {
   MenuSelectionStatus,
 } from '@/menu/entities/menu-selection.entity';
 import { UserService } from '@/user/user.service';
+import { UserTasteAnalysisService } from '@/user/services/user-taste-analysis.service';
 import { BatchJobService } from './batch-job.service';
 import { OpenAiBatchClient } from '@/external/openai/clients/openai-batch.client';
 import { BatchJob } from '../entities/batch-job.entity';
@@ -22,6 +23,9 @@ describe('PreferenceBatchService', () => {
     findOne: jest.Mock;
     updateEntityPreferencesAnalysis: jest.Mock;
     getEntityPreferences: jest.Mock;
+  };
+  let mockUserTasteAnalysisService: {
+    upsert: jest.Mock;
   };
 
   const mockBatchJob: BatchJob = {
@@ -51,6 +55,10 @@ describe('PreferenceBatchService', () => {
       getEntityPreferences: jest.fn(),
     };
 
+    mockUserTasteAnalysisService = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PreferenceBatchService,
@@ -61,6 +69,10 @@ describe('PreferenceBatchService', () => {
         {
           provide: UserService,
           useValue: mockUserService,
+        },
+        {
+          provide: UserTasteAnalysisService,
+          useValue: mockUserTasteAnalysisService,
         },
         {
           provide: BatchJobService,
@@ -116,10 +128,13 @@ describe('PreferenceBatchService', () => {
       expect(mockUserService.findOne).toHaveBeenCalledWith(1);
       expect(
         mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food', {
-        stablePatterns: undefined,
-        recentSignals: undefined,
-        diversityHints: undefined,
+      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food');
+      expect(mockUserTasteAnalysisService.upsert).toHaveBeenCalledWith(1, {
+        stablePatterns: null,
+        recentSignals: null,
+        diversityHints: null,
+        compactSummary: null,
+        analysisParagraphs: null,
       });
       expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
         [100, 101],
@@ -331,182 +346,19 @@ describe('PreferenceBatchService', () => {
       // Assert
       expect(
         mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food', {
-        stablePatterns: undefined,
-        recentSignals: undefined,
-        diversityHints: undefined,
-      });
-    });
-  });
-
-  describe('collectFailedSelectionsForRetry', () => {
-    it('should collect failed selections with retryCount less than maxRetries', async () => {
-      // Arrange
-      const mockQueryBuilder = createMockQueryBuilder<MenuSelection>();
-      const failedSelections: Partial<MenuSelection>[] = [
-        {
-          id: 1,
-          retryCount: 0,
-          status: MenuSelectionStatus.FAILED,
-          user: { id: 1, email: 'test@test.com' } as any,
-          menuPayload: {
-            breakfast: ['김치찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        },
-      ];
-
-      mockQueryBuilder.getMany.mockResolvedValue(
-        failedSelections as MenuSelection[],
-      );
-      mockMenuSelectionRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder,
-      );
-
-      // Act
-      const result = await service.collectFailedSelectionsForRetry(3);
-
-      // Assert
-      expect(result).toHaveLength(1);
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'selection.status = :status',
-        { status: MenuSelectionStatus.FAILED },
-      );
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'selection.retryCount < :maxRetries',
-        { maxRetries: 3 },
-      );
-    });
-  });
-
-  describe('buildBatchRequests', () => {
-    it('should include statistics in batch requests', async () => {
-      // Arrange
-      const mockUser = {
-        id: 1,
-        email: 'test@test.com',
-        preferredLanguage: 'ko',
-      } as any;
-
-      const groups = [
-        {
-          user: mockUser,
-          selections: [
-            { id: 100, selectedDate: '2024-01-15' } as MenuSelection,
-          ],
-          slotMenus: {
-            breakfast: [],
-            lunch: ['김치찌개'],
-            dinner: [],
-            etc: [],
-          },
-        },
-      ];
-
-      mockUserService.getEntityPreferences.mockResolvedValue({
-        likes: ['한식'],
-        dislikes: [],
-        analysis: '한식을 좋아하십니다.',
-      });
-
-      // Mock statistics calculation
-      const mockQueryBuilder = createMockQueryBuilder<MenuSelection>();
-      mockQueryBuilder.getRawOne.mockResolvedValue({ count: '10' });
-      mockMenuSelectionRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder,
-      );
-      mockMenuSelectionRepository.find.mockResolvedValue([]);
-
-      // Act
-      const result = await service.buildBatchRequests(groups);
-
-      // Assert
-      expect(result).toHaveLength(1);
-      expect(result[0].userPrompt).toContain('[Selection Statistics]');
-      expect(result[0].userPrompt).toContain('Total selection days:');
-      expect(result[0].userPrompt).toContain('Recent repeats (7d):');
-      expect(result[0].userPrompt).toContain('New trials (7d):');
-    });
-
-    it('should skip groups with no menus', async () => {
-      // Arrange
-      const groups = [
-        {
-          user: { id: 1, email: 'test@test.com' } as any,
-          selections: [{ id: 100 } as MenuSelection],
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        },
-      ];
-
-      // Act
-      const result = await service.buildBatchRequests(groups);
-
-      // Assert
-      expect(result).toHaveLength(0);
-    });
-
-    it('should build custom_id with correct format', async () => {
-      // Arrange
-      const mockUser = {
-        id: 5,
-        email: 'test@test.com',
-        preferredLanguage: 'ko',
-      } as any;
-
-      const groups = [
-        {
-          user: mockUser,
-          selections: [
-            { id: 100, selectedDate: '2024-01-15' } as MenuSelection,
-            { id: 101, selectedDate: '2024-01-16' } as MenuSelection,
-          ],
-          slotMenus: {
-            breakfast: [],
-            lunch: ['김치찌개'],
-            dinner: [],
-            etc: [],
-          },
-        },
-      ];
-
-      mockUserService.getEntityPreferences.mockResolvedValue({
-        likes: [],
-        dislikes: [],
-        analysis: undefined,
-      });
-
-      const mockQueryBuilder = createMockQueryBuilder<MenuSelection>();
-      mockQueryBuilder.getRawOne.mockResolvedValue({ count: '0' });
-      mockMenuSelectionRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder,
-      );
-      mockMenuSelectionRepository.find.mockResolvedValue([]);
-
-      // Act
-      const result = await service.buildBatchRequests(groups);
-
-      // Assert
-      expect(result[0].customId).toBe('pref_5_100,101');
-      expect(result[0].userId).toBe(5);
-      expect(result[0].selectionIds).toEqual([100, 101]);
+      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food');
     });
   });
 
   describe('processResults with structuredAnalysis', () => {
-    it('should pass structuredAnalysis to updateEntityPreferencesAnalysis when provided', async () => {
+    it('should pass structuredAnalysis to userTasteAnalysisService when provided', async () => {
       // Arrange
       const results = new Map<string, string>([
         [
           'pref_1_100',
           JSON.stringify({
             analysis: 'User likes Korean food',
+            compactSummary: 'Likes Korean food',
             stablePatterns: {
               categories: ['한식', '국물요리'],
               flavors: ['담백한'],
@@ -541,7 +393,8 @@ describe('PreferenceBatchService', () => {
       // Assert
       expect(
         mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes Korean food', {
+      ).toHaveBeenCalledWith(mockUser, 'User likes Korean food');
+      expect(mockUserTasteAnalysisService.upsert).toHaveBeenCalledWith(1, {
         stablePatterns: {
           categories: ['한식', '국물요리'],
           flavors: ['담백한'],
@@ -556,6 +409,8 @@ describe('PreferenceBatchService', () => {
           explorationAreas: ['일식'],
           rotationSuggestions: ['양식'],
         },
+        compactSummary: 'Likes Korean food',
+        analysisParagraphs: null,
       });
     });
 
@@ -581,10 +436,13 @@ describe('PreferenceBatchService', () => {
       // Assert
       expect(
         mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food', {
-        stablePatterns: undefined,
-        recentSignals: undefined,
-        diversityHints: undefined,
+      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food');
+      expect(mockUserTasteAnalysisService.upsert).toHaveBeenCalledWith(1, {
+        stablePatterns: null,
+        recentSignals: null,
+        diversityHints: null,
+        compactSummary: null,
+        analysisParagraphs: null,
       });
     });
   });

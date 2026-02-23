@@ -16,11 +16,7 @@ import { normalizePlaceId, parseUserPlaceId } from '@/menu/place-id.util';
 import { MenuRecommendationService } from '@/menu/services/menu-recommendation.service';
 import { GeminiPlacesService } from '@/menu/services/gemini-places.service';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
-import {
-  RedisCacheService,
-  CachedPlaceDetail,
-  CachedBlogSearchResult,
-} from '@/common/cache/cache.service';
+import { RedisCacheService } from '@/common/cache/cache.service';
 
 /**
  * 가게/장소 관련 서비스
@@ -88,24 +84,17 @@ export class PlaceService {
     return { places: result };
   }
 
-  async getPlaceDetail(placeId: string) {
+  async getPlaceDetail(placeId: string, language: 'ko' | 'en' = 'ko') {
     // UserPlace ID 체크
     const userPlaceId = parseUserPlaceId(placeId);
     if (userPlaceId !== null) {
       return this.getUserPlaceDetail(userPlaceId);
     }
 
-    // 캐시 확인
-    const cached = await this.cacheService.getPlaceDetail(placeId);
-    if (cached) {
-      return {
-        place: this.mapCachedToResponse(cached),
-      };
-    }
-
     // Google Places API 조회
     const place = await this.googlePlacesClient.getDetails(placeId, {
       includeBusinessStatus: true,
+      languageCode: language,
     });
 
     if (!place) {
@@ -116,36 +105,29 @@ export class PlaceService {
       place.photos,
     );
 
-    const placeDetail: CachedPlaceDetail = {
-      id: place.id ?? placeId,
-      name: place.displayName?.text ?? '',
-      address: place.formattedAddress ?? '',
-      location: place.location ?? { latitude: 0, longitude: 0 },
-      rating: place.rating ?? null,
-      userRatingCount: place.userRatingCount ?? null,
-      priceLevel: place.priceLevel ?? null,
-      businessStatus: place.businessStatus ?? null,
-      openNow: place.currentOpeningHours?.openNow ?? null,
-      photos: resolvedPhotos,
-      reviews:
-        place.reviews?.map((review) => ({
-          authorName: review.authorAttribution?.displayName ?? '',
-          rating: review.rating ?? 0,
-          text: review.originalText?.text ?? review.text?.text ?? '',
-          time: review.publishTime ?? '',
-        })) ?? null,
-      cachedAt: new Date().toISOString(),
-    };
-
-    // 캐시 저장 (비동기, 응답 속도에 영향 없음)
-    this.cacheService.setPlaceDetail(placeId, placeDetail).catch((err) => {
-      this.logger.error(
-        `Failed to cache place ${placeId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
-
     return {
-      place: this.mapCachedToResponse(placeDetail),
+      place: {
+        id: place.id ?? placeId,
+        name: place.displayName?.text ?? null,
+        localizedName: null,
+        address: place.formattedAddress ?? null,
+        localizedAddress: null,
+        location: place.location ?? null,
+        rating: place.rating ?? null,
+        userRatingCount: place.userRatingCount ?? null,
+        priceLevel: place.priceLevel ?? null,
+        businessStatus: place.businessStatus ?? null,
+        openNow: place.currentOpeningHours?.openNow ?? null,
+        photos: resolvedPhotos,
+        reviews:
+          place.reviews?.map((review) => ({
+            rating: review.rating ?? 0,
+            text: review.originalText?.text ?? review.text?.text ?? '',
+            authorName: review.authorAttribution?.displayName ?? '',
+            publishTime: review.publishTime ?? '',
+          })) ?? null,
+        source: PlaceRecommendationSource.GOOGLE,
+      },
     };
   }
 
@@ -163,7 +145,9 @@ export class PlaceService {
       place: {
         id: `user_place_${userPlace.id}`,
         name: userPlace.name,
+        localizedName: null,
         address: userPlace.address,
+        localizedAddress: null,
         location: {
           latitude: Number(userPlace.latitude),
           longitude: Number(userPlace.longitude),
@@ -185,33 +169,6 @@ export class PlaceService {
     };
   }
 
-  /**
-   * 캐시 데이터를 응답 형식으로 변환
-   */
-  private mapCachedToResponse(cached: CachedPlaceDetail) {
-    return {
-      id: cached.id,
-      name: cached.name,
-      address: cached.address,
-      location: cached.location,
-      rating: cached.rating,
-      userRatingCount: cached.userRatingCount,
-      priceLevel: cached.priceLevel,
-      businessStatus: cached.businessStatus,
-      openNow: cached.openNow,
-      photos: cached.photos,
-      reviews: cached.reviews
-        ? cached.reviews.map((review) => ({
-            rating: review.rating,
-            text: review.text,
-            authorName: review.authorName,
-            publishTime: review.time,
-          }))
-        : null,
-      source: PlaceRecommendationSource.GOOGLE,
-    };
-  }
-
   async searchRestaurantBlogs(
     query: string,
     restaurantName: string,
@@ -221,7 +178,6 @@ export class PlaceService {
   ) {
     // Determine language restrict code
     const options: { lr?: string; hl?: string } = {};
-    const resolvedLanguage = language ?? 'ko';
 
     if (language) {
       const restrictCode =
@@ -237,40 +193,12 @@ export class PlaceService {
     const queryAddress = searchAddress || query;
     const searchQuery = `${queryAddress} ${queryName}`;
 
-    // 캐시 확인
-    const cached = await this.cacheService.getBlogSearchResult(
-      searchQuery,
-      resolvedLanguage,
-    );
-    if (cached) {
-      this.logger.log(
-        `✅ [블로그 검색 캐시 HIT] query="${searchQuery}", language="${resolvedLanguage}"`,
-      );
-      return { blogs: cached.blogs };
-    }
-
-    // API 호출
-    this.logger.log(
-      `🔍 [블로그 검색 캐시 MISS] query="${searchQuery}", language="${resolvedLanguage}"`,
-    );
+    // API 호출 (캐싱 제거됨)
     const blogs = await this.googleSearchClient.searchBlogs(
       searchQuery,
       queryName,
       options,
     );
-
-    // 캐시 저장 (비동기, 응답 속도에 영향 없음)
-    const cacheData: CachedBlogSearchResult = {
-      blogs,
-      cachedAt: new Date().toISOString(),
-    };
-    this.cacheService
-      .setBlogSearchResult(searchQuery, resolvedLanguage, cacheData)
-      .catch((err) => {
-        this.logger.error(
-          `Failed to cache blog search "${searchQuery}": ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
 
     return { blogs };
   }
@@ -308,7 +236,10 @@ export class PlaceService {
     );
   }
 
-  async buildRecommendationDetailResponse(recommendation: MenuRecommendation) {
+  async buildRecommendationDetailResponse(
+    recommendation: MenuRecommendation,
+    language: 'ko' | 'en' = 'ko',
+  ) {
     const base = {
       id: recommendation.id,
       prompt: recommendation.prompt,
@@ -341,69 +272,6 @@ export class PlaceService {
       userPlaces.forEach((up) => userPlacesMap.set(up.id, up));
     }
 
-    // Google Place IDs만 추출
-    const googlePlaceIds = placeRecs
-      .filter((pr) => parseUserPlaceId(pr.placeId) === null)
-      .map((pr) => pr.placeId);
-
-    // 배치 캐시 조회
-    const cachedPlaces =
-      await this.cacheService.getPlaceDetailsBatch(googlePlaceIds);
-
-    // 캐시 미스된 Place IDs
-    const missedPlaceIds = googlePlaceIds.filter((id) => !cachedPlaces.has(id));
-
-    // API 호출하여 미스된 데이터 가져오기
-    const newCachedPlaces = new Map<string, CachedPlaceDetail>();
-    if (missedPlaceIds.length > 0) {
-      await Promise.all(
-        missedPlaceIds.map(async (placeId) => {
-          try {
-            const detail = await this.googlePlacesClient.getDetails(placeId);
-            if (detail) {
-              const resolvedPhotos =
-                await this.googlePlacesClient.resolvePhotoUris(detail.photos);
-
-              const cachedDetail: CachedPlaceDetail = {
-                id: detail.id ?? placeId,
-                name: detail.displayName?.text ?? '',
-                address: detail.formattedAddress ?? '',
-                location: detail.location ?? { latitude: 0, longitude: 0 },
-                rating: detail.rating ?? null,
-                userRatingCount: detail.userRatingCount ?? null,
-                priceLevel: detail.priceLevel ?? null,
-                businessStatus: detail.businessStatus ?? null,
-                openNow: detail.currentOpeningHours?.openNow ?? null,
-                photos: resolvedPhotos,
-                reviews:
-                  detail.reviews?.map((review) => ({
-                    authorName: review.authorAttribution?.displayName ?? '',
-                    rating: review.rating ?? 0,
-                    text: review.originalText?.text ?? review.text?.text ?? '',
-                    time: review.publishTime ?? '',
-                  })) ?? null,
-                cachedAt: new Date().toISOString(),
-              };
-
-              newCachedPlaces.set(placeId, cachedDetail);
-              cachedPlaces.set(placeId, cachedDetail);
-            }
-          } catch (error) {
-            this.logger.warn(`Failed to fetch place ${placeId}: ${error}`);
-          }
-        }),
-      );
-
-      // 새로 가져온 데이터 배치 캐싱 (비동기)
-      if (newCachedPlaces.size > 0) {
-        this.cacheService.setPlaceDetailsBatch(newCachedPlaces).catch((err) => {
-          this.logger.error(
-            `Failed to batch cache places: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
-      }
-    }
-
     const places = placeRecs.map((pr) => {
       const userPlaceId = parseUserPlaceId(pr.placeId);
 
@@ -412,15 +280,18 @@ export class PlaceService {
         const userPlace = userPlacesMap.get(userPlaceId);
 
         if (!userPlace) {
-          return this.buildEmptyPlaceResponse(pr);
+          return this.buildDbFallbackPlaceResponse(pr, language);
         }
 
         return {
           placeId: pr.placeId,
           reason: pr.reason,
+          reasonTags: pr.reasonTags ?? [],
           menuName: pr.menuName,
           name: userPlace.name,
+          localizedName: null,
           address: userPlace.address,
+          localizedAddress: null,
           rating: null,
           userRatingCount: null,
           priceLevel: null,
@@ -434,34 +305,8 @@ export class PlaceService {
         };
       }
 
-      // Google Places 처리 (캐시에서)
-      const cached = cachedPlaces.get(pr.placeId);
-      if (!cached) {
-        return this.buildEmptyPlaceResponse(pr);
-      }
-
-      return {
-        placeId: pr.placeId,
-        reason: pr.reason,
-        menuName: pr.menuName,
-        name: cached.name,
-        address: cached.address,
-        rating: cached.rating,
-        userRatingCount: cached.userRatingCount,
-        priceLevel: cached.priceLevel,
-        businessStatus: cached.businessStatus,
-        openNow: cached.openNow,
-        photos: cached.photos,
-        reviews: cached.reviews
-          ? cached.reviews.map((review) => ({
-              rating: review.rating,
-              text: review.text,
-              authorName: review.authorName,
-              publishTime: review.time,
-            }))
-          : null,
-        source: PlaceRecommendationSource.GOOGLE,
-      };
+      // Google Places 처리 (DB 데이터만 사용, 캐시 제거됨)
+      return this.buildDbFallbackPlaceResponse(pr, language);
     });
 
     return {
@@ -470,13 +315,29 @@ export class PlaceService {
     };
   }
 
-  private buildEmptyPlaceResponse(pr: PlaceRecommendation) {
+  private buildDbFallbackPlaceResponse(
+    pr: PlaceRecommendation,
+    language: 'ko' | 'en',
+  ) {
+    const name = language === 'ko' ? (pr.nameKo ?? null) : (pr.nameEn ?? null);
+    const address =
+      language === 'ko' ? (pr.addressKo ?? null) : (pr.addressEn ?? null);
+    const localizedName =
+      pr.nameLocal ??
+      (language === 'ko' ? (pr.nameEn ?? null) : (pr.nameKo ?? null));
+    const localizedAddress =
+      pr.addressLocal ??
+      (language === 'ko' ? (pr.addressEn ?? null) : (pr.addressKo ?? null));
+
     return {
       placeId: pr.placeId,
       reason: pr.reason,
+      reasonTags: pr.reasonTags ?? [],
       menuName: pr.menuName,
-      name: null,
-      address: null,
+      name,
+      localizedName,
+      address,
+      localizedAddress,
       rating: null,
       userRatingCount: null,
       priceLevel: null,
@@ -484,7 +345,7 @@ export class PlaceService {
       openNow: null,
       photos: [],
       reviews: null,
-      source: PlaceRecommendationSource.GOOGLE,
+      source: pr.source ?? PlaceRecommendationSource.GOOGLE,
     };
   }
 
@@ -558,26 +419,46 @@ export class PlaceService {
     );
 
     if (validRecommendations.length === 0) {
-      this.logger.warn('⚠️ [Gemini] placeId가 있는 추천 결과 없음');
+      this.logger.warn('[Gemini] placeId가 있는 추천 결과 없음');
     }
 
     this.logger.log(
-      `✅ [Gemini 가게 추천 완료] total=${geminiResponse.recommendations.length}, valid=${validRecommendations.length}`,
+      `[Gemini 가게 추천 완료] total=${geminiResponse.recommendations.length}, valid=${validRecommendations.length}`,
     );
 
-    // Persist PlaceRecommendations to database
+    // Persist PlaceRecommendations to database (PickEat 자체 데이터만)
     const recommendationEntities = validRecommendations.map((rec) =>
       this.placeRecommendationRepository.create({
         menuRecommendation: menuRecord,
         placeId: normalizePlaceId(rec.placeId!), // Non-null guaranteed by filter
         reason: rec.reason,
+        reasonTags: Array.isArray(rec.reasonTags) ? rec.reasonTags : [],
         menuName,
+        // NEW: 다국어 저장
+        nameKo: rec.nameKo,
+        nameEn: rec.nameEn,
+        nameLocal: rec.nameLocal ?? null,
+        addressKo: rec.addressKo ?? null,
+        addressEn: rec.addressEn ?? null,
+        addressLocal: rec.addressLocal ?? null,
+        placeLatitude: rec.location?.latitude ?? null,
+        placeLongitude: rec.location?.longitude ?? null,
       }),
     );
 
-    await this.placeRecommendationRepository.save(recommendationEntities);
-
-    this.logger.log(`💾 [DB 저장 완료] count=${recommendationEntities.length}`);
+    try {
+      await this.placeRecommendationRepository.save(recommendationEntities);
+      this.logger.log(
+        `💾 [DB 저장 완료] menuRecommendationId=${menuRecord.id}, menuName="${menuName}", count=${recommendationEntities.length}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ [DB 저장 실패] menuRecommendationId=${menuRecord.id}, menuName="${menuName}", count=${recommendationEntities.length}, error=${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.PLACE_RECOMMENDATION_SAVE_FAILED,
+      });
+    }
 
     return geminiResponse;
   }

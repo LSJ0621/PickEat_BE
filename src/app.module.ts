@@ -17,8 +17,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ExternalModule } from './external/external.module';
 import { MenuModule } from './menu/menu.module';
 import { NotificationModule } from './notification/notification.module';
-import { SearchModule } from './search/search.module';
 import { UserModule } from './user/user.module';
+import { RatingModule } from './rating/rating.module';
 import { UserPlaceModule } from './user-place/user-place.module';
 
 @Module({
@@ -49,7 +49,7 @@ import { UserPlaceModule } from './user-place/user-place.module';
     MenuModule,
     BatchModule,
     NotificationModule,
-    SearchModule,
+    RatingModule,
   ],
   controllers: [],
   providers: [

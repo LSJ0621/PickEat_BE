@@ -3,6 +3,6 @@ export class AdminUserListItemDto {
   email: string;
   name: string | null;
   socialType: string | null;
-  createdAt: Date;
+  createdAt: string;
   status: 'active' | 'deleted' | 'deactivated';
 }

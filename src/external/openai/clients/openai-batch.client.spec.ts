@@ -394,7 +394,7 @@ describe('OpenAiBatchClient', () => {
 
       // Act & Assert
       await expect(client.downloadResults('file-123')).rejects.toThrow(
-        'OpenAI client is not initialized. Check OPENAI_API_KEY.',
+        '필수 환경변수가 설정되지 않았습니다: OPENAI_API_KEY',
       );
     });
   });

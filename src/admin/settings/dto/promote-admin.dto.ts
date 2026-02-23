@@ -4,6 +4,7 @@ import {
   IsInt,
   IsOptional,
   IsPositive,
+  MaxLength,
   Validate,
   ValidateIf,
   ValidationArguments,
@@ -39,6 +40,7 @@ export class PromoteAdminDto {
   @ValidateIf((o) => !o.userId)
   @IsEmail()
   @IsOptional()
+  @MaxLength(255)
   email?: string;
 
   @IsEnum(ADMIN_ROLES)

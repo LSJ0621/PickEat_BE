@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   HttpException,
   HttpStatus,
@@ -9,13 +8,13 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { DataSource } from 'typeorm';
 import { AuthTokenService } from '../../services/auth-token.service';
 import { JwtTokenProvider } from '../../provider/jwt-token.provider';
 import { UserService } from '@/user/user.service';
-import { User } from '@/user/entities/user.entity';
-import { createMockRepository } from '../../../../test/mocks/repository.mock';
 import { UserFactory } from '../../../../test/factories/entity.factory';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
+import { ErrorCode } from '@/common/constants/error-codes';
 
 /**
  * Helper function to compute SHA-256 hash like the service does
@@ -26,12 +25,13 @@ function hashTokenForStorage(token: string): string {
 
 describe('AuthTokenService', () => {
   let service: AuthTokenService;
-  let mockUserRepository: ReturnType<typeof createMockRepository<User>>;
   let mockJwtService: jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>;
   let mockJwtTokenProvider: jest.Mocked<
     Pick<JwtTokenProvider, 'createToken' | 'createRefreshToken'>
   >;
-  let mockUserService: jest.Mocked<Pick<UserService, 'findByEmail'>>;
+  let mockUserService: jest.Mocked<
+    Pick<UserService, 'findByEmail' | 'updateRefreshTokenById'>
+  >;
   let mockQueryBuilder: {
     update: jest.Mock;
     set: jest.Mock;
@@ -75,15 +75,6 @@ describe('AuthTokenService', () => {
     // Clear all mock calls before each test
     jest.clearAllMocks();
 
-    mockUserRepository = createMockRepository<User>();
-    mockUserRepository.createQueryBuilder = jest
-      .fn()
-      .mockReturnValue(mockQueryBuilder);
-    (mockUserRepository as any).manager = {
-      connection: {
-        createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner),
-      },
-    };
     mockJwtService = {
       sign: jest.fn(),
       verify: jest.fn(),
@@ -96,7 +87,10 @@ describe('AuthTokenService', () => {
     >;
     mockUserService = {
       findByEmail: jest.fn(),
-    } as jest.Mocked<Pick<UserService, 'findByEmail'>>;
+      updateRefreshTokenById: jest.fn().mockResolvedValue(undefined),
+    } as jest.Mocked<
+      Pick<UserService, 'findByEmail' | 'updateRefreshTokenById'>
+    >;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -114,8 +108,10 @@ describe('AuthTokenService', () => {
           useValue: mockUserService,
         },
         {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
+          provide: DataSource,
+          useValue: {
+            createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner),
+          },
         },
         {
           provide: ConfigService,
@@ -165,7 +161,7 @@ describe('AuthTokenService', () => {
         'test@example.com',
         'USER',
       );
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalled();
     });
 
     it('should persist hashed refresh token to database', async () => {
@@ -184,10 +180,10 @@ describe('AuthTokenService', () => {
 
       // Assert
       expect(bcrypt.hash).toHaveBeenCalledWith(sha256Hash, 10);
-      expect(mockQueryBuilder.set).toHaveBeenCalledWith({
-        refreshToken: hashedToken,
-      });
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
+        user.id,
+        hashedToken,
+      );
     });
   });
 
@@ -206,13 +202,10 @@ describe('AuthTokenService', () => {
 
       // Assert
       expect(bcrypt.hash).toHaveBeenCalledWith(sha256Hash, 10);
-      expect(mockQueryBuilder.set).toHaveBeenCalledWith({
-        refreshToken: hashedToken,
-      });
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith('id = :id', {
-        id: user.id,
-      });
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
+        user.id,
+        hashedToken,
+      );
     });
 
     it('should set refresh token to null when null is provided', async () => {
@@ -223,10 +216,10 @@ describe('AuthTokenService', () => {
       await service.persistRefreshToken(user, null);
 
       // Assert
-      expect(mockQueryBuilder.set).toHaveBeenCalledWith({
-        refreshToken: null,
-      });
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
+        user.id,
+        null,
+      );
     });
   });
 
@@ -291,7 +284,11 @@ describe('AuthTokenService', () => {
         UnauthorizedException,
       );
       await expect(service.refreshAccessToken('invalid-token')).rejects.toThrow(
-        '유효하지 않은 refresh token입니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+          }),
+        }),
       );
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
@@ -312,7 +309,11 @@ describe('AuthTokenService', () => {
         UnauthorizedException,
       );
       await expect(service.refreshAccessToken('token')).rejects.toThrow(
-        '사용자를 찾을 수 없습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.USER_NOT_FOUND,
+          }),
+        }),
       );
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
@@ -334,7 +335,11 @@ describe('AuthTokenService', () => {
         UnauthorizedException,
       );
       await expect(service.refreshAccessToken('token')).rejects.toThrow(
-        '유효하지 않은 refresh token입니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+          }),
+        }),
       );
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
@@ -357,7 +362,11 @@ describe('AuthTokenService', () => {
         UnauthorizedException,
       );
       await expect(service.refreshAccessToken('wrong-token')).rejects.toThrow(
-        '유효하지 않은 refresh token입니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+          }),
+        }),
       );
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
@@ -410,24 +419,13 @@ describe('AuthTokenService', () => {
       mockQueryBuilder.getOne.mockResolvedValue(user);
 
       // Act & Assert
-      try {
-        await service.refreshAccessToken('valid-token');
-        fail('Should have thrown HttpException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(HttpException);
-        const httpError = error as HttpException;
-        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
-        const response = httpError.getResponse() as {
-          statusCode: number;
-          message: string;
-          error: string;
-        };
-        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
-        expect(response.message).toBe(
-          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
-        );
-        expect(response.error).toBe('USER_DEACTIVATED');
-      }
+      await expect(service.refreshAccessToken('valid-token')).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
+          }),
+        }),
+      );
       expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
       expect(mockQueryRunner.release).toHaveBeenCalled();
     });
@@ -463,10 +461,10 @@ describe('AuthTokenService', () => {
         'test@example.com',
       );
       expect(bcrypt.compare).toHaveBeenCalledWith(sha256Hash, 'hashed-token');
-      expect(mockQueryBuilder.set).toHaveBeenCalledWith({
-        refreshToken: null,
-      });
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
+        user.id,
+        null,
+      );
     });
 
     it('should do nothing when no refresh token is provided', async () => {
@@ -476,7 +474,7 @@ describe('AuthTokenService', () => {
       // Assert
       expect(mockJwtService.verify).not.toHaveBeenCalled();
       expect(mockUserService.findByEmail).not.toHaveBeenCalled();
-      expect(mockQueryBuilder.execute).not.toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
     });
 
     it('should not throw error when JWT verification fails during logout', async () => {
@@ -503,7 +501,7 @@ describe('AuthTokenService', () => {
       await service.logout('token');
 
       // Assert
-      expect(mockQueryBuilder.execute).not.toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
     });
 
     it('should not clear token when user has no refresh token', async () => {
@@ -521,7 +519,7 @@ describe('AuthTokenService', () => {
       await service.logout('token');
 
       // Assert
-      expect(mockQueryBuilder.execute).not.toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
     });
 
     it('should not clear token when token does not match', async () => {
@@ -540,7 +538,7 @@ describe('AuthTokenService', () => {
       await service.logout('wrong-token');
 
       // Assert
-      expect(mockQueryBuilder.execute).not.toHaveBeenCalled();
+      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,5 +1,12 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsNotEmpty, IsString, validateSync } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  validateSync,
+} from 'class-validator';
 
 enum NodeEnv {
   Development = 'development',
@@ -150,23 +157,6 @@ class EnvironmentVariables {
   @IsNotEmpty()
   OAUTH_GOOGLE_REDIRECT_URI: string;
 
-  // Naver API
-  @IsString()
-  @IsNotEmpty()
-  NAVER_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  NAVER_CLIENT_SECRET: string;
-
-  @IsString()
-  @IsNotEmpty()
-  NAVER_MAP_CLIENT_ID: string;
-
-  @IsString()
-  @IsNotEmpty()
-  NAVER_MAP_CLIENT_SECRET: string;
-
   // Docker Compose / Monitoring
   @IsString()
   @IsNotEmpty()
@@ -219,6 +209,15 @@ class EnvironmentVariables {
   @IsNotEmpty()
   DISCORD_BUG_REPORT_WEBHOOK_URL: string;
 
+  // Gemini API (optional: AI place recommendation feature, fallback to OpenAI if not provided)
+  @IsOptional()
+  @IsString()
+  GOOGLE_GEMINI_API_KEY?: string;
+
+  @IsOptional()
+  @IsIn(['minimal', 'normal', 'debug'])
+  GEMINI_LOG_VERBOSITY?: string;
+
   // Address Search Provider (optional, defaults to 'kakao')
   ADDRESS_SEARCH_PROVIDER?: string;
 }
@@ -234,6 +233,9 @@ export function validate(config: Record<string, unknown>) {
 
   if (errors.length > 0) {
     const missingKeys = errors.map((error) => error.property);
+    // NestJS ConfigModule의 validate 함수는 Error를 throw해야 앱 시작을 중단시킵니다.
+    // InternalServerErrorException 대신 일반 Error를 사용하는 이유:
+    // validate()는 NestJS 부트스트랩 전에 실행되어 HttpException이 처리되지 않기 때문입니다.
     throw new Error(
       `필수 환경 변수가 설정되지 않았습니다: ${missingKeys.join(', ')}`,
     );

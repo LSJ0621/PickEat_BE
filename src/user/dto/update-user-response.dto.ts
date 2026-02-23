@@ -1,5 +1,5 @@
 export class UpdateUserResponseDto {
   name: string | null;
-  birthYear: number | null;
+  birthDate: string | null;
   gender: 'male' | 'female' | 'other' | null;
 }

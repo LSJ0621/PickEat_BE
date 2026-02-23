@@ -5,6 +5,6 @@ export class AdminListItemDto {
   email: string;
   name: string | null;
   role: Role;
-  lastLoginAt: Date | null;
-  createdAt: Date;
+  lastLoginAt: string | null;
+  createdAt: string;
 }

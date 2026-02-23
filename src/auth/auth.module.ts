@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { join } from 'path';
+import { AUTH_TIMING } from '@/common/constants/business.constants';
 import { User } from '@/user/entities/user.entity';
 import { UserModule } from '@/user/user.module';
 import { AuthController } from './auth.controller';
@@ -15,6 +16,7 @@ import { EmailVerification } from './entities/email-verification.entity';
 import { JwtTokenProvider } from './provider/jwt-token.provider';
 import { AuthSocialService } from './services/auth-social.service';
 import { AuthTokenService } from './services/auth-token.service';
+import { EmailNotificationService } from './services/email-notification.service';
 import { EmailVerificationService } from './services/email-verification.service';
 import { JwtStrategy } from './strategy/jwt.strategy';
 import { LocalStrategy } from './strategy/local.strategy';
@@ -30,7 +32,7 @@ import { LocalStrategy } from './strategy/local.strategy';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '15m' },
+        signOptions: { expiresIn: AUTH_TIMING.ACCESS_TOKEN_EXPIRES },
       }),
     }),
     MailerModule.forRootAsync({
@@ -50,9 +52,10 @@ import { LocalStrategy } from './strategy/local.strategy';
           from: `"PickEat" <${config.get<string>('EMAIL_ADDRESS')}>`,
         },
         template: {
+          // process.cwd() is intentional: returns Node.js process root, not an env variable
           dir: join(
             process.cwd(),
-            process.env.NODE_ENV === 'production' ? 'dist' : 'src',
+            config.get('NODE_ENV') === 'production' ? 'dist' : 'src',
             'auth',
             'templates',
           ),
@@ -73,6 +76,7 @@ import { LocalStrategy } from './strategy/local.strategy';
     LocalStrategy,
     JwtTokenProvider,
     EmailVerificationService,
+    EmailNotificationService,
   ],
   exports: [JwtStrategy],
 })

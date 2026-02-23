@@ -6,6 +6,7 @@ import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity'
 import { UserPlace } from './entities/user-place.entity';
 import { UserPlaceRejectionHistory } from './entities/user-place-rejection-history.entity';
 import { UserPlaceService } from './user-place.service';
+import { AdminUserPlaceService } from './services/admin-user-place.service';
 import { UserPlaceController } from './user-place.controller';
 import { AdminUserPlaceController } from './controllers/admin-user-place.controller';
 
@@ -20,7 +21,7 @@ import { AdminUserPlaceController } from './controllers/admin-user-place.control
     AwsModule,
   ],
   controllers: [UserPlaceController, AdminUserPlaceController],
-  providers: [UserPlaceService],
+  providers: [UserPlaceService, AdminUserPlaceService],
   exports: [UserPlaceService],
 })
 export class UserPlaceModule {}

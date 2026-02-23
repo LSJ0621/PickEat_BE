@@ -65,33 +65,37 @@ export function buildUnifiedGroundingPrompt(
 - 영업 중인 가게 우선
 
 ## 출력 필드 설명
-- name: 가게명 (한국어) - UI 표시에 사용
-- localizedName: 가게명 (현지 언어, Google Maps 등록명) - 블로그 검색에 사용
-- address: 주소 (한국어) - UI 표시에 사용
-- localizedAddress: 주소 (현지 언어, 입력된 주소의 국가 언어로 작성) - 블로그 검색에 사용
-- reason: 이 가게를 추천하는 상세한 이유 (한국어, 300-500자)
+- nameKo: 가게명 (한국어)
+- nameEn: 가게명 (영어 번역)
+- nameLocal: 가게명 (가게 소재국의 현지 언어, Google Maps 등록명). **단, 가게가 한국에 있으면 null, 영어권 국가에 있으면 null**
+- addressKo: 주소 (한국어)
+- addressEn: 주소 (영어 번역)
+- addressLocal: 주소 (가게 소재국의 현지 언어만 사용). **단, 가게가 한국에 있으면 null, 영어권 국가에 있으면 null**
+- reason: 추천 이유 (150-200자, 핵심 강점 1-2가지를 간결하게)
+- reasonTags: 가게의 핵심 특징 키워드 2-3개 배열
 - latitude: 위도 (소수점 6자리)
 - longitude: 경도 (소수점 6자리)
 
 ## reason 작성 가이드
-- 최소 300자 이상 작성 (필수)
-- 구조: [대표 메뉴 소개] → [가게 특징/유명한 이유] → [방문 추천 이유]
-- 포함해야 할 내용:
-  1. 시그니처 메뉴 또는 인기 메뉴 (맛, 조리법, 재료 특징)
-  2. 가게가 유명한 이유 (리뷰에서 자주 언급되는 포인트, 평점, 미디어 노출 등)
-  3. 가게 분위기, 서비스 특징, 가격대 정보
-  4. 이 가게를 방문해야 하는 종합적인 이유
+- 150-200자 내로 작성
+- 핵심 강점 1-2가지를 간결하게 작성
 - 존댓말 사용
 - 구체적인 정보를 기반으로 작성 (추측이나 가정 금지)
 - Google Search에서 찾은 실제 정보만 활용
 
+## reasonTags 작성 가이드
+- 가게의 핵심 특징을 2-3개 키워드로 요약
+- 각 태그는 10자 이내
+- 예시: ["시그니처 짬뽕", "매운맛 강추", "재방문 높음"]
+
 ## 출력 형식 (JSON)
-{"restaurants":[{"name":"교동짬뽕","localizedName":"교동짬뽕","address":"경기도 남양주시 와부읍 덕소리 474-8","localizedAddress":"경기도 남양주시 와부읍 덕소리 474-8","reason":"추천 이유","latitude":37.123456,"longitude":127.123456}]}
+{"restaurants":[{"nameKo":"교동짬뽕","nameEn":"Gyodong Jjamppong","nameLocal":null,"addressKo":"경기도 남양주시 와부읍 덕소리 474-8","addressEn":"474-8 Deokso-ri, Wabu-eup, Namyangju-si","addressLocal":null,"reason":"해산물이 풍부한 짬뽕이 대표 메뉴로, 얼큰한 국물 맛이 일품이에요.","reasonTags":["시그니처 짬뽕","매운맛 강추","재방문 높음"],"latitude":37.123456,"longitude":127.123456}]}
 
 ## 중요
 - Google Maps에서 확인되지 않은 가게는 절대 포함하지 마세요
 - 추천할 가게가 없으면 빈 배열 반환
-- 반드시 JSON 형식으로만 응답`;
+- 반드시 JSON 형식으로만 응답
+- 응답 직전에 nameKo가 한국어, nameEn이 영어, nameLocal이 현지 언어(한국/영어권이면 null)인지 확인하세요`;
   }
 
   // English version
@@ -114,31 +118,35 @@ export function buildUnifiedGroundingPrompt(
 - Prioritize currently open restaurants
 
 ## Output Field Descriptions
-- name: Restaurant name (English) - used for UI display
-- localizedName: Restaurant name (local language, as registered on Google Maps) - used for blog search
-- address: Address (English) - used for UI display
-- localizedAddress: Address (local language, in the official language of the input address's country) - used for blog search
-- reason: Detailed reason for recommending (English, 300-500 characters)
+- nameKo: Restaurant name (Korean)
+- nameEn: Restaurant name (English)
+- nameLocal: Restaurant name (local language of the country, as registered on Google Maps). **Set to null if the restaurant is in Korea or an English-speaking country**
+- addressKo: Address (Korean)
+- addressEn: Address (English)
+- addressLocal: Address in PURE local language only. **Set to null if the restaurant is in Korea or an English-speaking country**
+- reason: Recommendation reason (150-200 characters, focus on 1-2 key strengths concisely)
+- reasonTags: Array of 2-3 keyword tags highlighting key features
 - latitude: Latitude (6 decimal places)
 - longitude: Longitude (6 decimal places)
 
 ## Reason Writing Guide
-- Write at least 300 characters (required)
-- Structure: [Signature menu] → [Restaurant features/popularity] → [Visit recommendation]
-- Include:
-  1. Signature or popular menu items (taste, cooking method, ingredient features)
-  2. Why the restaurant is famous (common review points, ratings, media coverage)
-  3. Atmosphere, service features, price range
-  4. Comprehensive reason to visit
+- Write 150-200 characters
+- Focus on 1-2 key strengths concisely
 - Use polite language
 - Write based on concrete information only (no assumptions)
 - Use only actual information found via Google Search
 
+## ReasonTags Writing Guide
+- Summarize key features in 2-3 keyword tags
+- Each tag should be 10 characters or less
+- Example: ["signature jjamppong", "spicy flavor", "high revisit"]
+
 ## Output Format (JSON)
-{"restaurants":[{"name":"local name","localizedName":"English name","address":"local address","localizedAddress":"English address","reason":"recommendation reason","latitude":37.123456,"longitude":127.123456}]}
+{"restaurants":[{"nameKo":"교동짬뽕","nameEn":"Gyodong Jjamppong","nameLocal":null,"addressKo":"경기도 남양주시 와부읍 덕소리 474-8","addressEn":"474-8 Deokso-ri, Wabu-eup, Namyangju-si","addressLocal":null,"reason":"Famous for their spicy seafood noodle soup with rich broth and generous portions.","reasonTags":["signature jjamppong","spicy flavor","high revisit"],"latitude":37.123456,"longitude":127.123456}]}
 
 ## Important
 - Never include restaurants not verified on Google Maps
 - Return empty array if no recommendable restaurants
-- Respond only in JSON format`;
+- Respond only in JSON format
+- Before outputting, verify: nameKo is Korean, nameEn is English, nameLocal is the local language (null for Korea/English-speaking countries)`;
 }

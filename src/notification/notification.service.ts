@@ -146,68 +146,6 @@ export class NotificationService {
   }
 
   /**
-   * 공개용 공지사항 목록 조회 (고정 우선, 발행일 순)
-   */
-  async findPublished(
-    queryDto: NotificationListQueryDto,
-  ): Promise<PaginatedResponse<Notification>> {
-    const { page = 1, limit = 20, type } = queryDto;
-
-    const qb = this.notificationRepository
-      .createQueryBuilder('notification')
-      .where('notification.status = :status', {
-        status: NotificationStatus.PUBLISHED,
-      })
-      .orderBy('notification.isPinned', 'DESC')
-      .addOrderBy('notification.publishedAt', 'DESC');
-
-    if (type !== undefined) {
-      qb.andWhere('notification.type = :type', { type });
-    }
-
-    const skip = (page - 1) * limit;
-    qb.skip(skip).take(limit);
-
-    const [items, totalCount] = await qb.getManyAndCount();
-
-    const hasNext = skip + items.length < totalCount;
-
-    const pageInfo: PageInfo = {
-      page,
-      limit,
-      totalCount,
-      hasNext,
-    };
-
-    return { items, pageInfo };
-  }
-
-  /**
-   * 공개용 공지사항 상세 조회
-   */
-  async findOnePublished(id: number): Promise<Notification> {
-    const notification = await this.notificationRepository.findOne({
-      where: { id, status: NotificationStatus.PUBLISHED },
-    });
-
-    if (!notification) {
-      throw new NotFoundException({
-        message: `공지사항을 찾을 수 없습니다. (ID: ${id})`,
-        errorCode: ErrorCode.NOTIFICATION_NOT_FOUND,
-      });
-    }
-
-    return notification;
-  }
-
-  /**
-   * 조회수 증가 (atomic increment)
-   */
-  async incrementViewCount(id: number): Promise<void> {
-    await this.notificationRepository.increment({ id }, 'viewCount', 1);
-  }
-
-  /**
    * 예약된 공지사항 발행 처리
    * SCHEDULED 상태이고 scheduledAt이 현재 시간 이하인 공지사항을 PUBLISHED로 변경
    */

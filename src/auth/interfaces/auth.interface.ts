@@ -13,6 +13,9 @@ export interface AuthResult {
   longitude: number | null;
   name: string | null;
   preferences: UserPreferences | null;
+  birthDate: string | null;
+  gender: 'male' | 'female' | 'other' | null;
+  preferredLanguage: 'ko' | 'en';
 }
 
 /**
@@ -24,6 +27,9 @@ export interface AuthProfile {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  birthDate: string | null;
+  gender: 'male' | 'female' | 'other' | null;
+  preferredLanguage: 'ko' | 'en';
 }
 
 /**

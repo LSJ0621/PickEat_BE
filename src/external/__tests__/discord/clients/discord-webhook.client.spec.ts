@@ -231,203 +231,152 @@ describe('DiscordWebhookClient', () => {
     });
 
     describe('error handling', () => {
-      it('should throw ExternalApiException on 400 Bad Request', async () => {
+      it('should silently handle 400 Bad Request', async () => {
         const error = createAxiosError(400, 'Bad Request');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 401 Unauthorized', async () => {
+      it('should silently handle 401 Unauthorized', async () => {
         const error = createAxiosError(401, 'Unauthorized');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 403 Forbidden', async () => {
+      it('should silently handle 403 Forbidden', async () => {
         const error = createAxiosError(403, 'Forbidden');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 404 Not Found (invalid webhook)', async () => {
+      it('should silently handle 404 Not Found (invalid webhook)', async () => {
         const error = createAxiosError(404, 'Not Found');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 429 Rate Limit', async () => {
+      it('should silently handle 429 Rate Limit', async () => {
         const error = createAxiosError(429, 'Too Many Requests', {
           retry_after: 1.5,
           global: false,
         });
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 500 Internal Server Error', async () => {
+      it('should silently handle 500 Internal Server Error', async () => {
         const error = createAxiosError(500, 'Internal Server Error');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 502 Bad Gateway', async () => {
+      it('should silently handle 502 Bad Gateway', async () => {
         const error = createAxiosError(502, 'Bad Gateway');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on 503 Service Unavailable', async () => {
+      it('should silently handle 503 Service Unavailable', async () => {
         const error = createAxiosError(503, 'Service Unavailable');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on network error', async () => {
+      it('should silently handle network error', async () => {
         const error = new Error('Network Error');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on timeout', async () => {
+      it('should silently handle timeout', async () => {
         const error = new Error('ETIMEDOUT') as Error & { code: string };
         error.code = 'ETIMEDOUT';
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on connection refused', async () => {
+      it('should silently handle connection refused', async () => {
         const error = new Error('ECONNREFUSED') as Error & { code: string };
         error.code = 'ECONNREFUSED';
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on DNS resolution failure', async () => {
+      it('should silently handle DNS resolution failure', async () => {
         const error = new Error('ENOTFOUND') as Error & { code: string };
         error.code = 'ENOTFOUND';
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should include provider info in exception', async () => {
+      it('should silently handle server errors', async () => {
         const error = createAxiosError(500, 'Internal Server Error');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        try {
-          await client.sendMessage(mockPayload);
-          fail('Should have thrown');
-        } catch (e) {
-          expect(e).toBeInstanceOf(ExternalApiException);
-          expect((e as ExternalApiException).provider).toBe('Discord');
-        }
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should include original error in exception', async () => {
+      it('should silently handle original error', async () => {
         const originalError = createAxiosError(400, 'Bad Request');
         httpService.post.mockReturnValue(throwError(() => originalError));
 
-        try {
-          await client.sendMessage(mockPayload);
-          fail('Should have thrown');
-        } catch (e) {
-          expect(e).toBeInstanceOf(ExternalApiException);
-          expect((e as ExternalApiException).originalError).toBe(originalError);
-        }
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should include custom error message in exception', async () => {
+      it('should silently handle all errors for non-critical feature', async () => {
         const error = createAxiosError(404, 'Not Found');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        try {
-          await client.sendMessage(mockPayload);
-          fail('Should have thrown');
-        } catch (e) {
-          expect(e).toBeInstanceOf(ExternalApiException);
-          const response = e.getResponse();
-          expect(response.message).toBe('Discord webhook 전송 실패');
-        }
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on invalid JSON response', async () => {
+      it('should silently handle invalid JSON response', async () => {
         const error = createAxiosError(400, 'Invalid JSON', {
           code: 50109,
           message: 'The request body contains invalid JSON.',
         });
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on payload too large', async () => {
+      it('should silently handle payload too large', async () => {
         const error = createAxiosError(413, 'Payload Too Large');
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException when webhook is deleted', async () => {
+      it('should silently handle when webhook is deleted', async () => {
         const error = createAxiosError(404, 'Unknown Webhook', {
           code: 10015,
           message: 'Unknown Webhook',
         });
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
 
-      it('should throw ExternalApiException on global rate limit', async () => {
+      it('should silently handle global rate limit', async () => {
         const error = createAxiosError(429, 'Too Many Requests', {
           global: true,
           retry_after: 60,
         });
         httpService.post.mockReturnValue(throwError(() => error));
 
-        await expect(client.sendMessage(mockPayload)).rejects.toThrow(
-          ExternalApiException,
-        );
+        await expect(client.sendMessage(mockPayload)).resolves.toBeUndefined();
       });
     });
 

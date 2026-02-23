@@ -1,12 +1,15 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
   UpdateDateColumn,
+  VersionColumn,
 } from 'typeorm';
 import { BatchJob } from '../../batch/entities/batch-job.entity';
 import { User } from '../../user/entities/user.entity';
@@ -20,10 +23,12 @@ export enum MenuSelectionStatus {
   SUCCEEDED = 'SUCCEEDED',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
+  PERMANENTLY_FAILED = 'PERMANENTLY_FAILED',
 }
 
 @Entity()
-@Index('idx_menu_selection_user_date', ['user', 'selectedDate'])
+@Unique('UQ_menu_selection_user_date', ['user', 'selectedDate'])
+@Index('idx_menu_selection_status', ['status'])
 export class MenuSelection {
   @PrimaryGeneratedColumn()
   id: number;
@@ -78,4 +83,10 @@ export class MenuSelection {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @VersionColumn()
+  version: number;
+
+  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

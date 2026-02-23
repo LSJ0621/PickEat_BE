@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { GooglePlacesClient } from '../../external/google/clients/google-places.client';
-import { KakaoLocalClient } from '../../external/kakao/clients/kakao-local.client';
 import { SearchAddressDto } from '../dto/search-address.dto';
 import {
   AddressSearchResponse,
@@ -11,25 +9,8 @@ import {
 @Injectable()
 export class AddressSearchService {
   private readonly logger = new Logger(AddressSearchService.name);
-  private readonly provider: 'kakao' | 'google';
 
-  constructor(
-    private readonly kakaoLocalClient: KakaoLocalClient,
-    private readonly googlePlacesClient: GooglePlacesClient,
-    private readonly configService: ConfigService,
-  ) {
-    const providerConfig =
-      this.configService.get<string>('ADDRESS_SEARCH_PROVIDER') || 'kakao';
-    if (providerConfig !== 'kakao' && providerConfig !== 'google') {
-      this.logger.warn(
-        `Invalid provider "${providerConfig}", defaulting to kakao`,
-      );
-      this.provider = 'kakao';
-    } else {
-      this.provider = providerConfig;
-    }
-    this.logger.log(`주소 검색 제공자: ${this.provider}`);
-  }
+  constructor(private readonly googlePlacesClient: GooglePlacesClient) {}
 
   async searchAddress(
     searchDto: SearchAddressDto,
@@ -38,19 +19,7 @@ export class AddressSearchService {
 
     const language = searchDto.language ?? 'ko';
 
-    if (this.provider === 'google') {
-      return this.searchWithGoogle(searchDto.query, language);
-    }
-
-    return this.searchWithKakao(searchDto.query);
-  }
-
-  private async searchWithKakao(query: string): Promise<AddressSearchResponse> {
-    const result = await this.kakaoLocalClient.searchAddress(query);
-    return {
-      meta: result.meta,
-      addresses: result.addresses,
-    };
+    return this.searchWithGoogle(searchDto.query, language);
   }
 
   private async searchWithGoogle(

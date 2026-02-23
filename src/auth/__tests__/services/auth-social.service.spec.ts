@@ -1,30 +1,35 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { AuthSocialService } from '../../services/auth-social.service';
 import { UserService } from '@/user/user.service';
 import { User } from '@/user/entities/user.entity';
-import {
-  GoogleOAuthClient,
-  GoogleUserProfile,
-} from '@/external/google/clients/google-oauth.client';
+import { GoogleOAuthClient } from '@/external/google/clients/google-oauth.client';
+import { GoogleUserProfile } from '@/external/google/google.types';
 import { KakaoOAuthClient } from '@/external/kakao/clients/kakao-oauth.client';
 import { KakaoUserProfile } from '@/external/kakao/kakao.types';
 import { SocialType } from '@/user/enum/social-type.enum';
-import { createMockRepository } from '../../../../test/mocks/repository.mock';
 import { UserFactory } from '../../../../test/factories/entity.factory';
 import { AuthResult } from '../../interfaces/auth.interface';
 import {
   createMockGoogleOAuthClient,
   createMockKakaoOAuthClient,
 } from '../../../../test/mocks/external-clients.mock';
+import { MessageCode } from '@/common/constants/message-codes';
+import { ErrorCode } from '@/common/constants/error-codes';
 
 describe('AuthSocialService', () => {
   let service: AuthSocialService;
   let mockUserService: jest.Mocked<
-    Pick<UserService, 'getUserBySocialId' | 'createOauth'>
+    Pick<
+      UserService,
+      | 'getUserBySocialId'
+      | 'createOauth'
+      | 'findByEmailWithPassword'
+      | 'findBySocialEmailWithDeleted'
+      | 'restoreSocialUser'
+      | 'findByEmail'
+    >
   >;
-  let mockUserRepository: ReturnType<typeof createMockRepository<User>>;
   let mockKakaoOAuthClient: ReturnType<typeof createMockKakaoOAuthClient>;
   let mockGoogleOAuthClient: ReturnType<typeof createMockGoogleOAuthClient>;
 
@@ -39,6 +44,9 @@ describe('AuthSocialService', () => {
         longitude: null,
         name: user.name,
         preferences: null,
+        birthDate: null,
+        gender: null,
+        preferredLanguage: 'ko',
       }),
   );
 
@@ -46,8 +54,21 @@ describe('AuthSocialService', () => {
     mockUserService = {
       getUserBySocialId: jest.fn(),
       createOauth: jest.fn(),
-    } as jest.Mocked<Pick<UserService, 'getUserBySocialId' | 'createOauth'>>;
-    mockUserRepository = createMockRepository<User>();
+      findByEmailWithPassword: jest.fn(),
+      findBySocialEmailWithDeleted: jest.fn(),
+      restoreSocialUser: jest.fn().mockResolvedValue(undefined),
+      findByEmail: jest.fn(),
+    } as jest.Mocked<
+      Pick<
+        UserService,
+        | 'getUserBySocialId'
+        | 'createOauth'
+        | 'findByEmailWithPassword'
+        | 'findBySocialEmailWithDeleted'
+        | 'restoreSocialUser'
+        | 'findByEmail'
+      >
+    >;
     mockKakaoOAuthClient = createMockKakaoOAuthClient();
     mockGoogleOAuthClient = createMockGoogleOAuthClient();
 
@@ -57,10 +78,6 @@ describe('AuthSocialService', () => {
         {
           provide: UserService,
           useValue: mockUserService,
-        },
-        {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
         },
         {
           provide: KakaoOAuthClient,
@@ -106,7 +123,7 @@ describe('AuthSocialService', () => {
         },
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(user);
 
       // Act
@@ -149,7 +166,7 @@ describe('AuthSocialService', () => {
         },
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(null);
       mockUserService.createOauth.mockResolvedValue(newUser);
 
@@ -162,6 +179,8 @@ describe('AuthSocialService', () => {
         kakaoId,
         email,
         SocialType.KAKAO,
+        undefined,
+        undefined,
       );
       expect(mockBuildAuthResult).toHaveBeenCalledWith(newUser);
     });
@@ -193,7 +212,13 @@ describe('AuthSocialService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.kakaoLogin(code, mockBuildAuthResult),
-      ).rejects.toThrow('카카오 프로필에 이메일이 포함되어 있지 않습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when email is already used for regular signup', async () => {
@@ -219,7 +244,7 @@ describe('AuthSocialService', () => {
         },
       });
 
-      mockUserRepository.findOne.mockResolvedValue(regularUser);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(regularUser);
 
       // Act & Assert
       await expect(
@@ -227,7 +252,13 @@ describe('AuthSocialService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.kakaoLogin(code, mockBuildAuthResult),
-      ).rejects.toThrow('이미 일반 회원가입으로 가입한 이메일입니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
+          }),
+        }),
+      );
     });
 
     it('should throw RE_REGISTER_REQUIRED when user is deleted', async () => {
@@ -259,7 +290,7 @@ describe('AuthSocialService', () => {
         },
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(deletedUser);
 
       // Act & Assert
@@ -309,28 +340,19 @@ describe('AuthSocialService', () => {
         },
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(deactivatedUser);
 
       // Act & Assert
-      try {
-        await service.kakaoLogin(code, mockBuildAuthResult);
-        fail('Should have thrown HttpException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(HttpException);
-        const httpError = error as HttpException;
-        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
-        const response = httpError.getResponse() as {
-          statusCode: number;
-          message: string;
-          error: string;
-        };
-        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
-        expect(response.message).toBe(
-          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
-        );
-        expect(response.error).toBe('USER_DEACTIVATED');
-      }
+      await expect(
+        service.kakaoLogin(code, mockBuildAuthResult),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
+          }),
+        }),
+      );
     });
   });
 
@@ -354,7 +376,7 @@ describe('AuthSocialService', () => {
         },
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(user);
 
       // Act
@@ -403,7 +425,7 @@ describe('AuthSocialService', () => {
         family_name: 'User',
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(user);
 
       // Act
@@ -449,7 +471,7 @@ describe('AuthSocialService', () => {
         family_name: 'User',
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(null);
       mockUserService.createOauth.mockResolvedValue(newUser);
 
@@ -463,6 +485,7 @@ describe('AuthSocialService', () => {
         email,
         SocialType.GOOGLE,
         name,
+        undefined,
       );
       expect(mockBuildAuthResult).toHaveBeenCalledWith(newUser);
     });
@@ -492,7 +515,13 @@ describe('AuthSocialService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.googleLogin(code, mockBuildAuthResult),
-      ).rejects.toThrow('구글 프로필에 이메일이 포함되어 있지 않습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when email is already used for regular signup', async () => {
@@ -516,7 +545,7 @@ describe('AuthSocialService', () => {
         name: 'Test',
       });
 
-      mockUserRepository.findOne.mockResolvedValue(regularUser);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(regularUser);
 
       // Act & Assert
       await expect(
@@ -524,7 +553,13 @@ describe('AuthSocialService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.googleLogin(code, mockBuildAuthResult),
-      ).rejects.toThrow('이미 일반 회원가입으로 가입한 이메일입니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
+          }),
+        }),
+      );
     });
 
     it('should throw RE_REGISTER_REQUIRED when Google user is deleted', async () => {
@@ -554,7 +589,7 @@ describe('AuthSocialService', () => {
         name: 'Deleted User',
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(deletedUser);
 
       // Act & Assert
@@ -602,28 +637,19 @@ describe('AuthSocialService', () => {
         name: 'Deactivated User',
       });
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
       mockUserService.getUserBySocialId.mockResolvedValue(deactivatedUser);
 
       // Act & Assert
-      try {
-        await service.googleLogin(code, mockBuildAuthResult);
-        fail('Should have thrown HttpException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(HttpException);
-        const httpError = error as HttpException;
-        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
-        const response = httpError.getResponse() as {
-          statusCode: number;
-          message: string;
-          error: string;
-        };
-        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
-        expect(response.message).toBe(
-          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
-        );
-        expect(response.error).toBe('USER_DEACTIVATED');
-      }
+      await expect(
+        service.googleLogin(code, mockBuildAuthResult),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
+          }),
+        }),
+      );
     });
   });
 
@@ -644,39 +670,38 @@ describe('AuthSocialService', () => {
         refreshToken: null,
       };
 
-      mockUserRepository.findOne
-        .mockResolvedValueOnce(deletedUser) // First call: find deleted user
-        .mockResolvedValueOnce(null) // Second call: check no active regular user
-        .mockResolvedValueOnce(restoredUser); // Third call: return restored user
-
-      mockUserRepository.update.mockResolvedValue({
-        affected: 1,
-        raw: [],
-        generatedMaps: [],
-      });
+      mockUserService.findBySocialEmailWithDeleted.mockResolvedValue(
+        deletedUser,
+      );
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
+      mockUserService.restoreSocialUser.mockResolvedValue(undefined);
+      mockUserService.findByEmail.mockResolvedValue(restoredUser as User);
 
       // Act
       const result = await service.reRegisterSocial({ email });
 
       // Assert
-      expect(result.message).toBe('재가입이 완료되었습니다. 로그인해주세요.');
-      expect(mockUserRepository.update).toHaveBeenCalledWith(
-        { email },
-        { refreshToken: null, deletedAt: null },
+      expect(result.messageCode).toBe(
+        MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
       );
+      expect(mockUserService.restoreSocialUser).toHaveBeenCalledWith(email);
     });
 
     it('should throw BadRequestException when no deleted account exists', async () => {
       // Arrange
       const email = 'nonexistent@kakao.com';
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findBySocialEmailWithDeleted.mockResolvedValue(null);
 
       // Act & Assert
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
         BadRequestException,
       );
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
-        '재가입할 수 있는 계정이 없습니다',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_NO_REREGISTER_ACCOUNT,
+          }),
+        }),
       );
     });
 
@@ -690,14 +715,20 @@ describe('AuthSocialService', () => {
       );
       activeUser.deletedAt = null;
 
-      mockUserRepository.findOne.mockResolvedValue(activeUser);
+      mockUserService.findBySocialEmailWithDeleted.mockResolvedValue(
+        activeUser,
+      );
 
       // Act & Assert
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
         BadRequestException,
       );
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
-        '재가입할 수 있는 계정이 없습니다',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_NO_REREGISTER_ACCOUNT,
+          }),
+        }),
       );
     });
 
@@ -714,11 +745,12 @@ describe('AuthSocialService', () => {
       const activeRegularUser = UserFactory.createWithPassword(email);
 
       // Set up mocks for the expected call sequence
-      mockUserRepository.findOne
-        .mockResolvedValueOnce(deletedSocialUser) // First call: where { email, socialId: Not(null) }, withDeleted: true
-        .mockResolvedValueOnce(activeRegularUser) // Second call: where { email, password: Not(null) }
-        .mockResolvedValueOnce(deletedSocialUser) // Third call (for second expect)
-        .mockResolvedValueOnce(activeRegularUser); // Fourth call (for second expect)
+      mockUserService.findBySocialEmailWithDeleted
+        .mockResolvedValueOnce(deletedSocialUser) // First call (first expect)
+        .mockResolvedValueOnce(deletedSocialUser); // Second call (second expect)
+      mockUserService.findByEmailWithPassword
+        .mockResolvedValueOnce(activeRegularUser) // First call (first expect)
+        .mockResolvedValueOnce(activeRegularUser); // Second call (second expect)
 
       // Act & Assert
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
@@ -740,26 +772,27 @@ describe('AuthSocialService', () => {
       deletedUser.deletedAt = new Date();
       deletedUser.socialId = 'kakao-123'; // Ensure socialId is set
 
-      mockUserRepository.findOne
-        .mockResolvedValueOnce(deletedUser) // First call: find deleted user with socialId
-        .mockResolvedValueOnce(null) // Second call: no active regular user
-        .mockResolvedValueOnce(null) // Third call: user not found after update
-        .mockResolvedValueOnce(deletedUser) // Fourth call (for second expect)
-        .mockResolvedValueOnce(null) // Fifth call (for second expect)
-        .mockResolvedValueOnce(null); // Sixth call (for second expect)
-
-      mockUserRepository.update.mockResolvedValue({
-        affected: 1,
-        raw: [],
-        generatedMaps: [],
-      });
+      mockUserService.findBySocialEmailWithDeleted
+        .mockResolvedValueOnce(deletedUser) // First expect: first call
+        .mockResolvedValueOnce(deletedUser); // Second expect: first call
+      mockUserService.findByEmailWithPassword
+        .mockResolvedValueOnce(null) // First expect: no active regular user
+        .mockResolvedValueOnce(null); // Second expect: no active regular user
+      mockUserService.restoreSocialUser.mockResolvedValue(undefined);
+      mockUserService.findByEmail
+        .mockResolvedValueOnce(null) // First expect: user not found after update
+        .mockResolvedValueOnce(null); // Second expect: user not found after update
 
       // Act & Assert
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
         BadRequestException,
       );
       await expect(service.reRegisterSocial({ email })).rejects.toThrow(
-        '재가입 처리 중 오류가 발생했습니다',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_RE_REGISTER_ERROR,
+          }),
+        }),
       );
     });
   });

@@ -4,6 +4,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -18,6 +19,7 @@ export class CreateUserAddressDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(100)
   alias?: string; // 주소 별칭 (선택사항)
 
   @IsBoolean()

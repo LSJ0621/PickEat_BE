@@ -22,9 +22,9 @@ export class BugReportAdminNote {
   @Column({ type: 'text' })
   content: string;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'created_by_id' })
-  createdBy: User;
+  createdBy: User | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

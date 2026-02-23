@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -9,13 +10,15 @@ import {
 import { User } from '@/user/entities/user.entity';
 
 @Entity('admin_audit_logs')
+@Index('idx_audit_log_admin_action', ['adminId', 'action'])
+@Index('idx_audit_log_created_at', ['createdAt'])
 export class AdminAuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'admin_id' })
-  admin: User;
+  admin: User | null;
 
   @Column({ name: 'admin_id' })
   adminId: number;

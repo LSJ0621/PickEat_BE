@@ -31,7 +31,7 @@ export class MenuRecommendationService {
    * 메뉴 추천
    */
   async recommend(user: User, prompt: string) {
-    this.logger.log(`👤 [추천 요청] userId: ${user.id}`);
+    this.logger.log(`[추천 요청] userId: ${user.id}`);
 
     const likes = user.preferences?.likes ?? [];
     const dislikes = user.preferences?.dislikes ?? [];
@@ -79,7 +79,7 @@ export class MenuRecommendationService {
     }
 
     const userAddressString = defaultAddress.roadAddress;
-    this.logger.log(`📍 [기본 주소 조회] ${userAddressString}`);
+    this.logger.log(`[기본 주소 조회] ${userAddressString}`);
 
     const { intro, recommendations, closing } =
       await this.openAiMenuService.generateMenuRecommendations(
@@ -89,6 +89,10 @@ export class MenuRecommendationService {
         analysis,
         language,
         userAddressString,
+        user.birthDate
+          ? parseInt(user.birthDate.substring(0, 4), 10)
+          : undefined,
+        user.gender ?? undefined,
         compactSummary,
         structuredAnalysis,
       );
@@ -131,6 +135,7 @@ export class MenuRecommendationService {
       .leftJoinAndSelect(
         'recommendation.placeRecommendations',
         'placeRecommendation',
+        'placeRecommendation.deletedAt IS NULL',
       )
       .where('recommendation.user.id = :id', { id: user.id })
       .orderBy('recommendation.recommendedAt', 'DESC');
@@ -165,10 +170,17 @@ export class MenuRecommendationService {
    * ID로 추천 이력 조회
    */
   async findById(id: number, user: User): Promise<MenuRecommendation> {
-    const recommendation = await this.recommendationRepository.findOne({
-      where: { id, user: { id: user.id } },
-      relations: ['placeRecommendations', 'user'],
-    });
+    const recommendation = await this.recommendationRepository
+      .createQueryBuilder('recommendation')
+      .leftJoinAndSelect('recommendation.user', 'user')
+      .leftJoinAndSelect(
+        'recommendation.placeRecommendations',
+        'placeRecommendation',
+        'placeRecommendation.deletedAt IS NULL',
+      )
+      .where('recommendation.id = :id', { id })
+      .andWhere('user.id = :userId', { userId: user.id })
+      .getOne();
 
     if (!recommendation) {
       throw new BadRequestException({
@@ -229,7 +241,7 @@ export class MenuRecommendationService {
   private calculateDateRange(date: string) {
     const start = new Date(`${date}T00:00:00.000Z`);
     if (Number.isNaN(start.getTime())) {
-      throw new BadRequestException('Invalid date parameter');
+      throw new BadRequestException(ErrorCode.INVALID_DATE_PARAMETER);
     }
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);

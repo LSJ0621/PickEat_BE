@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { UserPlaceStatus } from '../enum/user-place-status.enum';
 
 export class AdminUserPlaceListQueryDto {
@@ -27,5 +35,6 @@ export class AdminUserPlaceListQueryDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   search?: string;
 }

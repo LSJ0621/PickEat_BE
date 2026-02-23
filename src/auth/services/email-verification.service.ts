@@ -1,24 +1,18 @@
-import { MailerService } from '@nestjs-modules/mailer';
-import {
-  BadRequestException,
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import { Repository } from 'typeorm';
-import { EMAIL_VERIFICATION } from '../../common/constants/business.constants';
+import { EMAIL_VERIFICATION } from '@/common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { MessageCode } from '@/common/constants/message-codes';
-import { TEST_MODE } from '../../common/constants/test-mode.constants';
-import { isTestMode } from '../../common/utils/test-mode.util';
+import { TEST_MODE } from '@/common/constants/test-mode.constants';
+import { isTestMode } from '@/common/utils/test-mode.util';
 import { EMAIL_CONTENT } from '../constants/email-content.constants';
 import { EmailPurpose } from '../dto/send-email-code.dto';
 import { EmailVerification } from '../entities/email-verification.entity';
-import { User } from '../../user/entities/user.entity';
+import { UserService } from '@/user/user.service';
+import { EmailNotificationService } from './email-notification.service';
 
 @Injectable()
 export class EmailVerificationService {
@@ -28,12 +22,10 @@ export class EmailVerificationService {
   constructor(
     @InjectRepository(EmailVerification)
     private readonly emailVerificationRepository: Repository<EmailVerification>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    private readonly mailerService: MailerService,
-    private readonly config: ConfigService,
+    private readonly userService: UserService,
+    private readonly emailNotificationService: EmailNotificationService,
   ) {
-    this.ensureMailConfig();
+    this.emailNotificationService.ensureMailConfig();
   }
 
   generateCode(length = 6): string {
@@ -50,16 +42,14 @@ export class EmailVerificationService {
     remainCount: number;
     messageCode: MessageCode;
   }> {
-    this.ensureMailConfig();
     const normalizedPurpose = this.normalizePurpose(purpose);
 
     // User lookup and language selection
     let selectedLang = lang || 'ko';
     if (!lang) {
-      const user = await this.userRepository.findOne({
-        where: { email },
-        select: ['preferredLanguage'],
-      });
+      const user = await this.userService.findByEmailWithSelect(email, [
+        'preferredLanguage',
+      ]);
       if (user?.preferredLanguage) {
         selectedLang = user.preferredLanguage;
       }
@@ -133,16 +123,12 @@ export class EmailVerificationService {
       };
     }
 
-    await this.mailerService.sendMail({
-      to: email,
-      subject: localizedContent.emailTitle,
-      template: this.getTemplateName(selectedLang),
-      context: {
-        ...localizedContent,
-        verificationCode: code,
-        lang: selectedLang,
-      },
-    });
+    await this.emailNotificationService.sendVerificationEmail(
+      email,
+      code,
+      localizedContent,
+      selectedLang,
+    );
 
     return {
       remainCount,
@@ -155,7 +141,7 @@ export class EmailVerificationService {
     code: string,
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
     lang?: string,
-  ): Promise<boolean> {
+  ): Promise<void> {
     // 테스트 모드에서 테스트 코드 사용 시 바이패스
     if (isTestMode() && code === TEST_MODE.EMAIL_VERIFICATION_CODE) {
       this.logger.debug(`[TEST MODE] Email verification bypass for ${email}`);
@@ -168,7 +154,7 @@ export class EmailVerificationService {
         latest.status = 'USED';
         await this.emailVerificationRepository.save(latest);
       }
-      return true;
+      return;
     }
 
     const normalizedPurpose = this.normalizePurpose(purpose);
@@ -200,7 +186,6 @@ export class EmailVerificationService {
     latest.usedAt = now;
     latest.status = 'USED';
     await this.emailVerificationRepository.save(latest);
-    return true;
   }
 
   async isEmailVerified(
@@ -217,7 +202,7 @@ export class EmailVerificationService {
     purpose: EmailPurpose = EmailPurpose.SIGNUP,
   ): Promise<void> {
     const normalizedPurpose = this.normalizePurpose(purpose);
-    await this.emailVerificationRepository.delete({
+    await this.emailVerificationRepository.softDelete({
       email,
       purpose: normalizedPurpose,
     });
@@ -237,32 +222,35 @@ export class EmailVerificationService {
     await this.emailVerificationRepository.save(latest);
   }
 
-  private normalizePurpose(purpose?: EmailPurpose): EmailPurpose {
-    return purpose ?? EmailPurpose.SIGNUP;
+  /**
+   * Delegate: Send welcome email
+   */
+  async sendWelcomeEmail(
+    userId: string,
+    language?: 'ko' | 'en',
+  ): Promise<void> {
+    return this.emailNotificationService.sendWelcomeEmail(userId, language);
   }
 
-  private ensureMailConfig() {
-    // 테스트 모드에서는 이메일 설정 검증 건너뛰기
-    if (isTestMode()) {
-      this.logger.debug('[TEST MODE] Skipping email config validation');
-      return;
-    }
+  /**
+   * Delegate: Send account deactivation notification email
+   */
+  async sendAccountDeactivationEmail(
+    email: string,
+    reason: string,
+    deactivatedAt: Date,
+    language?: 'ko' | 'en',
+  ): Promise<void> {
+    return this.emailNotificationService.sendAccountDeactivationEmail(
+      email,
+      reason,
+      deactivatedAt,
+      language,
+    );
+  }
 
-    const emailHost = this.config.get<string>('EMAIL_HOST');
-    const emailPort = this.config.get<number>('EMAIL_PORT');
-    const emailSecure = this.config.get<string>('EMAIL_SECURE');
-    const emailAddress = this.config.get<string>('EMAIL_ADDRESS');
-    const emailPassword = this.config.get<string>('EMAIL_PASSWORD');
-    if (
-      !emailHost ||
-      !emailPort ||
-      !emailSecure ||
-      !emailAddress ||
-      !emailPassword
-    ) {
-      this.logger.error('Email configuration is missing');
-      throw new InternalServerErrorException('Email configuration error');
-    }
+  private normalizePurpose(purpose?: EmailPurpose): EmailPurpose {
+    return purpose ?? EmailPurpose.SIGNUP;
   }
 
   private ensureNotBlocked(
@@ -431,172 +419,11 @@ export class EmailVerificationService {
   }
 
   private isSameDay(now: Date, target?: Date | null): boolean {
-    if (!target) {
-      return false;
-    }
-    return now.toDateString() === target.toDateString();
-  }
-
-  private getTemplateName(lang: string): string {
-    const supportedLangs = ['ko', 'en'];
-    const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
-    return `email-verification-${selectedLang}`;
-  }
-
-  /**
-   * Send welcome email to newly registered user
-   * @param userId - User ID for fetching user data
-   * @param language - Preferred language ('ko' | 'en')
-   */
-  async sendWelcomeEmail(
-    userId: string,
-    language?: 'ko' | 'en',
-  ): Promise<void> {
-    try {
-      // Fetch user data
-      const user = await this.userRepository.findOne({
-        where: { id: parseInt(userId, 10) },
-        select: ['email', 'name', 'preferredLanguage'],
-      });
-
-      if (!user) {
-        this.logger.warn(`User with ID ${userId} not found for welcome email`);
-        return;
-      }
-
-      // Determine language
-      const selectedLang = language || user.preferredLanguage || 'ko';
-
-      // Build localized content
-      const content = EMAIL_CONTENT[selectedLang]?.welcome;
-      const userName = user.name || user.email.split('@')[0];
-      const loginLink =
-        this.config.get<string>('FRONTEND_URL') || 'https://pickeat.com';
-
-      // Test mode check
-      if (isTestMode()) {
-        this.logger.debug(
-          `[TEST MODE] Skipping welcome email to ${user.email} in ${selectedLang}`,
-        );
-        return;
-      }
-
-      // Send email
-      await this.mailerService.sendMail({
-        to: user.email,
-        subject: content.emailTitle,
-        template: this.getWelcomeTemplateName(selectedLang),
-        context: {
-          lang: selectedLang,
-          pageTitle: content.pageTitle,
-          emailTitle: content.emailTitle,
-          userName,
-          description: content.description,
-          featuresTitle: content.featuresTitle,
-          loginLink,
-          ctaText: content.ctaText,
-          footer: content.footer,
-        },
-      });
-
-      this.logger.log(`Welcome email sent to ${user.email} in ${selectedLang}`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to send welcome email to user ${userId}: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Send account deactivation notification email
-   * @param email - User email address
-   * @param reason - Deactivation reason (HTML-safe)
-   * @param deactivatedAt - Deactivation timestamp
-   * @param language - Preferred language ('ko' | 'en')
-   */
-  async sendAccountDeactivationEmail(
-    email: string,
-    reason: string,
-    deactivatedAt: Date,
-    language?: 'ko' | 'en',
-  ): Promise<void> {
-    try {
-      // Determine language
-      let selectedLang = language || 'ko';
-      if (!language) {
-        const user = await this.userRepository.findOne({
-          where: { email },
-          select: ['preferredLanguage'],
-        });
-        if (user?.preferredLanguage) {
-          selectedLang = user.preferredLanguage;
-        }
-      }
-
-      // Build localized content
-      const content = EMAIL_CONTENT[selectedLang]?.deactivation;
-      const userName = email.split('@')[0];
-
-      // Format timestamp
-      const formattedDate = deactivatedAt.toLocaleString(
-        selectedLang === 'ko' ? 'ko-KR' : 'en-US',
-        {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        },
-      );
-
-      // Test mode check
-      if (isTestMode()) {
-        this.logger.debug(
-          `[TEST MODE] Skipping deactivation email to ${email} in ${selectedLang}`,
-        );
-        return;
-      }
-
-      // Send email
-      await this.mailerService.sendMail({
-        to: email,
-        subject: content.emailTitle,
-        template: this.getAccountDeactivationTemplateName(selectedLang),
-        context: {
-          lang: selectedLang,
-          pageTitle: content.pageTitle,
-          emailTitle: content.emailTitle,
-          userName,
-          description: content.description,
-          reason,
-          deactivatedAt: formattedDate,
-          supportEmail: content.supportEmail,
-          dataRetentionDays: content.dataRetentionDays,
-          footer: content.footer,
-        },
-      });
-
-      this.logger.log(`Deactivation email sent to ${email} in ${selectedLang}`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to send deactivation email to ${email}: ${error.message}`,
-      );
-      throw error;
-    }
-  }
-
-  private getWelcomeTemplateName(lang: string): string {
-    const supportedLangs = ['ko', 'en'];
-    const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
-    return `welcome-${selectedLang}`;
-  }
-
-  private getAccountDeactivationTemplateName(lang: string): string {
-    const supportedLangs = ['ko', 'en'];
-    const selectedLang = supportedLangs.includes(lang) ? lang : 'ko';
-    return `account-deactivation-${selectedLang}`;
+    if (!target) return false;
+    return (
+      now.getUTCFullYear() === target.getUTCFullYear() &&
+      now.getUTCMonth() === target.getUTCMonth() &&
+      now.getUTCDate() === target.getUTCDate()
+    );
   }
 }

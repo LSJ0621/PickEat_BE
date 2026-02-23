@@ -2,34 +2,22 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AddressSearchService } from '../../services/address-search.service';
 import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
-import { KakaoLocalClient } from '@/external/kakao/clients/kakao-local.client';
 import { SearchAddressDto } from '../../dto/search-address.dto';
-import {
-  createMockGooglePlacesClient,
-  createMockKakaoLocalClient,
-} from '../../../../test/mocks/external-clients.mock';
+import { createMockGooglePlacesClient } from '../../../../test/mocks/external-clients.mock';
 
 describe('AddressSearchService', () => {
   let service: AddressSearchService;
-  let mockKakaoLocalClient: jest.Mocked<
-    ReturnType<typeof createMockKakaoLocalClient>
-  >;
   let mockGooglePlacesClient: jest.Mocked<
     ReturnType<typeof createMockGooglePlacesClient>
   >;
 
-  const createTestModule = async (provider: string = 'kakao') => {
+  const createTestModule = async () => {
     jest.clearAllMocks();
-    mockKakaoLocalClient = createMockKakaoLocalClient();
     mockGooglePlacesClient = createMockGooglePlacesClient();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AddressSearchService,
-        {
-          provide: KakaoLocalClient,
-          useValue: mockKakaoLocalClient,
-        },
         {
           provide: GooglePlacesClient,
           useValue: mockGooglePlacesClient,
@@ -37,7 +25,7 @@ describe('AddressSearchService', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockReturnValue(provider),
+            get: jest.fn(),
           },
         },
       ],
@@ -46,119 +34,9 @@ describe('AddressSearchService', () => {
     service = module.get<AddressSearchService>(AddressSearchService);
   };
 
-  describe('with Kakao provider (default)', () => {
+  describe('searchAddress', () => {
     beforeEach(async () => {
-      await createTestModule('kakao');
-    });
-
-    describe('searchAddress', () => {
-      it('should search address and return results', async () => {
-        // Arrange
-        const searchDto: SearchAddressDto = {
-          query: '서울특별시 강남구 테헤란로 123',
-        };
-        const mockResponse = {
-          meta: {
-            total_count: 1,
-            pageable_count: 1,
-            is_end: true,
-          },
-          addresses: [
-            {
-              address: '서울특별시 강남구 역삼동',
-              roadAddress: '서울특별시 강남구 테헤란로 123',
-              postalCode: '06234',
-              latitude: '37.5012345',
-              longitude: '127.0398765',
-            },
-          ],
-        };
-
-        mockKakaoLocalClient.searchAddress.mockResolvedValue(mockResponse);
-
-        // Act
-        const result = await service.searchAddress(searchDto);
-
-        // Assert
-        expect(result).toEqual(mockResponse);
-        expect(mockKakaoLocalClient.searchAddress).toHaveBeenCalledWith(
-          searchDto.query,
-        );
-      });
-
-      it('should search by partial address', async () => {
-        // Arrange
-        const searchDto: SearchAddressDto = { query: '강남구 테헤란로' };
-        const mockResponse = {
-          meta: {
-            total_count: 5,
-            pageable_count: 5,
-            is_end: false,
-          },
-          addresses: [
-            {
-              address: '서울특별시 강남구 역삼동',
-              roadAddress: '서울특별시 강남구 테헤란로 123',
-              postalCode: '06234',
-              latitude: '37.5012345',
-              longitude: '127.0398765',
-            },
-          ],
-        };
-
-        mockKakaoLocalClient.searchAddress.mockResolvedValue(mockResponse);
-
-        // Act
-        const result = await service.searchAddress(searchDto);
-
-        // Assert
-        expect(result.meta.total_count).toBe(5);
-        expect(result.addresses).toHaveLength(1);
-      });
-
-      it('should return empty results when no address found', async () => {
-        // Arrange
-        const searchDto: SearchAddressDto = { query: '존재하지않는주소12345' };
-        const mockResponse = {
-          meta: {
-            total_count: 0,
-            pageable_count: 0,
-            is_end: true,
-          },
-          addresses: [],
-        };
-
-        mockKakaoLocalClient.searchAddress.mockResolvedValue(mockResponse);
-
-        // Act
-        const result = await service.searchAddress(searchDto);
-
-        // Assert
-        expect(result.meta.total_count).toBe(0);
-        expect(result.addresses).toEqual([]);
-      });
-
-      it('should pass through API errors from KakaoLocalClient', async () => {
-        // Arrange
-        const searchDto: SearchAddressDto = { query: '서울시 강남구' };
-        const error = new Error('Kakao API error');
-
-        mockKakaoLocalClient.searchAddress.mockRejectedValue(error);
-
-        // Act & Assert
-        await expect(service.searchAddress(searchDto)).rejects.toThrow(
-          'Kakao API error',
-        );
-        expect(mockKakaoLocalClient.searchAddress).toHaveBeenCalledWith(
-          searchDto.query,
-        );
-      });
-    });
-  });
-
-  describe('with Google provider', () => {
-    beforeEach(async () => {
-      await createTestModule('google');
+      await createTestModule();
     });
 
     it('should create session token and use it for autocomplete and details', async () => {
@@ -347,68 +225,6 @@ describe('AddressSearchService', () => {
       // includedRegionCodes가 전달되지 않았는지 확인
       const callArgs = mockGooglePlacesClient.autocomplete.mock.calls[0][1];
       expect(callArgs).not.toHaveProperty('includedRegionCodes');
-    });
-  });
-
-  describe('provider configuration', () => {
-    it('should default to kakao when not configured', async () => {
-      await createTestModule('');
-
-      const searchDto: SearchAddressDto = { query: '강남구' };
-      const mockResponse = {
-        meta: { total_count: 1, pageable_count: 1, is_end: true },
-        addresses: [
-          {
-            address: '서울특별시 강남구',
-            roadAddress: null,
-            postalCode: null,
-            latitude: '37.5',
-            longitude: '127.0',
-          },
-        ],
-      };
-      mockKakaoLocalClient.searchAddress.mockResolvedValue(mockResponse);
-
-      await service.searchAddress(searchDto);
-
-      expect(mockKakaoLocalClient.searchAddress).toHaveBeenCalled();
-      expect(mockGooglePlacesClient.autocomplete).not.toHaveBeenCalled();
-    });
-
-    it('should use google when configured', async () => {
-      await createTestModule('google');
-
-      const searchDto: SearchAddressDto = { query: '강남구' };
-      mockGooglePlacesClient.autocomplete.mockResolvedValue([]);
-
-      await service.searchAddress(searchDto);
-
-      expect(mockGooglePlacesClient.autocomplete).toHaveBeenCalled();
-      expect(mockKakaoLocalClient.searchAddress).not.toHaveBeenCalled();
-    });
-
-    it('should fallback to kakao for invalid provider value', async () => {
-      await createTestModule('invalid-provider');
-
-      const searchDto: SearchAddressDto = { query: '강남구' };
-      const mockResponse = {
-        meta: { total_count: 1, pageable_count: 1, is_end: true },
-        addresses: [
-          {
-            address: '서울특별시 강남구',
-            roadAddress: null,
-            postalCode: null,
-            latitude: '37.5',
-            longitude: '127.0',
-          },
-        ],
-      };
-      mockKakaoLocalClient.searchAddress.mockResolvedValue(mockResponse);
-
-      await service.searchAddress(searchDto);
-
-      expect(mockKakaoLocalClient.searchAddress).toHaveBeenCalled();
-      expect(mockGooglePlacesClient.autocomplete).not.toHaveBeenCalled();
     });
   });
 });

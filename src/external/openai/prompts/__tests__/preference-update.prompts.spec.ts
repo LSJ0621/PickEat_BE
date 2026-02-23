@@ -514,6 +514,8 @@ describe('preference-update.prompts', () => {
       expect(schemaObj.type).toBe('object');
       expect(schemaObj.required).toEqual([
         'analysis',
+        'compactSummary',
+        'analysisParagraphs',
         'stablePatterns',
         'recentSignals',
         'diversityHints',
@@ -527,6 +529,8 @@ describe('preference-update.prompts', () => {
 
       // Assert
       expect(properties).toHaveProperty('analysis');
+      expect(properties).toHaveProperty('compactSummary');
+      expect(properties).toHaveProperty('analysisParagraphs');
       expect(properties).toHaveProperty('stablePatterns');
       expect(properties).toHaveProperty('recentSignals');
       expect(properties).toHaveProperty('diversityHints');
@@ -540,7 +544,7 @@ describe('preference-update.prompts', () => {
 
       // Assert
       expect(analysis?.type).toBe('string');
-      expect(analysis?.description).toContain('300자 이내');
+      expect(analysis?.description).toContain('200-400자');
     });
 
     it('should have correct stablePatterns structure', () => {
@@ -606,8 +610,8 @@ describe('preference-update.prompts', () => {
         ?.analysis;
 
       // Assert
-      expect(analysis?.description).toContain('max 300 characters');
-      expect(analysis?.description).not.toContain('300자');
+      expect(analysis?.description).toContain('200-400 characters');
+      expect(analysis?.description).not.toContain('200-400자');
     });
 
     it('should return Korean descriptions when language is ko', () => {
@@ -617,7 +621,7 @@ describe('preference-update.prompts', () => {
         ?.analysis;
 
       // Assert
-      expect(analysis?.description).toContain('300자 이내');
+      expect(analysis?.description).toContain('200-400자');
     });
 
     it('should have additionalProperties set to false', () => {
@@ -718,7 +722,7 @@ describe('preference-update.prompts', () => {
     it('should contain writing guidelines', () => {
       // Assert
       expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('<writing_guidelines>');
-      expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('- 300자 이내로 작성');
+      expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('**총 200-400자**');
     });
 
     it('should contain categorization guide', () => {
@@ -763,7 +767,7 @@ describe('preference-update.prompts', () => {
       // Assert
       expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('<writing_guidelines>');
       expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain(
-        '- Write within 300 characters',
+        '**Total 200-400 characters**',
       );
     });
   });

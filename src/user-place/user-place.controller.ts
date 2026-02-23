@@ -21,6 +21,7 @@ import {
 import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
 import { MessageCode } from '@/common/constants/message-codes';
 import { USER_PLACE } from '@/common/constants/business.constants';
+import { MULTER_OPTIONS } from '@/common/config/multer.config';
 import { ImageValidationPipe } from '@/common/pipes/file-validation.pipe';
 import { UserService } from '@/user/user.service';
 import { CreateUserPlaceDto } from './dto/create-user-place.dto';
@@ -59,7 +60,7 @@ export class UserPlaceController {
    * Create a new user place
    */
   @Post()
-  @UseInterceptors(FilesInterceptor('images', 5))
+  @UseInterceptors(FilesInterceptor('images', 5, MULTER_OPTIONS))
   @Throttle({
     default: {
       limit: USER_PLACE.RATE_LIMITS.CREATE_PER_MINUTE,
@@ -119,7 +120,7 @@ export class UserPlaceController {
    * Update user place
    */
   @Patch(':id')
-  @UseInterceptors(FilesInterceptor('images', 5))
+  @UseInterceptors(FilesInterceptor('images', 5, MULTER_OPTIONS))
   @Throttle({
     default: {
       limit: USER_PLACE.RATE_LIMITS.UPDATE_DELETE_PER_MINUTE,

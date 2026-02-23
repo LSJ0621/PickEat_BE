@@ -24,6 +24,7 @@ export class CreateNotificationDto {
 
   @IsString({ message: 'VALIDATION_STRING:content' })
   @IsNotEmpty({ message: 'VALIDATION_REQUIRED:content' })
+  @MaxLength(2000, { message: 'VALIDATION_MAX_LENGTH:content:2000' })
   content: string;
 
   @IsOptional()

@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
@@ -11,6 +12,10 @@ import {
   DownloadResultsResponse,
   BatchResultError,
 } from '@/batch/types/preference-batch.types';
+import {
+  retryWithExponentialBackoff,
+  RetryOptions,
+} from '@/common/utils/retry.util';
 
 /**
  * OpenAI Batch API Client
@@ -23,16 +28,16 @@ export class OpenAiBatchClient implements OnModuleInit {
   private readonly logger = new Logger(OpenAiBatchClient.name);
   private openai: OpenAI | null = null;
 
+  private readonly retryOptions: RetryOptions = {
+    retryableStatusCodes: [429, 500, 502, 503, 504],
+  };
+
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit(): void {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      this.logger.error('OPENAI_API_KEY is not configured');
-      return;
-    }
+    const apiKey = this.configService.getOrThrow<string>('OPENAI_API_KEY');
     this.openai = new OpenAI({ apiKey });
-    this.logger.log('✅ OpenAI Batch Client initialized');
+    this.logger.log('OpenAI Batch Client initialized');
   }
 
   /**
@@ -49,20 +54,26 @@ export class OpenAiBatchClient implements OnModuleInit {
   async uploadBatchContent(content: string): Promise<string> {
     this.ensureClient();
 
-    // Convert string to Buffer and use OpenAI SDK's toFile helper
-    const buffer = Buffer.from(content, 'utf-8');
-    const filename = `batch_${Date.now()}.jsonl`;
+    return retryWithExponentialBackoff(
+      async () => {
+        // Convert string to Buffer and use OpenAI SDK's toFile helper
+        const buffer = Buffer.from(content, 'utf-8');
+        const filename = `batch_${Date.now()}.jsonl`;
 
-    // Use OpenAI's toFile helper for proper Node.js compatibility
-    const file = await toFile(buffer, filename);
+        // Use OpenAI's toFile helper for proper Node.js compatibility
+        const file = await toFile(buffer, filename);
 
-    const uploadedFile = await this.openai!.files.create({
-      file,
-      purpose: 'batch',
-    });
+        const uploadedFile = await this.openai!.files.create({
+          file,
+          purpose: 'batch',
+        });
 
-    this.logger.log(`Uploaded batch file: ${uploadedFile.id}`);
-    return uploadedFile.id;
+        this.logger.log(`Uploaded batch file: ${uploadedFile.id}`);
+        return uploadedFile.id;
+      },
+      this.retryOptions,
+      this.logger,
+    );
   }
 
   /**
@@ -75,18 +86,24 @@ export class OpenAiBatchClient implements OnModuleInit {
   ): Promise<string> {
     this.ensureClient();
 
-    const batch = await this.openai!.batches.create({
-      input_file_id: inputFileId,
-      endpoint: '/v1/chat/completions',
-      completion_window: '24h',
-      metadata: {
-        created_at: new Date().toISOString(),
-        ...metadata,
-      },
-    });
+    return retryWithExponentialBackoff(
+      async () => {
+        const batch = await this.openai!.batches.create({
+          input_file_id: inputFileId,
+          endpoint: '/v1/chat/completions',
+          completion_window: '24h',
+          metadata: {
+            created_at: new Date().toISOString(),
+            ...metadata,
+          },
+        });
 
-    this.logger.log(`Created batch: ${batch.id}`);
-    return batch.id;
+        this.logger.log(`Created batch: ${batch.id}`);
+        return batch.id;
+      },
+      this.retryOptions,
+      this.logger,
+    );
   }
 
   /**
@@ -95,18 +112,24 @@ export class OpenAiBatchClient implements OnModuleInit {
   async getBatchStatus(batchId: string): Promise<BatchStatusResult> {
     this.ensureClient();
 
-    const batch = await this.openai!.batches.retrieve(batchId);
+    return retryWithExponentialBackoff(
+      async () => {
+        const batch = await this.openai!.batches.retrieve(batchId);
 
-    return {
-      status: batch.status as OpenAiBatchStatus,
-      outputFileId: batch.output_file_id ?? undefined,
-      errorFileId: batch.error_file_id ?? undefined,
-      progress: {
-        total: batch.request_counts?.total ?? 0,
-        completed: batch.request_counts?.completed ?? 0,
-        failed: batch.request_counts?.failed ?? 0,
+        return {
+          status: batch.status as OpenAiBatchStatus,
+          outputFileId: batch.output_file_id ?? undefined,
+          errorFileId: batch.error_file_id ?? undefined,
+          progress: {
+            total: batch.request_counts?.total ?? 0,
+            completed: batch.request_counts?.completed ?? 0,
+            failed: batch.request_counts?.failed ?? 0,
+          },
+        };
       },
-    };
+      this.retryOptions,
+      this.logger,
+    );
   }
 
   /**
@@ -118,8 +141,14 @@ export class OpenAiBatchClient implements OnModuleInit {
   ): Promise<DownloadResultsResponse> {
     this.ensureClient();
 
-    const response = await this.openai!.files.content(outputFileId);
-    const text = await response.text();
+    const text = await retryWithExponentialBackoff(
+      async () => {
+        const res = await this.openai!.files.content(outputFileId);
+        return res.text();
+      },
+      this.retryOptions,
+      this.logger,
+    );
 
     const results = new Map<string, string>();
     const errors: BatchResultError[] = [];
@@ -195,8 +224,14 @@ export class OpenAiBatchClient implements OnModuleInit {
   async downloadErrors(errorFileId: string): Promise<BatchError[]> {
     this.ensureClient();
 
-    const response = await this.openai!.files.content(errorFileId);
-    const text = await response.text();
+    const text = await retryWithExponentialBackoff(
+      async () => {
+        const res = await this.openai!.files.content(errorFileId);
+        return res.text();
+      },
+      this.retryOptions,
+      this.logger,
+    );
 
     const errors: BatchError[] = [];
 
@@ -224,8 +259,14 @@ export class OpenAiBatchClient implements OnModuleInit {
    */
   async cancelBatch(batchId: string): Promise<void> {
     this.ensureClient();
-    await this.openai!.batches.cancel(batchId);
-    this.logger.log(`Cancelled batch: ${batchId}`);
+    await retryWithExponentialBackoff(
+      async () => {
+        await this.openai!.batches.cancel(batchId);
+        this.logger.log(`Cancelled batch: ${batchId}`);
+      },
+      this.retryOptions,
+      this.logger,
+    );
   }
 
   /**
@@ -240,9 +281,7 @@ export class OpenAiBatchClient implements OnModuleInit {
    */
   private ensureClient(): void {
     if (!this.openai) {
-      throw new Error(
-        'OpenAI client is not initialized. Check OPENAI_API_KEY.',
-      );
+      throw new ConfigMissingException(['OPENAI_API_KEY']);
     }
   }
 }

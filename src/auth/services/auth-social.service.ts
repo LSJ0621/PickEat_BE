@@ -5,17 +5,15 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
-import { ErrorCode } from '../../common/constants/error-codes';
-import { MessageCode } from '../../common/constants/message-codes';
-import { GoogleOAuthClient } from '../../external/google/clients/google-oauth.client';
-import { KakaoOAuthClient } from '../../external/kakao/clients/kakao-oauth.client';
-import { User } from '../../user/entities/user.entity';
-import { SocialType } from '../../user/enum/social-type.enum';
-import { UserService } from '../../user/user.service';
-import { GoogleProfileDto } from '../dto/google-profile.dto';
-import { KakaoProfileDto } from '../dto/kakao-profile.dto';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { MessageCode } from '@/common/constants/message-codes';
+import { GoogleOAuthClient } from '@/external/google/clients/google-oauth.client';
+import { GoogleUserProfile } from '@/external/google/google.types';
+import { KakaoOAuthClient } from '@/external/kakao/clients/kakao-oauth.client';
+import { KakaoUserProfile } from '@/external/kakao/kakao.types';
+import { User } from '@/user/entities/user.entity';
+import { SocialType } from '@/user/enum/social-type.enum';
+import { UserService } from '@/user/user.service';
 import { ReRegisterSocialDto } from '../dto/re-register-social.dto';
 import { AuthResult } from '../interfaces/auth.interface';
 
@@ -25,8 +23,6 @@ export class AuthSocialService {
 
   constructor(
     private readonly userService: UserService,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     private readonly kakaoOAuthClient: KakaoOAuthClient,
     private readonly googleOAuthClient: GoogleOAuthClient,
   ) {}
@@ -61,13 +57,13 @@ export class AuthSocialService {
     return { access_token: tokenResponse.access_token };
   }
 
-  private async getKakaoProfile(token: string): Promise<KakaoProfileDto> {
+  private async getKakaoProfile(token: string): Promise<KakaoUserProfile> {
     const profile = await this.kakaoOAuthClient.getUserProfile(token);
-    return profile as unknown as KakaoProfileDto;
+    return profile;
   }
 
   private async processKakaoProfile(
-    kakaoProfileDto: KakaoProfileDto,
+    kakaoProfileDto: KakaoUserProfile,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
     language?: 'ko' | 'en',
   ): Promise<AuthResult> {
@@ -78,9 +74,7 @@ export class AuthSocialService {
       });
     }
 
-    const activeUser = await this.userRepository.findOne({
-      where: { email, password: Not(IsNull()) },
-    });
+    const activeUser = await this.userService.findByEmailWithPassword(email);
     if (activeUser) {
       throw new BadRequestException({
         errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
@@ -101,7 +95,7 @@ export class AuthSocialService {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          error: 'RE_REGISTER_REQUIRED',
+          error: ErrorCode.AUTH_RE_REGISTER_REQUIRED,
           email: email,
         },
         HttpStatus.BAD_REQUEST,
@@ -145,13 +139,13 @@ export class AuthSocialService {
     return { access_token: tokenResponse.access_token };
   }
 
-  private async getGoogleProfile(token: string): Promise<GoogleProfileDto> {
+  private async getGoogleProfile(token: string): Promise<GoogleUserProfile> {
     const profile = await this.googleOAuthClient.getUserProfile(token);
-    return profile as unknown as GoogleProfileDto;
+    return profile;
   }
 
   private async processGoogleProfile(
-    googleProfileDto: GoogleProfileDto,
+    googleProfileDto: GoogleUserProfile,
     buildAuthResult: (entity: User) => Promise<AuthResult>,
     language?: 'ko' | 'en',
   ): Promise<AuthResult> {
@@ -162,9 +156,7 @@ export class AuthSocialService {
       });
     }
 
-    const activeUser = await this.userRepository.findOne({
-      where: { email, password: Not(IsNull()) },
-    });
+    const activeUser = await this.userService.findByEmailWithPassword(email);
     if (activeUser) {
       throw new BadRequestException({
         errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED,
@@ -186,7 +178,7 @@ export class AuthSocialService {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          error: 'RE_REGISTER_REQUIRED',
+          error: ErrorCode.AUTH_RE_REGISTER_REQUIRED,
           email: email,
         },
         HttpStatus.BAD_REQUEST,
@@ -210,10 +202,9 @@ export class AuthSocialService {
   async reRegisterSocial(
     reRegisterSocialDto: ReRegisterSocialDto,
   ): Promise<{ messageCode: MessageCode }> {
-    const deletedUser = await this.userRepository.findOne({
-      where: { email: reRegisterSocialDto.email, socialId: Not(IsNull()) },
-      withDeleted: true,
-    });
+    const deletedUser = await this.userService.findBySocialEmailWithDeleted(
+      reRegisterSocialDto.email,
+    );
 
     if (!deletedUser || !deletedUser.deletedAt) {
       throw new BadRequestException({
@@ -221,9 +212,9 @@ export class AuthSocialService {
       });
     }
 
-    const activeRegularUser = await this.userRepository.findOne({
-      where: { email: reRegisterSocialDto.email, password: Not(IsNull()) },
-    });
+    const activeRegularUser = await this.userService.findByEmailWithPassword(
+      reRegisterSocialDto.email,
+    );
 
     if (activeRegularUser) {
       throw new BadRequestException({
@@ -232,14 +223,9 @@ export class AuthSocialService {
       });
     }
 
-    await this.userRepository.update(
-      { email: reRegisterSocialDto.email },
-      { refreshToken: null, deletedAt: null },
-    );
+    await this.userService.restoreSocialUser(reRegisterSocialDto.email);
 
-    const user = await this.userRepository.findOne({
-      where: { email: reRegisterSocialDto.email },
-    });
+    const user = await this.userService.findByEmail(reRegisterSocialDto.email);
 
     if (!user) {
       throw new BadRequestException({

@@ -90,98 +90,85 @@ describe('GooglePlacesClient', () => {
       );
     });
 
-    it('should throw ExternalApiException on 400 error', async () => {
+    it('should return empty array on 400 error (graceful degradation)', async () => {
       const error = createAxiosError(400, 'Bad Request');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 401 error', async () => {
+    it('should return empty array on 401 error (graceful degradation)', async () => {
       const error = createAxiosError(401, 'Unauthorized');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 403 error', async () => {
+    it('should return empty array on 403 error (graceful degradation)', async () => {
       const error = createAxiosError(403, 'Forbidden');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 404 error', async () => {
+    it('should return empty array on 404 error (graceful degradation)', async () => {
       const error = createAxiosError(404, 'Not Found');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 500 error', async () => {
+    it('should return empty array on 500 error (graceful degradation)', async () => {
       const error = createAxiosError(500, 'Internal Server Error');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 502 error', async () => {
+    it('should return empty array on 502 error (graceful degradation)', async () => {
       const error = createAxiosError(502, 'Bad Gateway');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 503 error', async () => {
+    it('should return empty array on 503 error (graceful degradation)', async () => {
       const error = createAxiosError(503, 'Service Unavailable');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on 429 rate limit', async () => {
+    it('should return empty array on 429 rate limit (graceful degradation)', async () => {
       const error = createAxiosError(429, 'Too Many Requests');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should throw ExternalApiException on network error', async () => {
+    it('should return empty array on network error (graceful degradation)', async () => {
       const error = new Error('Network Error');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      await expect(client.searchByText(query)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.searchByText(query);
+      expect(result).toEqual([]);
     });
 
-    it('should include provider info in exception', async () => {
+    it('should log error details on failure', async () => {
       const error = createAxiosError(500, 'Internal Server Error');
       httpService.post.mockReturnValue(throwError(() => error));
 
-      try {
-        await client.searchByText(query);
-        fail('Should have thrown');
-      } catch (e) {
-        expect(e).toBeInstanceOf(ExternalApiException);
-        expect((e as ExternalApiException).provider).toBe('Google Places');
-      }
+      const result = await client.searchByText(query);
+      // Graceful degradation: returns empty array
+      expect(result).toEqual([]);
     });
 
     it('should support custom options', async () => {
@@ -389,40 +376,36 @@ describe('GooglePlacesClient', () => {
       );
     });
 
-    it('should throw ExternalApiException on 400 error', async () => {
+    it('should return null on 400 error (graceful degradation)', async () => {
       const error = createAxiosError(400, 'Bad Request');
       httpService.get.mockReturnValue(throwError(() => error));
 
-      await expect(client.getDetails(placeId)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.getDetails(placeId);
+      expect(result).toBeNull();
     });
 
-    it('should throw ExternalApiException on 404 error', async () => {
+    it('should return null on 404 error (graceful degradation)', async () => {
       const error = createAxiosError(404, 'Not Found');
       httpService.get.mockReturnValue(throwError(() => error));
 
-      await expect(client.getDetails(placeId)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.getDetails(placeId);
+      expect(result).toBeNull();
     });
 
-    it('should throw ExternalApiException on 500 error', async () => {
+    it('should return null on 500 error (graceful degradation)', async () => {
       const error = createAxiosError(500, 'Internal Server Error');
       httpService.get.mockReturnValue(throwError(() => error));
 
-      await expect(client.getDetails(placeId)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.getDetails(placeId);
+      expect(result).toBeNull();
     });
 
-    it('should throw ExternalApiException on 429 rate limit', async () => {
+    it('should return null on 429 rate limit (graceful degradation)', async () => {
       const error = createAxiosError(429, 'Too Many Requests');
       httpService.get.mockReturnValue(throwError(() => error));
 
-      await expect(client.getDetails(placeId)).rejects.toThrow(
-        ExternalApiException,
-      );
+      const result = await client.getDetails(placeId);
+      expect(result).toBeNull();
     });
 
     it('should support includeBusinessStatus option', async () => {

@@ -43,4 +43,8 @@ export const WEB_SEARCH_CONFIG = {
   MODEL: 'gpt-5.1',
   /** 검색 컨텍스트 크기 */
   CONTEXT_SIZE: 'low' as const,
+  /** 웹 검색 요약용 경량 모델 (Call A) */
+  SUMMARY_MODEL: 'gpt-5-mini',
+  /** 웹 검색 최대 호출 횟수 */
+  MAX_TOOL_CALLS: 1,
 } as const;

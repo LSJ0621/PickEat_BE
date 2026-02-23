@@ -250,3 +250,16 @@ export class CreateSomethingDto {
 - [ ] @/ 경로 alias 사용
 - [ ] Logger 사용 (console.log 금지)
 - [ ] `pnpm run build` 성공
+
+---
+
+## Mandatory Agent Usage
+
+pick-eat_be/ 작업 시 반드시 아래 에이전트를 사용하세요:
+- **test-code-writer**: 테스트 코드 작성 시
+- **code-reviewer**: 코드 변경 완료 후 필수
+- **code-quality-manager**: 빌드/테스트 에러 발생 시
+- **api-sync-analyzer**: controller, DTO, endpoints 변경 후
+- **api-documentation-manager**: API 변경 확인 후 문서화
+- **prompt-engineer**: src/external/openai/prompts/ 파일 수정 시
+- **refactor-executor**: 리팩토링 작업 (3+ 파일)

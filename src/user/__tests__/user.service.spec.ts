@@ -7,6 +7,7 @@ import { User } from '../entities/user.entity';
 import { AddressSearchService } from '../services/address-search.service';
 import { UserAddressService } from '../services/user-address.service';
 import { UserPreferenceService } from '../services/user-preference.service';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import {
   UserFactory,
   UserPreferencesFactory,
@@ -22,6 +23,7 @@ describe('UserService', () => {
   let addressSearchService: jest.Mocked<AddressSearchService>;
   let userAddressService: jest.Mocked<UserAddressService>;
   let userPreferenceService: jest.Mocked<UserPreferenceService>;
+  let cacheService: jest.Mocked<RedisCacheService>;
 
   beforeEach(async () => {
     userRepository = {
@@ -60,6 +62,15 @@ describe('UserService', () => {
       'updatePreferencesAnalysis',
     ]);
 
+    cacheService = createMockService<RedisCacheService>([
+      'invalidateUserProfile',
+      'invalidateUserAddresses',
+      'invalidateUserPreferences',
+    ]);
+    cacheService.invalidateUserProfile.mockResolvedValue(undefined);
+    cacheService.invalidateUserAddresses.mockResolvedValue(undefined);
+    cacheService.invalidateUserPreferences.mockResolvedValue(undefined);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
@@ -82,6 +93,10 @@ describe('UserService', () => {
         {
           provide: UserPreferenceService,
           useValue: userPreferenceService,
+        },
+        {
+          provide: RedisCacheService,
+          useValue: cacheService,
         },
       ],
     }).compile();
@@ -837,6 +852,75 @@ describe('UserService', () => {
     });
   });
 
+  describe('updateEntityLanguage', () => {
+    const mockExecute = jest.fn();
+    const mockReturning = jest.fn().mockReturnValue({ execute: mockExecute });
+    const mockWhere = jest.fn().mockReturnValue({ returning: mockReturning });
+    const mockSet = jest.fn().mockReturnValue({ where: mockWhere });
+    const mockUpdate = jest.fn().mockReturnValue({ set: mockSet });
+    const mockCreateQueryBuilder = jest
+      .fn()
+      .mockReturnValue({ update: mockUpdate });
+
+    beforeEach(() => {
+      userRepository.createQueryBuilder =
+        mockCreateQueryBuilder as unknown as typeof userRepository.createQueryBuilder;
+    });
+
+    it('should update language with single targeted query and invalidate cache', async () => {
+      // Arrange
+      const email = 'test@example.com';
+      const userId = 42;
+      mockExecute.mockResolvedValue({
+        affected: 1,
+        raw: [{ id: userId }],
+      });
+      cacheService.invalidateUserProfile.mockResolvedValue(undefined);
+
+      // Act
+      await service.updateEntityLanguage(email, 'en');
+
+      // Assert
+      expect(mockCreateQueryBuilder).toHaveBeenCalled();
+      expect(mockUpdate).toHaveBeenCalledWith(User);
+      expect(mockSet).toHaveBeenCalledWith({ preferredLanguage: 'en' });
+      expect(mockWhere).toHaveBeenCalledWith('email = :email', { email });
+      expect(mockReturning).toHaveBeenCalledWith('id');
+      expect(cacheService.invalidateUserProfile).toHaveBeenCalledWith(userId);
+    });
+
+    it('should throw NotFoundException when user not found', async () => {
+      // Arrange
+      const email = 'nonexistent@example.com';
+      mockExecute.mockResolvedValue({
+        affected: 0,
+        raw: [],
+      });
+
+      // Act & Assert
+      await expect(service.updateEntityLanguage(email, 'ko')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should complete successfully even if cache invalidation fails', async () => {
+      // Arrange
+      const email = 'test@example.com';
+      mockExecute.mockResolvedValue({
+        affected: 1,
+        raw: [{ id: 1 }],
+      });
+      cacheService.invalidateUserProfile.mockRejectedValue(
+        new Error('Redis connection failed'),
+      );
+
+      // Act & Assert
+      await expect(
+        service.updateEntityLanguage(email, 'en'),
+      ).resolves.not.toThrow();
+    });
+  });
+
   describe('searchAddress', () => {
     it('should delegate to addressSearchService', async () => {
       // Arrange
@@ -1101,7 +1185,7 @@ describe('UserService', () => {
       const user = UserFactory.create({
         id: userId,
         name: 'Old Name',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
       const updates = { name: 'New Name' };
@@ -1117,24 +1201,27 @@ describe('UserService', () => {
       expect(userRepository.save).toHaveBeenCalledWith(user);
     });
 
-    it('should update only birthYear when birthYear is provided', async () => {
+    it('should update only birthDate when birthDate is provided', async () => {
       // Arrange
       const userId = 1;
       const user = UserFactory.create({
         id: userId,
         name: 'Test User',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
-      const updates = { birthYear: 1990 };
+      const updates = { birthDate: '1990-06-15' };
       userRepository.findOneBy.mockResolvedValue(user);
-      userRepository.save.mockResolvedValue({ ...user, birthYear: 1990 });
+      userRepository.save.mockResolvedValue({
+        ...user,
+        birthDate: '1990-06-15',
+      });
 
       // Act
       const result = await service.updateProfile(userId, updates);
 
       // Assert
-      expect(result.birthYear).toBe(1990);
+      expect(result.birthDate).toBe('1990-06-15');
       expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
       expect(userRepository.save).toHaveBeenCalledWith(user);
     });
@@ -1145,7 +1232,7 @@ describe('UserService', () => {
       const user = UserFactory.create({
         id: userId,
         name: 'Test User',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
       const updates = { gender: 'male' as const };
@@ -1167,19 +1254,19 @@ describe('UserService', () => {
       const user = UserFactory.create({
         id: userId,
         name: 'Old Name',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
       const updates = {
         name: 'New Name',
-        birthYear: 1995,
+        birthDate: '1995-03-20',
         gender: 'female' as const,
       };
       userRepository.findOneBy.mockResolvedValue(user);
       userRepository.save.mockResolvedValue({
         ...user,
         name: 'New Name',
-        birthYear: 1995,
+        birthDate: '1995-03-20',
         gender: 'female',
       });
 
@@ -1188,7 +1275,7 @@ describe('UserService', () => {
 
       // Assert
       expect(result.name).toBe('New Name');
-      expect(result.birthYear).toBe(1995);
+      expect(result.birthDate).toBe('1995-03-20');
       expect(result.gender).toBe('female');
       expect(userRepository.findOneBy).toHaveBeenCalledWith({ id: userId });
       expect(userRepository.save).toHaveBeenCalledWith(user);
@@ -1214,14 +1301,14 @@ describe('UserService', () => {
       const user = UserFactory.create({
         id: userId,
         name: 'Original Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male',
       });
-      const updates = { birthYear: 1995 };
+      const updates = { birthDate: '1995-03-20' };
       userRepository.findOneBy.mockResolvedValue(user);
       userRepository.save.mockResolvedValue({
         ...user,
-        birthYear: 1995,
+        birthDate: '1995-03-20',
       });
 
       // Act
@@ -1229,7 +1316,7 @@ describe('UserService', () => {
 
       // Assert
       expect(result.name).toBe('Original Name');
-      expect(result.birthYear).toBe(1995);
+      expect(result.birthDate).toBe('1995-03-20');
       expect(result.gender).toBe('male');
     });
 
@@ -1257,7 +1344,7 @@ describe('UserService', () => {
       const user = UserFactory.create({
         id: userId,
         name: 'Original Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male',
       });
       const updates = {};
@@ -1269,7 +1356,7 @@ describe('UserService', () => {
 
       // Assert
       expect(result.name).toBe('Original Name');
-      expect(result.birthYear).toBe(1990);
+      expect(result.birthDate).toBe('1990-06-15');
       expect(result.gender).toBe('male');
       expect(userRepository.save).toHaveBeenCalledWith(user);
     });

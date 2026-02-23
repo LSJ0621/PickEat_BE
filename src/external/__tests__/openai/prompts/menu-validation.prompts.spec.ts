@@ -63,8 +63,9 @@ describe('menu-validation.prompts', () => {
           ['양식', '중식'],
         );
 
-        expect(result).toContain('USER_REQUEST:');
+        expect(result).toContain('<user_request>');
         expect(result).toContain('오늘 점심 뭐 먹을까');
+        expect(result).toContain('</user_request>');
         expect(result).toContain('USER_PREFERENCES (for reference):');
         expect(result).toContain('Likes: 한식, 일식');
         expect(result).toContain('Dislikes: 양식, 중식');
@@ -143,8 +144,9 @@ describe('menu-validation.prompts', () => {
       it('should display "None" for both likes and dislikes when both are empty', () => {
         const result = buildValidationUserPrompt('혼밥 메뉴 추천', [], []);
 
-        expect(result).toContain('USER_REQUEST:');
+        expect(result).toContain('<user_request>');
         expect(result).toContain('혼밥 메뉴 추천');
+        expect(result).toContain('</user_request>');
         expect(result).toContain('USER_PREFERENCES (for reference):');
         expect(result).toContain('Likes: None');
         expect(result).toContain('Dislikes: None');
@@ -154,13 +156,14 @@ describe('menu-validation.prompts', () => {
         const result = buildValidationUserPrompt('데이트 식당 추천', [], []);
 
         const lines = result.split('\n');
-        expect(lines).toHaveLength(6);
-        expect(lines[0]).toBe('USER_REQUEST:');
+        expect(lines).toHaveLength(7);
+        expect(lines[0]).toBe('<user_request>');
         expect(lines[1]).toBe('데이트 식당 추천');
-        expect(lines[2]).toBe('---');
-        expect(lines[3]).toBe('USER_PREFERENCES (for reference):');
-        expect(lines[4]).toBe('Likes: None');
-        expect(lines[5]).toBe('Dislikes: None');
+        expect(lines[2]).toBe('</user_request>');
+        expect(lines[3]).toBe('---');
+        expect(lines[4]).toBe('USER_PREFERENCES (for reference):');
+        expect(lines[5]).toBe('Likes: None');
+        expect(lines[6]).toBe('Dislikes: None');
       });
     });
 
@@ -212,8 +215,9 @@ describe('menu-validation.prompts', () => {
             testCase.dislikes,
           );
 
-          expect(result).toContain('USER_REQUEST:');
+          expect(result).toContain('<user_request>');
           expect(result).toContain(testCase.prompt);
+          expect(result).toContain('</user_request>');
           expect(result).toContain('---');
           expect(result).toContain('USER_PREFERENCES (for reference):');
           expect(result).toContain('Likes:');
@@ -505,15 +509,17 @@ describe('menu-validation.prompts', () => {
           'ko',
         );
 
-        expect(result).toContain('USER_REQUEST:');
+        expect(result).toContain('<user_request>');
         expect(result).toContain('I want pizza');
+        expect(result).toContain('</user_request>');
       });
 
       it('should work without language parameter', () => {
         const result = buildValidationUserPrompt('오늘 점심 뭐 먹을까', [], []);
 
-        expect(result).toContain('USER_REQUEST:');
+        expect(result).toContain('<user_request>');
         expect(result).toContain('오늘 점심 뭐 먹을까');
+        expect(result).toContain('</user_request>');
       });
 
       it('should maintain same output regardless of language parameter', () => {

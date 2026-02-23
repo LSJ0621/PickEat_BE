@@ -3,9 +3,12 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
-import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
+import { SEARCH_DEFAULTS } from '@/common/constants/business.constants';
+import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
+import {
+  retryWithExponentialBackoff,
+  RetryOptions,
+} from '@/common/utils/retry.util';
 import { GOOGLE_PLACES_CONFIG } from '../google.constants';
 import {
   GooglePlaceDetails,
@@ -25,6 +28,10 @@ export class GooglePlacesClient {
   private readonly apiKey: string;
   private readonly appUrl: string;
   private readonly baseUrl = GOOGLE_PLACES_CONFIG.BASE_URL;
+
+  private readonly retryOptions: RetryOptions = {
+    retryableStatusCodes: [429, 500, 502, 503, 504],
+  };
 
   constructor(
     private readonly httpService: HttpService,
@@ -78,16 +85,21 @@ export class GooglePlacesClient {
         requestBody.sessionToken = options.sessionToken;
       }
 
-      const response = await firstValueFrom(
-        this.httpService.post<GooglePlacesAutocompleteResponse>(
-          url,
-          requestBody,
-          {
-            headers: this.buildHeaders(
-              GOOGLE_PLACES_CONFIG.FIELD_MASKS.AUTOCOMPLETE,
+      const response = await retryWithExponentialBackoff(
+        () =>
+          firstValueFrom(
+            this.httpService.post<GooglePlacesAutocompleteResponse>(
+              url,
+              requestBody,
+              {
+                headers: this.buildHeaders(
+                  GOOGLE_PLACES_CONFIG.FIELD_MASKS.AUTOCOMPLETE,
+                ),
+              },
             ),
-          },
-        ),
+          ),
+        this.retryOptions,
+        this.logger,
       );
 
       const suggestions = response.data?.suggestions ?? [];
@@ -97,11 +109,11 @@ export class GooglePlacesClient {
       return suggestions;
     } catch (error: unknown) {
       this.logError('Places Autocomplete', input, error);
-      throw new ExternalApiException(
-        'Google Places',
-        error,
-        'Places Autocomplete에 실패했습니다.',
+      // Graceful degradation: 빈 배열 반환
+      this.logger.warn(
+        `Places Autocomplete 실패, 빈 결과 반환 (query: "${input}")`,
       );
+      return [];
     }
   }
 
@@ -143,22 +155,31 @@ export class GooglePlacesClient {
         apiRequestBody.locationBias = requestBody.locationBias;
       }
 
-      const response = await firstValueFrom(
-        this.httpService.post<GooglePlacesSearchResponse>(url, apiRequestBody, {
-          headers: this.buildHeaders(GOOGLE_PLACES_CONFIG.FIELD_MASKS.SEARCH),
-        }),
+      const response = await retryWithExponentialBackoff(
+        () =>
+          firstValueFrom(
+            this.httpService.post<GooglePlacesSearchResponse>(
+              url,
+              apiRequestBody,
+              {
+                headers: this.buildHeaders(
+                  GOOGLE_PLACES_CONFIG.FIELD_MASKS.SEARCH,
+                ),
+              },
+            ),
+          ),
+        this.retryOptions,
+        this.logger,
       );
 
       const places = response.data?.places ?? [];
-      this.logger.log(`✅ [Places 검색 완료] count=${places.length}`);
+      this.logger.log(`[Places 검색 완료] count=${places.length}`);
       return places;
     } catch (error: unknown) {
       this.logError('Places 검색', query, error);
-      throw new ExternalApiException(
-        'Google Places',
-        error,
-        'Places 검색에 실패했습니다.',
-      );
+      // Graceful degradation: 빈 배열 반환
+      this.logger.warn(`Places 검색 실패, 빈 결과 반환 (query: "${query}")`);
+      return [];
     }
   }
 
@@ -201,26 +222,31 @@ export class GooglePlacesClient {
         headers['X-Goog-SessionToken'] = options.sessionToken;
       }
 
-      const response = await firstValueFrom(
-        this.httpService.get<GooglePlaceDetails>(url, {
-          params: {
-            languageCode:
-              options?.languageCode ??
-              GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE,
-          },
-          headers,
-        }),
+      const response = await retryWithExponentialBackoff(
+        () =>
+          firstValueFrom(
+            this.httpService.get<GooglePlaceDetails>(url, {
+              params: {
+                languageCode:
+                  options?.languageCode ??
+                  GOOGLE_PLACES_CONFIG.DEFAULTS.LANGUAGE_CODE,
+              },
+              headers,
+            }),
+          ),
+        this.retryOptions,
+        this.logger,
       );
 
       const result = response.data ?? null;
       return result;
     } catch (error: unknown) {
       this.logError('Places 상세 조회', placeId, error);
-      throw new ExternalApiException(
-        'Google Places',
-        error,
-        'Places 상세 조회에 실패했습니다.',
+      // Graceful degradation: null 반환
+      this.logger.warn(
+        `Places 상세 조회 실패, null 반환 (placeId: "${placeId}")`,
       );
+      return null;
     }
   }
 
@@ -238,18 +264,23 @@ export class GooglePlacesClient {
     const url = `${this.baseUrl}${GOOGLE_PLACES_CONFIG.ENDPOINTS.PHOTO(photoName)}`;
 
     try {
-      const response = await firstValueFrom(
-        this.httpService.get<GooglePlacePhotoUriResponse>(url, {
-          params: {
-            maxHeightPx: options?.maxHeight ?? 400,
-            maxWidthPx: options?.maxWidth ?? 400,
-            skipHttpRedirect: true,
-          },
-          headers: {
-            'X-Goog-Api-Key': this.apiKey,
-            Referer: this.appUrl,
-          },
-        }),
+      const response = await retryWithExponentialBackoff(
+        () =>
+          firstValueFrom(
+            this.httpService.get<GooglePlacePhotoUriResponse>(url, {
+              params: {
+                maxHeightPx: options?.maxHeight ?? 400,
+                maxWidthPx: options?.maxWidth ?? 400,
+                skipHttpRedirect: true,
+              },
+              headers: {
+                'X-Goog-Api-Key': this.apiKey,
+                Referer: this.appUrl,
+              },
+            }),
+          ),
+        this.retryOptions,
+        this.logger,
       );
 
       const result = response.data?.photoUri ?? null;

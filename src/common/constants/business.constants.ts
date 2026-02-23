@@ -12,8 +12,6 @@ export const USER_LIMITS = {
  * 검색 관련 기본값 상수
  */
 export const SEARCH_DEFAULTS = {
-  /** 네이버 로컬 검색 결과 개수 */
-  NAVER_LOCAL_DISPLAY: 5,
   /** Google Places 검색 결과 개수 */
   GOOGLE_PLACES_MAX_RESULTS: 10,
   /** Google Custom Search 결과 개수 */
@@ -31,9 +29,20 @@ export const MENU_RECOMMENDATION = {
 } as const;
 
 /**
+ * 인증 관련 쿠키 상수
+ */
+export const AUTH_COOKIE = {
+  REFRESH_TOKEN_NAME: 'refreshToken',
+} as const;
+
+/**
  * 인증 관련 상수 (밀리초 단위)
  */
 export const AUTH_TIMING = {
+  /** Access Token 만료 시간: 15분 */
+  ACCESS_TOKEN_EXPIRES: '15m',
+  /** Refresh Token 만료 시간: 7일 */
+  REFRESH_TOKEN_EXPIRES: '7d',
   /** 쿠키 만료 시간: 7일 */
   COOKIE_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
   /** 하루: 24시간 */
@@ -68,6 +77,18 @@ export const BUG_REPORT_NOTIFICATION = {
   RECENT_BUGS_COUNT: 5,
   /** 설명 미리보기 최대 길이 */
   DESCRIPTION_PREVIEW_LENGTH: 100,
+} as const;
+
+/**
+ * 파일 업로드 관련 상수
+ */
+export const FILE_UPLOAD = {
+  /** 단일 파일 최대 크기: 5MB */
+  MAX_FILE_SIZE: 5 * 1024 * 1024,
+  /** 최대 동시 업로드 파일 개수 */
+  MAX_FILES_COUNT: 5,
+  /** 전체 요청 최대 크기: 30MB (5MB * 5 files + overhead) */
+  MAX_REQUEST_SIZE: 30 * 1024 * 1024,
 } as const;
 
 /**
@@ -124,4 +145,46 @@ export const USER_PLACE_CATEGORIES = [
 export const GOOGLE_PLACES_SEARCH = {
   /** Location bias radius in meters (float required by Google Places API) */
   LOCATION_BIAS_RADIUS_METERS: 500.0,
+} as const;
+
+/**
+ * DB 커넥션 풀 설정
+ */
+export const DATABASE_POOL = {
+  /** 최대 커넥션 수 */
+  MAX: 20,
+  /** 커넥션 타임아웃 (ms) */
+  CONNECTION_TIMEOUT_MS: 30_000,
+  /** 유휴 타임아웃 (ms) */
+  IDLE_TIMEOUT_MS: 10_000,
+  /** 재시도 횟수 */
+  RETRY_ATTEMPTS: 3,
+  /** 재시도 간격 (ms) */
+  RETRY_DELAY_MS: 3_000,
+} as const;
+
+/**
+ * 배치 처리 관련 상수
+ */
+export const BATCH_CONFIG = {
+  /** 최대 재시도 횟수 */
+  MAX_RETRY_COUNT: 3,
+  /** Advisory Lock 타임아웃 (ms): 5분 */
+  ADVISORY_LOCK_TIMEOUT_MS: 5 * 60 * 1000,
+  /** 결과 처리 청크 크기 */
+  RESULT_CHUNK_SIZE: 100,
+  /** 과거 데이터 조회 제한 (개월) */
+  HISTORY_LIMIT_MONTHS: 6,
+} as const;
+
+/**
+ * 스케줄러 분산 락 이름
+ */
+export const SCHEDULER_LOCKS = {
+  PREFERENCES_BATCH: 'preferences_batch_submit',
+  PREFERENCES_BATCH_RESULT: 'preferences_batch_result',
+  PREFERENCES_RETRY: 'preferences_retry_batch',
+  NOTIFICATION_PUBLISH: 'notification_publish',
+  BUG_REPORT_CHECK: 'bug_report_check',
+  RATING_AGGREGATE_UPDATE: 'rating_aggregate_update',
 } as const;

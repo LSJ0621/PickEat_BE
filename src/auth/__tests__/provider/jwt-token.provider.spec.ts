@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { AUTH_TIMING } from '@/common/constants/business.constants';
 import { JwtTokenProvider } from '../../provider/jwt-token.provider';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 
@@ -118,7 +119,7 @@ describe('JwtTokenProvider', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith(
         expect.objectContaining({ email, role, type: 'refresh' }),
         {
-          expiresIn: '7d',
+          expiresIn: AUTH_TIMING.REFRESH_TOKEN_EXPIRES,
           secret: 'test-refresh-secret',
         },
       );
@@ -140,7 +141,7 @@ describe('JwtTokenProvider', () => {
       expect(mockJwtService.sign).toHaveBeenCalledWith(
         expect.objectContaining({ email, role, type: 'refresh' }),
         {
-          expiresIn: '7d',
+          expiresIn: AUTH_TIMING.REFRESH_TOKEN_EXPIRES,
           secret: 'test-refresh-secret',
         },
       );

@@ -35,6 +35,7 @@ describe('UserController', () => {
       updateEntitySingleAddress: jest.fn(),
       updateEntityName: jest.fn(),
       updateProfile: jest.fn(),
+      updateEntityLanguage: jest.fn(),
       deleteUser: jest.fn(),
       getEntityDefaultAddress: jest.fn(),
       getEntityAddresses: jest.fn(),
@@ -282,18 +283,18 @@ describe('UserController', () => {
         id: 1,
         email: mockAuthUser.email,
         name: 'Old Name',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
       const updateDto: UpdateUserDto = {
         name: 'New Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male',
       };
       const updatedUser = {
         ...user,
         name: 'New Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male' as const,
       };
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
@@ -305,7 +306,7 @@ describe('UserController', () => {
       // Assert
       expect(result).toEqual({
         name: 'New Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male',
       });
       expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
@@ -320,7 +321,7 @@ describe('UserController', () => {
         id: 1,
         email: mockAuthUser.email,
         name: 'Old Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male',
       });
       const updateDto: UpdateUserDto = { name: 'New Name' };
@@ -337,7 +338,7 @@ describe('UserController', () => {
       // Assert
       expect(result).toEqual({
         name: 'New Name',
-        birthYear: 1990,
+        birthDate: '1990-06-15',
         gender: 'male',
       });
       expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
@@ -345,19 +346,19 @@ describe('UserController', () => {
       });
     });
 
-    it('should update only birthYear when only birthYear is provided', async () => {
+    it('should update only birthDate when only birthDate is provided', async () => {
       // Arrange
       const user = UserFactory.create({
         id: 1,
         email: mockAuthUser.email,
         name: 'Test User',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
-      const updateDto: UpdateUserDto = { birthYear: 1995 };
+      const updateDto: UpdateUserDto = { birthDate: '1995-03-20' };
       const updatedUser = {
         ...user,
-        birthYear: 1995,
+        birthDate: '1995-03-20',
       };
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.updateProfile.mockResolvedValue(updatedUser);
@@ -368,11 +369,11 @@ describe('UserController', () => {
       // Assert
       expect(result).toEqual({
         name: 'Test User',
-        birthYear: 1995,
+        birthDate: '1995-03-20',
         gender: null,
       });
       expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
-        birthYear: 1995,
+        birthDate: '1995-03-20',
       });
     });
 
@@ -382,7 +383,7 @@ describe('UserController', () => {
         id: 1,
         email: mockAuthUser.email,
         name: 'Test User',
-        birthYear: null,
+        birthDate: null,
         gender: null,
       });
       const updateDto: UpdateUserDto = { gender: 'female' };
@@ -399,7 +400,7 @@ describe('UserController', () => {
       // Assert
       expect(result).toEqual({
         name: 'Test User',
-        birthYear: null,
+        birthDate: null,
         gender: 'female',
       });
       expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
@@ -478,6 +479,41 @@ describe('UserController', () => {
     });
   });
 
+  describe('updateLanguage', () => {
+    it('should update language and return success message', async () => {
+      // Arrange
+      const dto = { language: 'en' as const };
+      mockUserService.updateEntityLanguage.mockResolvedValue(undefined);
+
+      // Act
+      const result = await controller.updateLanguage(dto, mockAuthUser);
+
+      // Assert
+      expect(result).toEqual({ messageCode: 'USER_LANGUAGE_CHANGED' });
+      expect(mockUserService.updateEntityLanguage).toHaveBeenCalledWith(
+        mockAuthUser.email,
+        'en',
+      );
+    });
+
+    it('should propagate NotFoundException when user not found', async () => {
+      // Arrange
+      const dto = { language: 'ko' as const };
+      mockUserService.updateEntityLanguage.mockRejectedValue(
+        new NotFoundException('User not found'),
+      );
+
+      // Act & Assert
+      await expect(
+        controller.updateLanguage(dto, mockAuthUser),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockUserService.updateEntityLanguage).toHaveBeenCalledWith(
+        mockAuthUser.email,
+        'ko',
+      );
+    });
+  });
+
   describe('getDefaultAddress', () => {
     it('should return default address when it exists', async () => {
       // Arrange
@@ -533,9 +569,9 @@ describe('UserController', () => {
       const result = await controller.getUserAddresses(mockAuthUser);
 
       // Assert
-      expect(result).toHaveLength(2);
-      expect(result[0].id).toBe(1);
-      expect(result[1].id).toBe(2);
+      expect(result.addresses).toHaveLength(2);
+      expect(result.addresses[0].id).toBe(1);
+      expect(result.addresses[1].id).toBe(2);
       expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
         mockAuthUser.email,
       );
@@ -552,7 +588,7 @@ describe('UserController', () => {
       const result = await controller.getUserAddresses(mockAuthUser);
 
       // Assert
-      expect(result).toEqual([]);
+      expect(result.addresses).toEqual([]);
       expect(mockUserService.getEntityAddresses).toHaveBeenCalledWith(user);
     });
 
@@ -573,10 +609,10 @@ describe('UserController', () => {
       const result = await controller.getUserAddresses(mockAuthUser);
 
       // Assert
-      expect(result[0].latitude).toBe(37.5012345);
-      expect(result[0].longitude).toBe(127.0398765);
-      expect(typeof result[0].latitude).toBe('number');
-      expect(typeof result[0].longitude).toBe('number');
+      expect(result.addresses[0].latitude).toBe(37.5012345);
+      expect(result.addresses[0].longitude).toBe(127.0398765);
+      expect(typeof result.addresses[0].latitude).toBe('number');
+      expect(typeof result.addresses[0].longitude).toBe('number');
     });
   });
 

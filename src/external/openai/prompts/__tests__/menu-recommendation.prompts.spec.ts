@@ -383,20 +383,18 @@ describe('menu-recommendation.prompts', () => {
 
       // Assert
       expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      expect(result).toContain('USER_PROMPT:');
+      expect(result).toContain('<user_prompt>');
       expect(result).toContain('I want something spicy');
       expect(result).toContain('PREFERENCES (use only what is needed):');
       expect(result).toContain('Likes: Korean food, Spicy food');
       expect(result).toContain('Dislikes: Sweet food');
       expect(result).toContain('PREFERENCE_ANALYSIS:');
       expect(result).toContain('User prefers spicy Korean dishes');
-      expect(result).toContain('USER_PROFILE (웹 검색에 사용):');
+      expect(result).toContain('USER_PROFILE (참고용):');
       expect(result).toContain('국가: Korea');
       expect(result).toContain('연령대: 30대');
       expect(result).toContain('성별: 남성');
-      expect(result).toContain(
-        'USER_ADDRESS (이 위치의 인기 음식을 웹 검색으로 찾아주세요):',
-      );
+      expect(result).toContain('USER_ADDRESS (위치 참고):');
       expect(result).toContain('Seoul, Gangnam-gu');
     });
 
@@ -425,14 +423,12 @@ describe('menu-recommendation.prompts', () => {
 
       // Assert
       expect(result).toContain('RESPONSE_LANGUAGE: English');
-      expect(result).toContain('USER_PROMPT:');
+      expect(result).toContain('<user_prompt>');
       expect(result).toContain('Recommend me something');
       expect(result).toContain('Likes: Pizza');
       expect(result).toContain('Dislikes: Sushi');
       expect(result).not.toContain('USER_PROFILE');
-      expect(result).toContain(
-        'USER_ADDRESS (use web_search to find popular foods in this location):',
-      );
+      expect(result).toContain('USER_ADDRESS (location reference):');
       expect(result).toContain('New York, Manhattan');
     });
 
@@ -464,7 +460,7 @@ describe('menu-recommendation.prompts', () => {
       );
 
       // Assert
-      expect(result).toContain('USER_PROFILE (use for web search queries):');
+      expect(result).toContain('USER_PROFILE (reference only):');
       expect(result).toContain('Country: Japan');
       expect(result).toContain('Age Group: 20s');
       expect(result).toContain('Gender: Female');
@@ -495,7 +491,7 @@ describe('menu-recommendation.prompts', () => {
       );
 
       // Assert
-      expect(result).toContain('USER_PROMPT:');
+      expect(result).toContain('<user_prompt>');
       expect(result).toContain('Anything');
       expect(result).toContain('Likes: None');
       expect(result).toContain('Dislikes: None');
@@ -527,7 +523,7 @@ describe('menu-recommendation.prompts', () => {
       );
 
       // Assert
-      expect(result).toContain('USER_PROFILE (use for web search queries):');
+      expect(result).toContain('USER_PROFILE (reference only):');
       expect(result).toContain('Country: Italy');
       expect(result).not.toContain('Age Group:');
       expect(result).not.toContain('Gender:');
@@ -556,7 +552,7 @@ describe('menu-recommendation.prompts', () => {
       );
 
       // Assert
-      expect(result).toContain('USER_PROFILE (웹 검색에 사용):');
+      expect(result).toContain('USER_PROFILE (참고용):');
       expect(result).not.toContain('국가:');
       expect(result).toContain('연령대: 20대');
       expect(result).not.toContain('성별:');
@@ -585,7 +581,7 @@ describe('menu-recommendation.prompts', () => {
       );
 
       // Assert
-      expect(result).toContain('USER_PROFILE (웹 검색에 사용):');
+      expect(result).toContain('USER_PROFILE (참고용):');
       expect(result).not.toContain('국가:');
       expect(result).not.toContain('연령대:');
       expect(result).toContain('성별: 여성');

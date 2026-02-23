@@ -9,12 +9,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { AUTH_TIMING } from '../common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { MessageCode } from '@/common/constants/message-codes';
 import { UserAddress } from '../user/entities/user-address.entity';
 import { User } from '../user/entities/user.entity';
+import { EmailVerification } from './entities/email-verification.entity';
 import { UserService } from '../user/user.service';
 import { LoginDto } from './dto/login.dto';
 import { ReRegisterSocialDto } from './dto/re-register-social.dto';
@@ -27,6 +28,7 @@ import {
   AuthProfile,
   AuthResult,
 } from './interfaces/auth.interface';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import { AuthSocialService } from './services/auth-social.service';
 import { AuthTokenService } from './services/auth-token.service';
 import { EmailVerificationService } from './services/email-verification.service';
@@ -40,8 +42,10 @@ export class AuthService {
     private readonly authTokenService: AuthTokenService,
     private readonly authSocialService: AuthSocialService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly cacheService: RedisCacheService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
   // ========== 소셜 로그인 (위임) ==========
@@ -77,6 +81,13 @@ export class AuthService {
     reRegisterSocialDto: ReRegisterSocialDto,
   ): Promise<{ messageCode: MessageCode }> {
     return this.authSocialService.reRegisterSocial(reRegisterSocialDto);
+  }
+
+  async findDeletedUserByEmail(email: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { email },
+      withDeleted: true,
+    });
   }
 
   // ========== 토큰 관리 (위임) ==========
@@ -141,47 +152,56 @@ export class AuthService {
     };
   }
 
-  async validateUser(email: string, password: string): Promise<User | null> {
+  async validateUser(
+    email: string,
+    password: string,
+  ): Promise<{
+    user: User | null;
+    reason:
+      | 'success'
+      | 'not_found'
+      | 'deleted'
+      | 'deactivated'
+      | 'wrong_password'
+      | 'no_password';
+  }> {
     const user = await this.userRepository.findOne({
       where: { email },
       withDeleted: true,
     });
 
     if (!user) {
-      return null;
+      return { user: null, reason: 'not_found' };
     }
 
     if (user.deletedAt) {
-      return null;
+      return { user: null, reason: 'deleted' };
     }
 
     if (user.isDeactivated) {
-      return null;
+      return { user: null, reason: 'deactivated' };
     }
 
     if (!user.password) {
-      return null;
+      return { user: null, reason: 'no_password' };
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return null;
+      return { user: null, reason: 'wrong_password' };
     }
 
-    return user;
+    return { user, reason: 'success' };
   }
 
   async login(loginDto: LoginDto): Promise<AuthResult> {
-    const user = await this.validateUser(loginDto.email, loginDto.password);
+    const { user, reason } = await this.validateUser(
+      loginDto.email,
+      loginDto.password,
+    );
 
     if (!user) {
-      // 비활성화된 유저인지 확인하여 적절한 에러 메시지 제공
-      const existingUser = await this.userRepository.findOne({
-        where: { email: loginDto.email },
-        withDeleted: true,
-      });
-
-      if (existingUser?.isDeactivated) {
+      if (reason === 'deactivated') {
         throw new HttpException(
           {
             statusCode: HttpStatus.FORBIDDEN,
@@ -278,22 +298,35 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(reRegisterDto.password, 10);
 
-    await this.userRepository.update(
-      { email: reRegisterDto.email },
-      {
-        password: hashedPassword,
-        name: reRegisterDto.name,
-        reRegisterEmailVerified: true,
-        refreshToken: null,
-        deletedAt: null,
-        lastPasswordChangedAt: new Date(),
-      },
-    );
+    await this.dataSource.transaction(async (manager) => {
+      await manager.getRepository(User).update(
+        { email: reRegisterDto.email },
+        {
+          password: hashedPassword,
+          name: reRegisterDto.name,
+          reRegisterEmailVerified: true,
+          refreshToken: null,
+          deletedAt: null,
+          lastPasswordChangedAt: new Date(),
+        },
+      );
 
-    await this.emailVerificationService.expireVerification(
-      reRegisterDto.email,
-      EmailPurpose.RE_REGISTER,
-    );
+      const verification = await manager
+        .getRepository(EmailVerification)
+        .findOne({
+          where: {
+            email: reRegisterDto.email,
+            purpose: EmailPurpose.RE_REGISTER,
+          },
+          order: { createdAt: 'DESC' },
+        });
+
+      if (verification) {
+        verification.status = 'INVALIDATED';
+        verification.expiresAt = new Date();
+        await manager.getRepository(EmailVerification).save(verification);
+      }
+    });
 
     const user = await this.userRepository.findOne({
       where: { email: reRegisterDto.email },
@@ -315,15 +348,43 @@ export class AuthService {
   async getUserProfile(email: string): Promise<AuthProfile> {
     const entity = await this.userService.getAuthenticatedEntity(email);
 
+    // 1. 캐시 조회
+    const cached = await this.cacheService.getUserProfile(entity.id);
+    if (cached) {
+      return {
+        email: cached.email,
+        name: cached.name,
+        address: cached.address,
+        latitude: cached.latitude,
+        longitude: cached.longitude,
+        birthDate: cached.birthDate,
+        gender: cached.gender as AuthProfile['gender'],
+        preferredLanguage: cached.preferredLanguage,
+      };
+    }
+
+    // 2. 캐시 MISS → DB 조회
     const defaultAddress =
       await this.userService.getEntityDefaultAddress(entity);
     const addressResponse = this.buildAddressResponse(entity, defaultAddress);
 
-    return {
+    const profile: AuthProfile = {
       email: entity.email,
       name: this.nullableString(entity.name),
       ...addressResponse,
+      birthDate: entity.birthDate ?? null,
+      gender: entity.gender ?? null,
+      preferredLanguage: entity.preferredLanguage,
     };
+
+    // 3. 캐시 저장 (비동기, 에러 무시)
+    this.cacheService
+      .setUserProfile(entity.id, profile)
+      .catch((err) =>
+        this.logger.warn(`프로필 캐시 저장 실패: ${err.message}`),
+      );
+
+    return profile;
   }
 
   // ========== Auth Result 빌드 ==========
@@ -343,6 +404,9 @@ export class AuthService {
       ...addressResponse,
       name: this.nullableString(entity.name),
       preferences: entity.preferences ?? null,
+      birthDate: entity.birthDate ?? null,
+      gender: entity.gender ?? null,
+      preferredLanguage: entity.preferredLanguage,
     };
   }
 
@@ -456,10 +520,6 @@ export class AuthService {
   }
 
   private nullableString(value: string | null | undefined): string | null {
-    return value ?? null;
-  }
-
-  private nullableNumber(value: number | null | undefined): number | null {
     return value ?? null;
   }
 }

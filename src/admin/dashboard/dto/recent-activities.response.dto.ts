@@ -3,17 +3,17 @@ export class RecentActivitiesResponseDto {
     id: number;
     email: string;
     socialType: string | null;
-    createdAt: Date;
+    createdAt: string;
   }>;
   recentBugReports: Array<{
     id: number;
     title: string;
     category: string;
-    createdAt: Date;
+    createdAt: string;
   }>;
   recentDeletedUsers: Array<{
     id: number;
     email: string;
-    deletedAt: Date;
+    deletedAt: string;
   }>;
 }

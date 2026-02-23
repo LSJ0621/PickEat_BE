@@ -95,10 +95,8 @@ export class BugReportNotificationService {
    * @returns 마지막 알림 기록 (없으면 null)
    */
   async getLastNotification(): Promise<BugReportNotification | null> {
-    const notifications = await this.notificationRepository.find({
+    return this.notificationRepository.findOne({
       order: { sentAt: 'DESC' },
-      take: 1,
     });
-    return notifications[0] || null;
   }
 }

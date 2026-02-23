@@ -40,13 +40,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '김치찌개 전문점',
+            nameKo: '김치찌개 전문점',
+            nameEn: 'Kimchi Jjigae Restaurant',
             reason: '평점이 높고 현지인들에게 인기가 많습니다.',
-            address: '서울특별시 강남구 역삼동 123-45',
+            addressKo: '서울특별시 강남구 역삼동 123-45',
+            addressEn: '123-45 Yeoksam-dong, Gangnam-gu, Seoul',
             latitude: 37.5012345,
             longitude: 127.0456789,
-            localizedName: '김치찌개 전문점',
-            localizedAddress: '서울특별시 강남구 역삼동 123-45',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         googleMapsWidgetContextToken: 'test-token',
@@ -74,19 +76,22 @@ describe('GeminiPlacesService', () => {
       expect(result.recommendations).toHaveLength(1);
       expect(result.recommendations[0]).toEqual({
         placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-        name: '김치찌개 전문점',
         reason: '평점이 높고 현지인들에게 인기가 많습니다.',
+        reasonTags: [],
         menuName: '김치찌개',
         source: 'GEMINI',
-        address: '서울특별시 강남구 역삼동 123-45',
         location: {
           latitude: 37.5012345,
           longitude: 127.0456789,
         },
         searchName: '김치찌개 전문점',
         searchAddress: '서울특별시 강남구 역삼동 123-45',
-        localizedName: '김치찌개 전문점',
-        localizedAddress: '서울특별시 강남구 역삼동 123-45',
+        nameKo: '김치찌개 전문점',
+        nameEn: 'Kimchi Jjigae Restaurant',
+        nameLocal: null,
+        addressKo: '서울특별시 강남구 역삼동 123-45',
+        addressEn: '123-45 Yeoksam-dong, Gangnam-gu, Seoul',
+        addressLocal: null,
       });
       expect(result.googleMapsWidgetContextToken).toBe('test-token');
     });
@@ -97,13 +102,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '김치찌개 전문점',
+            nameKo: '김치찌개 전문점',
+            nameEn: 'Kimchi Jjigae Restaurant',
             reason: 'Highly rated and popular among locals.',
-            address: '서울특별시 강남구 역삼동 123-45',
+            addressKo: '서울특별시 강남구 역삼동 123-45',
+            addressEn: '123-45 Yeoksam-dong, Gangnam-gu, Seoul',
             latitude: 37.5012345,
             longitude: 127.0456789,
-            localizedName: 'Kimchi Jjigae Restaurant',
-            localizedAddress: '123-45 Yeoksam-dong, Gangnam-gu, Seoul',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         googleMapsWidgetContextToken: 'test-token-en',
@@ -131,34 +138,39 @@ describe('GeminiPlacesService', () => {
       expect(result.recommendations).toHaveLength(1);
       expect(result.recommendations[0]).toEqual({
         placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-        name: '김치찌개 전문점',
         reason: 'Highly rated and popular among locals.',
+        reasonTags: [],
         menuName: 'Kimchi Stew',
         source: 'GEMINI',
-        address: '서울특별시 강남구 역삼동 123-45',
         location: {
           latitude: 37.5012345,
           longitude: 127.0456789,
         },
         searchName: '김치찌개 전문점',
         searchAddress: '서울특별시 강남구 역삼동 123-45',
-        localizedName: 'Kimchi Jjigae Restaurant',
-        localizedAddress: '123-45 Yeoksam-dong, Gangnam-gu, Seoul',
+        nameKo: '김치찌개 전문점',
+        nameEn: 'Kimchi Jjigae Restaurant',
+        nameLocal: null,
+        addressKo: '서울특별시 강남구 역삼동 123-45',
+        addressEn: '123-45 Yeoksam-dong, Gangnam-gu, Seoul',
+        addressLocal: null,
       });
     });
 
-    it('should handle recommendations with undefined localizedName and localizedAddress', async () => {
+    it('should handle recommendations with undefined nameLocal and addressLocal', async () => {
       const geminiResponse = {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '김치찌개 전문점',
+            nameKo: '김치찌개 전문점',
+            nameEn: 'Kimchi Restaurant',
             reason: '추천 이유',
-            address: '서울특별시 강남구',
+            addressKo: '서울특별시 강남구',
+            addressEn: 'Gangnam-gu, Seoul',
             latitude: 37.5012345,
             longitude: 127.0456789,
-            localizedName: undefined,
-            localizedAddress: undefined,
+            nameLocal: undefined,
+            addressLocal: undefined,
           },
         ],
         success: true,
@@ -177,22 +189,24 @@ describe('GeminiPlacesService', () => {
         'ko',
       );
 
-      expect(result.recommendations[0].localizedName).toBeUndefined();
-      expect(result.recommendations[0].localizedAddress).toBeUndefined();
+      expect(result.recommendations[0].nameLocal).toBeNull();
+      expect(result.recommendations[0].addressLocal).toBeNull();
     });
 
-    it('should set searchName same as name', async () => {
+    it('should set searchName from nameLocal or nameKo', async () => {
       const geminiResponse = {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '맛집',
+            nameKo: '맛집',
+            nameEn: 'Restaurant',
             reason: '좋아요',
-            address: '서울',
+            addressKo: '서울',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: 'Restaurant',
-            localizedAddress: 'Seoul',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -212,21 +226,23 @@ describe('GeminiPlacesService', () => {
       );
 
       expect(result.recommendations[0].searchName).toBe('맛집');
-      expect(result.recommendations[0].name).toBe('맛집');
+      expect(result.recommendations[0].nameKo).toBe('맛집');
     });
 
-    it('should set searchAddress same as address', async () => {
+    it('should set searchAddress from addressLocal or addressKo', async () => {
       const geminiResponse = {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '맛집',
+            nameKo: '맛집',
+            nameEn: 'Restaurant',
             reason: '좋아요',
-            address: '서울특별시',
+            addressKo: '서울특별시',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: 'Restaurant',
-            localizedAddress: 'Seoul',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -246,7 +262,7 @@ describe('GeminiPlacesService', () => {
       );
 
       expect(result.recommendations[0].searchAddress).toBe('서울특별시');
-      expect(result.recommendations[0].address).toBe('서울특별시');
+      expect(result.recommendations[0].addressKo).toBe('서울특별시');
     });
 
     it('should handle location when latitude and longitude are undefined', async () => {
@@ -254,11 +270,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '추천',
-            address: '주소',
+            addressKo: '주소',
+            addressEn: 'Address',
             latitude: undefined,
             longitude: undefined,
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -285,11 +305,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '추천',
-            address: '주소',
+            addressKo: '주소',
+            addressEn: 'Address',
             latitude: undefined,
             longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -316,11 +340,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '추천',
-            address: '주소',
+            addressKo: '주소',
+            addressEn: 'Address',
             latitude: 37.5,
             longitude: undefined,
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -347,23 +375,27 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'place-1',
-            name: '김치찌개집',
+            nameKo: '김치찌개집',
+            nameEn: 'Kimchi Restaurant',
             reason: '맛있어요',
-            address: '서울',
+            addressKo: '서울',
+            addressEn: 'Seoul',
             latitude: 37.5,
             longitude: 127.0,
-            localizedName: 'Kimchi Restaurant',
-            localizedAddress: 'Seoul',
+            nameLocal: null,
+            addressLocal: null,
           },
           {
             placeId: 'place-2',
-            name: '한식당',
+            nameKo: '한식당',
+            nameEn: 'Korean Restaurant',
             reason: '분위기 좋아요',
-            address: '강남',
+            addressKo: '강남',
+            addressEn: 'Gangnam',
             latitude: 37.51,
             longitude: 127.01,
-            localizedName: 'Korean Restaurant',
-            localizedAddress: 'Gangnam',
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -383,8 +415,8 @@ describe('GeminiPlacesService', () => {
       );
 
       expect(result.recommendations).toHaveLength(2);
-      expect(result.recommendations[0].localizedName).toBe('Kimchi Restaurant');
-      expect(result.recommendations[1].localizedName).toBe('Korean Restaurant');
+      expect(result.recommendations[0].nameEn).toBe('Kimchi Restaurant');
+      expect(result.recommendations[1].nameEn).toBe('Korean Restaurant');
     });
 
     it('should use default language ko when not specified', async () => {
@@ -392,11 +424,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'place-1',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '추천',
-            address: '주소',
+            addressKo: '주소',
+            addressEn: 'Address',
             latitude: 37.5,
             longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -427,11 +463,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'place-1',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '추천',
-            address: '주소',
+            addressKo: '주소',
+            addressEn: 'Address',
             latitude: 37.5,
             longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,
@@ -458,11 +498,15 @@ describe('GeminiPlacesService', () => {
         restaurants: [
           {
             placeId: 'place-1',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '추천',
-            address: '주소',
+            addressKo: '주소',
+            addressEn: 'Address',
             latitude: 37.5,
             longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
           },
         ],
         success: true,

@@ -2,12 +2,17 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
+import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
 import {
   buildValidationUserPrompt,
   getValidationJsonSchema,
   getValidationSystemPrompt,
 } from '@/external/openai/prompts/menu-validation.prompts';
-import { ValidationResponse } from '../interfaces/menu-validation.interface';
+import {
+  ValidationConstraints,
+  ValidationIntent,
+  ValidationResponse,
+} from '../interfaces/menu-validation.interface';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { OpenAIResponse } from '@/external/openai/openai.types';
 import OpenAI from 'openai';
@@ -69,22 +74,32 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
     );
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: validationPrompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'menu_validation',
-            schema: getValidationJsonSchema(language),
-            strict: true,
-          },
+      // Retry OpenAI API call with exponential backoff (max 3 retries)
+      const response = await retryWithExponentialBackoff(
+        () =>
+          this.openai.chat.completions.create({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: validationPrompt },
+            ],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'menu_validation',
+                schema: getValidationJsonSchema(language),
+                strict: true,
+              },
+            },
+            max_tokens: OPENAI_CONFIG.MAX_TOKENS.MENU_VALIDATION,
+          }),
+        {
+          maxRetries: 1,
+          initialDelayMs: 1000,
+          maxDelayMs: 10000,
         },
-        max_tokens: OPENAI_CONFIG.MAX_TOKENS.MENU_VALIDATION,
-      });
+        this.logger,
+      );
 
       const openAIResponse = response as unknown as OpenAIResponse;
       const usage = openAIResponse.usage;
@@ -117,13 +132,14 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
         });
       }
 
-      const parsed = JSON.parse(content) as ValidationResponse;
+      const parsed = JSON.parse(content);
+      const validated = this.validateResponse(parsed);
 
       this.logger.log(
-        `[Stage 1 validation complete] isValid=${parsed.isValid}, intent=${parsed.intent}`,
+        `[Stage 1 validation complete] isValid=${validated.isValid}, intent=${validated.intent}`,
       );
 
-      return parsed;
+      return validated;
     } catch (error) {
       this.logger.error(
         `[Stage 1 validation failed] error=${error instanceof Error ? error.message : String(error)}`,
@@ -135,5 +151,57 @@ export class Gpt4oMiniValidationService implements OnModuleInit {
         'Failed to validate menu request.',
       );
     }
+  }
+
+  /**
+   * ValidationResponse 필수 필드 검증
+   */
+  private validateResponse(parsed: unknown): ValidationResponse {
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new OpenAIResponseException(
+        'Invalid validation response format.',
+        parsed,
+      );
+    }
+
+    const response = parsed as Record<string, unknown>;
+
+    // 필수 필드 검증
+    if (typeof response.isValid !== 'boolean') {
+      throw new OpenAIResponseException(
+        'isValid field is missing or invalid.',
+        parsed,
+      );
+    }
+
+    if (typeof response.intent !== 'string') {
+      throw new OpenAIResponseException(
+        'intent field is missing or invalid.',
+        parsed,
+      );
+    }
+
+    // constraints 검증 (선택적 - 기본값 처리 가능)
+    const constraints = response.constraints as
+      | ValidationConstraints
+      | undefined;
+    const validatedConstraints: ValidationConstraints = {
+      budget: constraints?.budget || 'medium',
+      dietary: Array.isArray(constraints?.dietary) ? constraints.dietary : [],
+      urgency: constraints?.urgency || 'normal',
+    };
+
+    return {
+      isValid: response.isValid,
+      invalidReason:
+        typeof response.invalidReason === 'string'
+          ? response.invalidReason
+          : '',
+      intent: response.intent as ValidationIntent,
+      constraints: validatedConstraints,
+      suggestedCategories: Array.isArray(response.suggestedCategories)
+        ? response.suggestedCategories
+        : [],
+    };
   }
 }

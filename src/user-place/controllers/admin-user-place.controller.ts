@@ -22,13 +22,15 @@ import {
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
 import { RolesGuard } from '@/auth/guard/roles.guard';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { ADMIN_ROLES } from '@/common/constants/roles.constants';
+import { MULTER_OPTIONS } from '@/common/config/multer.config';
 import { ImageValidationPipe } from '@/common/pipes/file-validation.pipe';
 import { UserService } from '@/user/user.service';
 import { AdminUserPlaceListQueryDto } from '../dto/admin-user-place-list-query.dto';
 import { RejectUserPlaceDto } from '../dto/reject-user-place.dto';
 import { UpdateUserPlaceByAdminDto } from '../dto/update-user-place-by-admin.dto';
-import { UserPlaceService } from '../user-place.service';
+import { AdminUserPlaceService } from '../services/admin-user-place.service';
 
 @Controller('admin/user-places')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,7 +38,7 @@ import { UserPlaceService } from '../user-place.service';
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 export class AdminUserPlaceController {
   constructor(
-    private readonly userPlaceService: UserPlaceService,
+    private readonly adminUserPlaceService: AdminUserPlaceService,
     private readonly userService: UserService,
   ) {}
 
@@ -45,7 +47,7 @@ export class AdminUserPlaceController {
    */
   @Get()
   async findAll(@Query() query: AdminUserPlaceListQueryDto) {
-    return this.userPlaceService.findAllForAdmin(query);
+    return this.adminUserPlaceService.findAllForAdmin(query);
   }
 
   /**
@@ -53,7 +55,7 @@ export class AdminUserPlaceController {
    */
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.userPlaceService.findOneForAdmin(id);
+    return this.adminUserPlaceService.findOneForAdmin(id);
   }
 
   /**
@@ -65,13 +67,9 @@ export class AdminUserPlaceController {
     @CurrentUser() user: AuthUserPayload,
     @Req() req: Request,
   ) {
-    const adminUser = await this.userService.findByEmail(user.email);
-    if (!adminUser) {
-      throw new NotFoundException('Admin user not found');
-    }
-
+    const adminUser = await this.getAdminUser(user.email);
     const ipAddress = this.getClientIp(req);
-    return this.userPlaceService.approvePlace(id, adminUser.id, ipAddress);
+    return this.adminUserPlaceService.approvePlace(id, adminUser.id, ipAddress);
   }
 
   /**
@@ -84,20 +82,21 @@ export class AdminUserPlaceController {
     @CurrentUser() user: AuthUserPayload,
     @Req() req: Request,
   ) {
-    const adminUser = await this.userService.findByEmail(user.email);
-    if (!adminUser) {
-      throw new NotFoundException('Admin user not found');
-    }
-
+    const adminUser = await this.getAdminUser(user.email);
     const ipAddress = this.getClientIp(req);
-    return this.userPlaceService.rejectPlace(id, adminUser.id, dto, ipAddress);
+    return this.adminUserPlaceService.rejectPlace(
+      id,
+      adminUser.id,
+      dto,
+      ipAddress,
+    );
   }
 
   /**
    * Update place information (Admin)
    */
   @Patch(':id')
-  @UseInterceptors(FilesInterceptor('images', 5))
+  @UseInterceptors(FilesInterceptor('images', 5, MULTER_OPTIONS))
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserPlaceByAdminDto,
@@ -105,19 +104,26 @@ export class AdminUserPlaceController {
     @CurrentUser() user: AuthUserPayload,
     @Req() req: Request,
   ) {
-    const adminUser = await this.userService.findByEmail(user.email);
-    if (!adminUser) {
-      throw new NotFoundException('Admin user not found');
-    }
-
+    const adminUser = await this.getAdminUser(user.email);
     const ipAddress = this.getClientIp(req);
-    return this.userPlaceService.updatePlaceByAdmin(
+    return this.adminUserPlaceService.updatePlaceByAdmin(
       id,
       adminUser.id,
       dto,
       ipAddress,
       files ?? [],
     );
+  }
+
+  /**
+   * Look up admin user by email, throwing if not found
+   */
+  private async getAdminUser(email: string) {
+    const adminUser = await this.userService.findByEmail(email);
+    if (!adminUser) {
+      throw new NotFoundException(ErrorCode.ADMIN_USER_NOT_FOUND);
+    }
+    return adminUser;
   }
 
   /**

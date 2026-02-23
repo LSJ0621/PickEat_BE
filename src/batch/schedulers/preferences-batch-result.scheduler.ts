@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import {
+  SCHEDULER_LOCKS,
+  BATCH_CONFIG,
+} from '@/common/constants/business.constants';
+import { withAdvisoryLock } from '@/common/utils/advisory-lock.util';
 import { BatchJobService } from '../services/batch-job.service';
 import { PreferenceBatchService } from '../services/preference-batch.service';
 import { OpenAiBatchClient } from '@/external/openai/clients/openai-batch.client';
@@ -25,6 +30,7 @@ export class PreferencesBatchResultScheduler {
     private readonly openAiBatchClient: OpenAiBatchClient,
     @InjectRepository(MenuSelection)
     private readonly menuSelectionRepository: Repository<MenuSelection>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -33,39 +39,59 @@ export class PreferencesBatchResultScheduler {
    */
   @Cron('5 17 * * *', { timeZone: 'Asia/Seoul' })
   async pollAndProcessResults(): Promise<void> {
-    this.logger.log('🔄 [결과 폴링 스케줄러] 시작 - 매일 14시 40분');
+    this.logger.log('[결과 폴링 스케줄러] 시작 - 매일 14시 40분');
 
-    if (!this.openAiBatchClient.isReady()) {
-      this.logger.warn('⚠️ OpenAI Batch Client is not ready');
-      return;
-    }
-
-    try {
-      // Find incomplete batch jobs
-      const incompleteBatches = await this.batchJobService.findIncomplete();
-
-      if (incompleteBatches.length === 0) {
-        this.logger.log('ℹ️ [폴링] 처리 대기 중인 배치가 없습니다.');
-        return;
-      }
-
-      this.logger.log(
-        `📋 [폴링] ${incompleteBatches.length}개의 배치 상태 확인 중...`,
-      );
-
-      for (const batchJob of incompleteBatches) {
-        if (!batchJob.openAiBatchId) {
-          this.logger.warn(
-            `⚠️ BatchJob ${batchJob.id}에 OpenAI batch ID가 없습니다.`,
-          );
-          continue;
+    const { acquired, timedOut } = await withAdvisoryLock(
+      this.dataSource,
+      SCHEDULER_LOCKS.PREFERENCES_BATCH_RESULT,
+      async () => {
+        if (!this.openAiBatchClient.isReady()) {
+          this.logger.warn('OpenAI Batch Client is not ready');
+          return { success: false };
         }
 
-        await this.processSingleBatch(batchJob.id, batchJob.openAiBatchId);
-      }
-    } catch (error) {
-      this.logger.error(
-        `❌ [폴링 실패] ${error instanceof Error ? error.message : 'Unknown error'}`,
+        try {
+          // Find incomplete batch jobs
+          const incompleteBatches = await this.batchJobService.findIncomplete();
+
+          if (incompleteBatches.length === 0) {
+            this.logger.log('[폴링] 처리 대기 중인 배치가 없습니다.');
+            return { success: true };
+          }
+
+          this.logger.log(
+            `📋 [폴링] ${incompleteBatches.length}개의 배치 상태 확인 중...`,
+          );
+
+          for (const batchJob of incompleteBatches) {
+            if (!batchJob.openAiBatchId) {
+              this.logger.warn(
+                `⚠️ BatchJob ${batchJob.id}에 OpenAI batch ID가 없습니다.`,
+              );
+              continue;
+            }
+
+            await this.processSingleBatch(batchJob.id, batchJob.openAiBatchId);
+          }
+
+          return { success: true };
+        } catch (error) {
+          this.logger.error(
+            `❌ [폴링 실패] ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          return { success: false };
+        }
+      },
+      { timeoutMs: BATCH_CONFIG.ADVISORY_LOCK_TIMEOUT_MS },
+    );
+
+    if (timedOut) {
+      this.logger.error('Batch result polling timed out');
+    }
+
+    if (!acquired) {
+      this.logger.warn(
+        '⚠️ [결과 폴링 스케줄러] 다른 인스턴스에서 이미 실행 중입니다.',
       );
     }
   }

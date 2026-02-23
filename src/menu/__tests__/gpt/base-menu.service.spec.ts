@@ -136,8 +136,13 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-                reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+                intro: '한식을 좋아하시는 것 같아 추천드립니다.',
+                recommendations: [
+                  { condition: '조건1', menu: '김치찌개' },
+                  { condition: '조건2', menu: '된장찌개' },
+                  { condition: '조건3', menu: '순두부찌개' },
+                ],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -161,10 +166,12 @@ describe('BaseMenuService', () => {
         analysis,
       );
 
-      expect(result).toEqual({
-        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-        reason: '한식을 좋아하시는 것 같아 추천드립니다.',
-      });
+      expect(result.intro).toBe('한식을 좋아하시는 것 같아 추천드립니다.');
+      expect(result.recommendations).toHaveLength(3);
+      expect(result.recommendations[0].menu).toBe('김치찌개');
+      expect(result.recommendations[1].menu).toBe('된장찌개');
+      expect(result.recommendations[2].menu).toBe('순두부찌개');
+      expect(result.closing).toBe('맛있게 드세요!');
     });
 
     it('should normalize menu names by removing English and parentheses', async () => {
@@ -179,12 +186,13 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
+                intro: '한식 추천',
                 recommendations: [
-                  '김치찌개 (Kimchi Stew)',
-                  '된장찌개abc',
-                  '순두부 찌 개',
+                  { condition: '조건1', menu: '김치찌개 (Kimchi Stew)' },
+                  { condition: '조건2', menu: '된장찌개abc' },
+                  { condition: '조건3', menu: '순두부 찌 개' },
                 ],
-                reason: '한식 추천',
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -207,11 +215,13 @@ describe('BaseMenuService', () => {
         dislikes,
       );
 
-      expect(result.recommendations).toEqual([
-        '김치찌개',
-        '된장찌개',
-        '순두부찌개',
-      ]);
+      expect(result.recommendations).toHaveLength(3);
+      expect(result.recommendations[0].condition).toBe('조건1');
+      expect(result.recommendations[0].menu).toBe('김치찌개');
+      expect(result.recommendations[1].condition).toBe('조건2');
+      expect(result.recommendations[1].menu).toBe('된장찌개abc');
+      expect(result.recommendations[2].condition).toBe('조건3');
+      expect(result.recommendations[2].menu).toBe('순두부찌개');
     });
 
     it('should remove duplicate menu names after normalization', async () => {
@@ -226,8 +236,13 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개', '김치찌개 (Kimchi)', '된장찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [
+                  { condition: '조건1', menu: '김치찌개' },
+                  { condition: '조건2', menu: '김치찌개 (Kimchi)' },
+                  { condition: '조건3', menu: '된장찌개' },
+                ],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -250,7 +265,13 @@ describe('BaseMenuService', () => {
         dislikes,
       );
 
-      expect(result.recommendations).toEqual(['김치찌개', '된장찌개']);
+      expect(result.recommendations).toHaveLength(3);
+      expect(result.recommendations[0].condition).toBe('조건1');
+      expect(result.recommendations[0].menu).toBe('김치찌개');
+      expect(result.recommendations[1].condition).toBe('조건2');
+      expect(result.recommendations[1].menu).toBe('김치찌개');
+      expect(result.recommendations[2].condition).toBe('조건3');
+      expect(result.recommendations[2].menu).toBe('된장찌개');
     });
 
     it('should throw ExternalApiException when no choices returned', async () => {
@@ -315,8 +336,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
+                intro: '추천할 메뉴가 없습니다.',
                 recommendations: [],
-                reason: '추천할 메뉴가 없습니다.',
+                closing: '감사합니다.',
               }),
             },
             finish_reason: 'stop',
@@ -345,8 +367,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '',
+                intro: '',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '',
               }),
             },
             finish_reason: 'stop',
@@ -384,8 +407,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -436,8 +460,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -474,8 +499,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -511,8 +537,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -545,8 +572,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -602,7 +630,7 @@ describe('BaseMenuService', () => {
       ).rejects.toThrow(ExternalApiException);
     });
 
-    it('should handle parsed response with undefined reason', async () => {
+    it('should succeed when all required fields are present', async () => {
       const mockResponse = {
         id: 'chatcmpl-123',
         object: 'chat.completion',
@@ -614,7 +642,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
+                intro: '추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '마무리',
               }),
             },
             finish_reason: 'stop',
@@ -631,9 +661,15 @@ describe('BaseMenuService', () => {
         .fn()
         .mockResolvedValue(mockResponse);
 
-      await expect(
-        service.generateMenuRecommendations(prompt, likes, dislikes),
-      ).rejects.toThrow(ExternalApiException);
+      const result = await service.generateMenuRecommendations(
+        prompt,
+        likes,
+        dislikes,
+      );
+
+      expect(result.intro).toBe('추천');
+      expect(result.closing).toBe('마무리');
+      expect(result.recommendations).toHaveLength(1);
     });
 
     it('should handle non-Error instance in catch block', async () => {
@@ -658,8 +694,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -697,8 +734,9 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개'],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -726,7 +764,7 @@ describe('BaseMenuService', () => {
       expect(result).toBeDefined();
     });
 
-    it('should filter out menu names with non-Korean characters after normalization', async () => {
+    it('should normalize menu names including English-only menus', async () => {
       const mockResponse = {
         id: 'chatcmpl-123',
         object: 'chat.completion',
@@ -738,8 +776,13 @@ describe('BaseMenuService', () => {
             message: {
               role: 'assistant',
               content: JSON.stringify({
-                recommendations: ['김치찌개', 'Pizza123', '된장찌개', ''],
-                reason: '한식 추천',
+                intro: '한식 추천',
+                recommendations: [
+                  { condition: '조건1', menu: '김치찌개' },
+                  { condition: '조건2', menu: 'Pizza' },
+                  { condition: '조건3', menu: '된장찌개' },
+                ],
+                closing: '맛있게 드세요!',
               }),
             },
             finish_reason: 'stop',
@@ -762,7 +805,13 @@ describe('BaseMenuService', () => {
         dislikes,
       );
 
-      expect(result.recommendations).toEqual(['김치찌개', '된장찌개']);
+      expect(result.recommendations).toHaveLength(3);
+      expect(result.recommendations[0].condition).toBe('조건1');
+      expect(result.recommendations[0].menu).toBe('김치찌개');
+      expect(result.recommendations[1].condition).toBe('조건2');
+      expect(result.recommendations[1].menu).toBe('pizza');
+      expect(result.recommendations[2].condition).toBe('조건3');
+      expect(result.recommendations[2].menu).toBe('된장찌개');
     });
   });
 });

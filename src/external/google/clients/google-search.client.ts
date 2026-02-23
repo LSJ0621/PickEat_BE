@@ -2,22 +2,18 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
+import { SEARCH_DEFAULTS } from '@/common/constants/business.constants';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
+import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
 import { GOOGLE_CSE_CONFIG } from '../google.constants';
-import { GoogleCseItem, GoogleCseResponse } from '../google.types';
+import {
+  BlogSearchResult,
+  GoogleCseItem,
+  GoogleCseResponse,
+} from '../google.types';
 
-/**
- * 블로그 검색 결과
- */
-export interface BlogSearchResult {
-  title: string | null;
-  url: string | null;
-  snippet: string | null;
-  thumbnailUrl: string | null;
-  source: string | null;
-}
+export type { BlogSearchResult };
 
 @Injectable()
 export class GoogleSearchClient {
@@ -72,13 +68,14 @@ export class GoogleSearchClient {
           headers: {
             Referer: this.appUrl,
           },
+          timeout: 10000,
         }),
       );
 
       const items = response.data?.items ?? [];
       const blogs = items.map((item) => this.mapCseItemToBlogResult(item));
 
-      this.logger.log(`✅ [CSE 블로그 검색 완료] count=${blogs.length}`);
+      this.logger.log(`[CSE 블로그 검색 완료] count=${blogs.length}`);
       return blogs;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'unknown error';
@@ -105,6 +102,7 @@ export class GoogleSearchClient {
         'Google CSE',
         error,
         '블로그 검색에 실패했습니다.',
+        ErrorCode.EXTERNAL_API_ERROR,
       );
     }
   }

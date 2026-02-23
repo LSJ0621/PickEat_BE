@@ -1,4 +1,39 @@
 /**
+ * Google OAuth 토큰 응답
+ */
+export interface GoogleOAuthTokenResponse {
+  access_token: string;
+  expires_in?: number;
+  token_type?: string;
+  scope?: string;
+  id_token?: string;
+}
+
+/**
+ * Google 사용자 프로필
+ */
+export interface GoogleUserProfile {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+  given_name?: string;
+  family_name?: string;
+}
+
+/**
+ * 블로그 검색 결과
+ */
+export interface BlogSearchResult {
+  title: string | null;
+  url: string | null;
+  snippet: string | null;
+  thumbnailUrl: string | null;
+  source: string | null;
+}
+
+/**
  * Google Places 검색 결과 아이템
  */
 export interface GooglePlaceSearchResult {

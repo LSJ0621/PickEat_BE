@@ -2,7 +2,6 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
 import { DiscordWebhookPayload } from '../discord.types';
 
 @Injectable()
@@ -21,6 +20,7 @@ export class DiscordWebhookClient {
 
   /**
    * Discord Webhook으로 메시지 전송
+   * Discord는 부가 기능이므로 실패 시 에러를 throw하지 않고 로깅만 수행
    */
   async sendMessage(payload: DiscordWebhookPayload): Promise<void> {
     try {
@@ -34,15 +34,13 @@ export class DiscordWebhookClient {
         this.logger.warn(`Discord webhook 응답 상태 코드: ${response.status}`);
       }
     } catch (error) {
+      // Discord 전송 실패는 조용히 처리 (silent fail)
+      // 부가 기능이므로 메인 작업(버그 리포트 등록)에 영향을 주지 않도록 함
       this.logger.error(
-        `Discord webhook 전송 실패: ${error.message}`,
+        `Discord webhook 전송 실패 (무시됨): ${error.message}`,
         error.stack,
       );
-      throw new ExternalApiException(
-        'Discord',
-        error as Error,
-        'Discord webhook 전송 실패',
-      );
+      // throw 제거 - 에러를 상위로 전파하지 않음
     }
   }
 }

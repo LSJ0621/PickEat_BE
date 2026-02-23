@@ -7,15 +7,18 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 
 export class RecommendPlacesV2Dto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   menuName: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   address: string;
 
   @IsLatitude()

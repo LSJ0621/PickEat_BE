@@ -1,45 +1,58 @@
 /**
- * Naver 로컬 검색 아이템
+ * Naver Local Search response item
  */
 export interface NaverLocalSearchItem {
-  title: string;
+  title?: string;
+  link?: string;
   category?: string;
   description?: string;
   telephone?: string;
   address?: string;
   roadAddress?: string;
-  link?: string;
   mapx?: string;
   mapy?: string;
   distance?: string;
 }
 
 /**
- * Naver 로컬 검색 응답
+ * Naver Local Search API response
  */
 export interface NaverLocalSearchResponse {
-  total: number;
-  display: number;
-  start: number;
-  items: NaverLocalSearchItem[];
+  total?: number;
+  display?: number;
+  start?: number;
+  items?: NaverLocalSearchItem[];
 }
 
 /**
- * Naver Reverse Geocode 지역 영역
+ * Naver Reverse Geocode result region area
  */
 export interface NaverRegionArea {
-  name: string;
+  name?: string;
 }
 
 /**
- * Naver Reverse Geocode 결과
+ * Naver Reverse Geocode result land information
+ */
+export interface NaverLandInfo {
+  type?: string;
+  name?: string;
+  number1?: string;
+  number2?: string;
+  addition0?: { type?: string; value?: string };
+  addition1?: { type?: string; value?: string };
+  addition2?: { type?: string; value?: string };
+}
+
+/**
+ * Naver Reverse Geocode result
  */
 export interface NaverReverseGeocodeResult {
-  name: string;
+  name?: string;
   code?: {
-    id: string;
-    type: string;
-    mappingId: string;
+    id?: string;
+    type?: string;
+    mappingId?: string;
   };
   region?: {
     area0?: NaverRegionArea;
@@ -48,25 +61,17 @@ export interface NaverReverseGeocodeResult {
     area3?: NaverRegionArea;
     area4?: NaverRegionArea;
   };
-  land?: {
-    type?: string;
-    number1?: string;
-    number2?: string;
-    addition0?: { type: string; value: string };
-    addition1?: { type: string; value: string };
-    addition2?: { type: string; value: string };
-    name?: string;
-  };
+  land?: NaverLandInfo;
 }
 
 /**
- * Naver Reverse Geocode 응답
+ * Naver Reverse Geocode API response
  */
 export interface NaverReverseGeocodeResponse {
-  status: {
-    code: number;
-    name: string;
-    message: string;
+  status?: {
+    code?: number;
+    name?: string;
+    message?: string;
   };
-  results: NaverReverseGeocodeResult[];
+  results?: NaverReverseGeocodeResult[];
 }

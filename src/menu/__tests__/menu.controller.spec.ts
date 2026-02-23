@@ -31,12 +31,11 @@ describe('MenuController', () => {
       getSelections: jest.fn(),
       updateSelection: jest.fn(),
       getHistory: jest.fn(),
-      searchRestaurantBlogs: jest.fn(),
-      recommendRestaurantsWithGooglePlacesAndLlm: jest.fn(),
       getRecommendationDetail: jest.fn(),
-      getPlaceDetail: jest.fn(),
       recommendRestaurants: jest.fn(),
-      searchRestaurantsWithGooglePlaces: jest.fn(),
+      recommendPlacesWithGemini: jest.fn(),
+      searchRestaurantBlogs: jest.fn(),
+      getPlaceDetail: jest.fn(),
     } as unknown as jest.Mocked<MenuService>;
 
     mockUserService = {
@@ -92,8 +91,13 @@ describe('MenuController', () => {
 
       const expectedResult = {
         id: 1,
-        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-        reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+        intro: '오늘은 한식이 생각나는 날씨네요',
+        recommendations: [
+          { condition: '든든하게 먹고 싶다면', menu: '김치찌개' },
+          { condition: '가볍게 먹고 싶다면', menu: '된장찌개' },
+          { condition: '매콤하게 먹고 싶다면', menu: '순두부찌개' },
+        ],
+        closing: '맛있게 드세요!',
         recommendedAt: new Date(),
         requestAddress: '서울시 강남구',
       };
@@ -749,117 +753,11 @@ describe('MenuController', () => {
       expect(mockMenuService.searchRestaurantBlogs).toHaveBeenCalledWith(
         query.query,
         query.restaurantName,
+        undefined,
+        undefined,
+        undefined,
       );
       expect(result).toEqual(expectedBlogs);
-    });
-  });
-
-  describe('recommendRestaurantsWithGooglePlacesAndLlm', () => {
-    it('should return place recommendations', async () => {
-      const authUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
-      const user = UserFactory.create({ email: authUser.email });
-
-      const expectedResult = {
-        recommendations: [
-          {
-            placeId: 'place-1',
-            name: '맛있는 식당',
-            reason: '평점이 높습니다',
-          },
-        ],
-      };
-
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockMenuService.recommendRestaurantsWithGooglePlacesAndLlm.mockResolvedValue(
-        expectedResult,
-      );
-
-      const result =
-        await controller.recommendRestaurantsWithGooglePlacesAndLlm(
-          '강남역 김치찌개',
-          '김치찌개',
-          '1',
-          authUser,
-        );
-
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        authUser.email,
-      );
-      expect(
-        mockMenuService.recommendRestaurantsWithGooglePlacesAndLlm,
-      ).toHaveBeenCalledWith(user, '강남역 김치찌개', '김치찌개', 1);
-      expect(result).toEqual(expectedResult);
-    });
-
-    it('should throw BadRequestException when menuName is missing', async () => {
-      const authUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
-
-      await expect(
-        controller.recommendRestaurantsWithGooglePlacesAndLlm(
-          '강남역 김치찌개',
-          '',
-          '1',
-          authUser,
-        ),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should handle undefined historyId', async () => {
-      const authUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
-      const user = UserFactory.create({ email: authUser.email });
-
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockMenuService.recommendRestaurantsWithGooglePlacesAndLlm.mockResolvedValue(
-        {
-          recommendations: [],
-        },
-      );
-
-      await controller.recommendRestaurantsWithGooglePlacesAndLlm(
-        '강남역 김치찌개',
-        '김치찌개',
-        undefined,
-        authUser,
-      );
-
-      expect(
-        mockMenuService.recommendRestaurantsWithGooglePlacesAndLlm,
-      ).toHaveBeenCalledWith(user, '강남역 김치찌개', '김치찌개', undefined);
-    });
-
-    it('should convert string historyId to number', async () => {
-      const authUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
-      const user = UserFactory.create({ email: authUser.email });
-
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockMenuService.recommendRestaurantsWithGooglePlacesAndLlm.mockResolvedValue(
-        {
-          recommendations: [],
-        },
-      );
-
-      await controller.recommendRestaurantsWithGooglePlacesAndLlm(
-        'query',
-        '김치찌개',
-        '123',
-        authUser,
-      );
-
-      expect(
-        mockMenuService.recommendRestaurantsWithGooglePlacesAndLlm,
-      ).toHaveBeenCalledWith(user, 'query', '김치찌개', 123);
     });
   });
 
@@ -873,35 +771,37 @@ describe('MenuController', () => {
 
       const expectedDetail = {
         history: {
+          hasPlaceRecommendations: true,
           id: 1,
           prompt: '점심 추천',
-          reason: '추천 이유',
+          intro: '오늘은 한식이 어울리는 날씨네요',
+          recommendations: [
+            { condition: '든든하게 먹고 싶다면', menu: '김치찌개' },
+          ],
+          closing: '맛있게 드세요!',
           recommendedAt: new Date(),
           requestAddress: '서울시',
-          hasPlaceRecommendations: true,
         },
         places: [
           {
             placeId: 'place-1',
             reason: '평점이 높습니다',
-            menuName: '김치찌개',
+            reasonTags: ['맛집', '청결'],
+            menuName: null,
             name: '맛있는 식당',
+            localizedName: null,
             address: '서울시 강남구',
-            rating: 4.5,
-            userRatingCount: 100,
-            priceLevel: 'PRICE_LEVEL_MODERATE',
-            businessStatus: 'OPERATIONAL',
-            openNow: true,
-            photos: ['https://example.com/photo1.jpg'],
-            reviews: [
-              {
-                rating: 5,
-                text: '맛있어요',
-                authorName: '홍길동',
-                publishTime: '2024-01-01',
-              },
-            ],
+            localizedAddress: null,
+            rating: null,
+            userRatingCount: null,
+            priceLevel: null,
+            businessStatus: null,
+            openNow: null,
+            photos: [],
+            reviews: null,
             source: PlaceRecommendationSource.GOOGLE,
+            phoneNumber: null,
+            category: null,
           },
         ],
       };
@@ -936,12 +836,19 @@ describe('MenuController', () => {
   describe('getPlaceDetail', () => {
     it('should return place detail', async () => {
       const placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+      const authUser: AuthUserPayload = {
+        email: 'test@example.com',
+        role: 'USER',
+      };
+      const user = UserFactory.create({ email: authUser.email });
 
       const expectedDetail = {
         place: {
           id: placeId,
           name: '맛있는 식당',
           address: '서울시 강남구',
+          localizedName: null,
+          localizedAddress: null,
           location: { latitude: 37.5, longitude: 127.0 },
           rating: 4.5,
           userRatingCount: 100,
@@ -954,11 +861,18 @@ describe('MenuController', () => {
         },
       };
 
+      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockMenuService.getPlaceDetail.mockResolvedValue(expectedDetail);
 
-      const result = await controller.getPlaceDetail(placeId);
+      const result = await controller.getPlaceDetail(placeId, authUser);
 
-      expect(mockMenuService.getPlaceDetail).toHaveBeenCalledWith(placeId);
+      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
+        authUser.email,
+      );
+      expect(mockMenuService.getPlaceDetail).toHaveBeenCalledWith(
+        placeId,
+        'ko',
+      );
       expect(result).toEqual(expectedDetail);
     });
   });

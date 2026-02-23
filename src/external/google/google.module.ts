@@ -5,7 +5,7 @@ import { GooglePlacesClient } from './clients/google-places.client';
 import { GoogleSearchClient } from './clients/google-search.client';
 
 @Module({
-  imports: [HttpModule],
+  imports: [HttpModule.register({ timeout: 10000 })],
   providers: [GooglePlacesClient, GoogleSearchClient, GoogleOAuthClient],
   exports: [GooglePlacesClient, GoogleSearchClient, GoogleOAuthClient],
 })

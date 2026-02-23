@@ -7,10 +7,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { ErrorCode } from '../../common/constants/error-codes';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
@@ -26,11 +25,11 @@ export class AuthTokenService {
     private readonly jwtService: JwtService,
     private readonly jwtTokenProvider: JwtTokenProvider,
     private readonly userService: UserService,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
     private readonly config: ConfigService,
   ) {
-    this.refreshTokenSecret = this.config.get<string>('JWT_REFRESH_SECRET', '');
+    this.refreshTokenSecret =
+      this.config.getOrThrow<string>('JWT_REFRESH_SECRET');
   }
 
   /**
@@ -66,20 +65,14 @@ export class AuthTokenService {
       : null;
 
     // Use query builder with execute() to ensure immediate database update
-    await this.userRepository
-      .createQueryBuilder()
-      .update(User)
-      .set({ refreshToken: hashedToken })
-      .where('id = :id', { id: entity.id })
-      .execute();
+    await this.userService.updateRefreshTokenById(entity.id, hashedToken);
   }
 
   async refreshAccessToken(
     refreshToken: string,
   ): Promise<{ token: string; refreshToken: string }> {
     // Use a transaction to ensure atomicity and prevent race conditions
-    const queryRunner =
-      this.userRepository.manager.connection.createQueryRunner();
+    const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 

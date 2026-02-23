@@ -4,7 +4,6 @@ import { DiscordModule } from './discord/discord.module';
 import { GeminiModule } from './gemini/gemini.module';
 import { GoogleModule } from './google/google.module';
 import { KakaoModule } from './kakao/kakao.module';
-import { NaverModule } from './naver/naver.module';
 import { OpenAiModule } from './openai/openai.module';
 import { MockExternalModule } from './mocks/mock-external.module';
 
@@ -41,7 +40,6 @@ export class ExternalModule {
         GoogleModule,
         GeminiModule,
         KakaoModule,
-        NaverModule.forRoot(),
         OpenAiModule,
         AwsModule,
         DiscordModule,
@@ -50,7 +48,6 @@ export class ExternalModule {
         GoogleModule,
         GeminiModule,
         KakaoModule,
-        NaverModule,
         OpenAiModule,
         AwsModule,
         DiscordModule,

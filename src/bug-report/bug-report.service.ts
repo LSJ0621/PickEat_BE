@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { AuthUserPayload } from '../auth/decorators/current-user.decorator';
 import {
@@ -39,15 +39,24 @@ export class BugReportService {
     const user = await this.userService.getAuthenticatedEntity(authUser.email);
 
     // 이미지 업로드 (최대 5장) - S3 URL만 저장
-    const imageUrls: string[] | null =
-      files && files.length > 0
-        ? await Promise.all(
-            files.slice(0, 5).map(async (file) => {
-              const url = await this.s3Client.uploadBugReportImage(file);
-              return url;
-            }),
-          )
-        : null;
+    let imageUrls: string[] | null = null;
+    if (files && files.length > 0) {
+      const results = await Promise.allSettled(
+        files
+          .slice(0, 5)
+          .map((file) => this.s3Client.uploadBugReportImage(file)),
+      );
+      const successUrls = results
+        .filter(
+          (r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled',
+        )
+        .map((r) => r.value);
+      const failedCount = results.filter((r) => r.status === 'rejected').length;
+      if (failedCount > 0) {
+        this.logger.warn(`${failedCount} bug report image upload(s) failed`);
+      }
+      imageUrls = successUrls.length > 0 ? successUrls : null;
+    }
 
     const bugReport = this.bugReportRepository.create({
       user: user,
@@ -134,28 +143,9 @@ export class BugReportService {
   }
 
   /**
-   * 관리자용 버그 제보 상태 변경
-   */
-  async updateStatus(id: number, status: BugReportStatus): Promise<BugReport> {
-    const bugReport = await this.bugReportRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    });
-
-    if (!bugReport) {
-      throw new NotFoundException({
-        message: `버그 제보를 찾을 수 없습니다. (ID: ${id})`,
-        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
-      });
-    }
-
-    // 상태 업데이트 (updatedAt은 자동으로 갱신됨)
-    bugReport.status = status;
-    return this.bugReportRepository.save(bugReport);
-  }
-
-  /**
-   * 날짜 범위 계산 (YYYY-MM-DD 형식의 날짜를 시작일 00:00:00 ~ 종료일 23:59:59로 변환)
+   * 날짜 범위 계산 (YYYY-MM-DD 형식의 날짜를 시작일 00:00:00 ~ 다음날 00:00:00 직전으로 변환)
+   * start: 해당 날짜 00:00:00.000
+   * end: 다음날 00:00:00.000 (< 조건으로 사용)
    */
   private calculateDateRange(date: string): { start: Date; end: Date } {
     const start = new Date(date);
@@ -176,54 +166,32 @@ export class BugReportService {
     status: BugReportStatus,
     changedBy: User,
   ): Promise<BugReport> {
-    const bugReport = await this.findOne(id);
-    const previousStatus = bugReport.status;
-
-    bugReport.status = status;
-    await this.bugReportRepository.save(bugReport);
-
-    // 상태 변경 이력 기록
-    await this.statusHistoryRepo.save({
-      bugReport,
-      previousStatus,
-      status,
-      changedBy,
-    });
-
-    return bugReport;
-  }
-
-  /**
-   * 트랜잭션 내에서 버그 제보 상태 변경 (배치 작업용)
-   */
-  private async updateStatusWithHistoryInTransaction(
-    manager: EntityManager,
-    id: number,
-    status: BugReportStatus,
-    changedBy: User,
-  ): Promise<void> {
-    const bugReport = await manager.findOne(BugReport, {
-      where: { id },
-      relations: ['user'],
-    });
-
-    if (!bugReport) {
-      throw new NotFoundException({
-        message: `버그 제보를 찾을 수 없습니다. (ID: ${id})`,
-        errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+    return this.dataSource.transaction(async (manager) => {
+      const bugReport = await manager.findOne(BugReport, {
+        where: { id },
+        relations: ['user'],
       });
-    }
 
-    const previousStatus = bugReport.status;
-    bugReport.status = status;
-    await manager.save(BugReport, bugReport);
+      if (!bugReport) {
+        throw new NotFoundException({
+          message: `버그 제보를 찾을 수 없습니다. (ID: ${id})`,
+          errorCode: ErrorCode.BUG_REPORT_NOT_FOUND,
+        });
+      }
 
-    // 상태 변경 이력 기록
-    await manager.save(BugReportStatusHistory, {
-      bugReport,
-      previousStatus,
-      status,
-      changedBy,
+      const previousStatus = bugReport.status;
+      bugReport.status = status;
+      await manager.save(BugReport, bugReport);
+
+      // 상태 변경 이력 기록
+      await manager.save(BugReportStatusHistory, {
+        bugReport,
+        previousStatus,
+        status,
+        changedBy,
+      });
+
+      return bugReport;
     });
   }
 
@@ -255,20 +223,22 @@ export class BugReportService {
       description: bugReport.description,
       images: bugReport.images,
       status: bugReport.status,
-      createdAt: bugReport.createdAt,
-      updatedAt: bugReport.updatedAt,
+      createdAt: bugReport.createdAt.toISOString(),
+      updatedAt: bugReport.updatedAt.toISOString(),
       user: {
         id: bugReport.user.id,
         email: bugReport.user.email,
         name: bugReport.user.name,
-        createdAt: bugReport.user.createdAt,
+        createdAt: bugReport.user.createdAt.toISOString(),
       },
       statusHistory: statusHistory.map((h) => ({
         id: h.id,
         previousStatus: h.previousStatus,
         status: h.status,
-        changedAt: h.changedAt,
-        changedBy: { id: h.changedBy.id, email: h.changedBy.email },
+        changedAt: h.changedAt.toISOString(),
+        changedBy: h.changedBy
+          ? { id: h.changedBy.id, email: h.changedBy.email }
+          : null,
       })),
     };
   }

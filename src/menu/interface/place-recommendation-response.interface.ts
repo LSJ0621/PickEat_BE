@@ -8,6 +8,7 @@ export interface PlaceRecommendationItem {
   placeId: string | null;
   name: string;
   reason: string;
+  reasonTags: string[];
   menuName?: string;
   source?: PlaceRecommendationSource;
   userPlaceId?: number;

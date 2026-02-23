@@ -7,11 +7,13 @@ import { MenuRecommendationService } from '../../services/menu-recommendation.se
 import { GeminiPlacesService } from '../../services/gemini-places.service';
 import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
 import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import { PlaceRecommendation } from '../../entities/place-recommendation.entity';
 import { PlaceRecommendationSource } from '../../enum/place-recommendation-source.enum';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { createMockRepository } from '../../../../test/mocks/repository.mock';
+import { createMockService } from '../../../../test/utils/test-helpers';
 import {
   UserFactory,
   MenuRecommendationFactory,
@@ -28,6 +30,7 @@ describe('PlaceService', () => {
   let mockGeminiPlacesService: jest.Mocked<GeminiPlacesService>;
   let mockGooglePlacesClient: jest.Mocked<GooglePlacesClient>;
   let mockGoogleSearchClient: jest.Mocked<GoogleSearchClient>;
+  let mockCacheService: jest.Mocked<RedisCacheService>;
 
   beforeEach(async () => {
     mockPlaceRecommendationRepository =
@@ -47,6 +50,7 @@ describe('PlaceService', () => {
     mockGoogleSearchClient = {
       searchBlogs: jest.fn(),
     } as unknown as jest.Mocked<GoogleSearchClient>;
+    mockCacheService = createMockService<RedisCacheService>([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -74,6 +78,10 @@ describe('PlaceService', () => {
         {
           provide: GoogleSearchClient,
           useValue: mockGoogleSearchClient,
+        },
+        {
+          provide: RedisCacheService,
+          useValue: mockCacheService,
         },
       ],
     }).compile();
@@ -418,6 +426,7 @@ describe('PlaceService', () => {
 
       expect(mockGooglePlacesClient.getDetails).toHaveBeenCalledWith(placeId, {
         includeBusinessStatus: true,
+        languageCode: 'ko',
       });
       expect(mockGooglePlacesClient.resolvePhotoUris).toHaveBeenCalledWith(
         placeDetails.photos,
@@ -425,7 +434,9 @@ describe('PlaceService', () => {
       expect(result.place).toEqual({
         id: placeId,
         name: '맛있는 식당',
+        localizedName: null,
         address: '서울특별시 강남구 테헤란로 123',
+        localizedAddress: null,
         location: { latitude: 37.5, longitude: 127.0 },
         rating: 4.5,
         userRatingCount: 200,
@@ -473,7 +484,7 @@ describe('PlaceService', () => {
       const result = await service.searchRestaurantBlogs(query, restaurantName);
 
       expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
-        query,
+        `${query} ${restaurantName}`,
         restaurantName,
         {},
       );
@@ -502,7 +513,7 @@ describe('PlaceService', () => {
       );
 
       expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
-        query,
+        `${query} ${restaurantName}`,
         restaurantName,
         { lr: 'lang_ko', hl: 'ko' },
       );
@@ -531,7 +542,7 @@ describe('PlaceService', () => {
       );
 
       expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
-        query,
+        `${query} ${restaurantName}`,
         restaurantName,
         { lr: 'lang_en', hl: 'en' },
       );
@@ -560,7 +571,7 @@ describe('PlaceService', () => {
       );
 
       expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
-        query,
+        `${query} ${restaurantName}`,
         restaurantName,
         { lr: 'lang_ja', hl: 'ja' },
       );
@@ -589,7 +600,7 @@ describe('PlaceService', () => {
       );
 
       expect(mockGoogleSearchClient.searchBlogs).toHaveBeenCalledWith(
-        query,
+        `${query} ${restaurantName}`,
         restaurantName,
         { lr: 'lang_zh-CN', hl: 'zh' },
       );
@@ -618,6 +629,7 @@ describe('PlaceService', () => {
             placeId: 'gemini_12345678',
             name: '김치찌개 전문점',
             reason: '평점이 높고 리뷰가 좋습니다.',
+            reasonTags: [],
             menuName: '김치찌개',
             source: 'GEMINI' as const,
             rating: 4.5,
@@ -627,6 +639,14 @@ describe('PlaceService', () => {
             address: '서울시 강남구',
             location: { latitude: 37.5012, longitude: 127.0396 },
             photoUrl: 'https://example.com/photo.jpg',
+            nameKo: '김치찌개 전문점',
+            nameEn: 'Kimchi Jjigae Restaurant',
+            nameLocal: null,
+            addressKo: '서울시 강남구',
+            addressEn: 'Gangnam-gu, Seoul',
+            addressLocal: null,
+            searchName: '김치찌개 전문점',
+            searchAddress: '서울시 강남구',
           },
         ],
         searchEntryPointHtml: undefined,
@@ -669,7 +689,7 @@ describe('PlaceService', () => {
       );
       expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
         menuName,
-        textQuery,
+        menuRecord.requestAddress,
         latitude,
         longitude,
         'ko',
@@ -909,7 +929,7 @@ describe('PlaceService', () => {
   });
 
   describe('buildRecommendationDetailResponse', () => {
-    it('should build detail response with place recommendations and details', async () => {
+    it('should build detail response with place recommendations from DB', async () => {
       const user = UserFactory.create({ id: 1 });
       const placeRecommendations = [
         PlaceRecommendationFactory.create({
@@ -917,6 +937,12 @@ describe('PlaceService', () => {
           placeId: 'place-1',
           reason: '평점이 높습니다',
           menuName: '김치찌개',
+          nameKo: '맛있는 식당',
+          nameEn: 'Delicious Restaurant',
+          nameLocal: null,
+          addressKo: '서울시 강남구',
+          addressEn: 'Gangnam-gu, Seoul',
+          addressLocal: null,
         }),
       ];
 
@@ -926,57 +952,31 @@ describe('PlaceService', () => {
         placeRecommendations,
       });
 
-      const placeDetails = {
-        id: 'place-1',
-        displayName: { text: '맛있는 식당' },
-        formattedAddress: '서울시 강남구',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        currentOpeningHours: { openNow: true },
-        photos: [{ name: 'photo1' }],
-        reviews: [
-          {
-            rating: 5,
-            originalText: { text: '좋아요' },
-            authorAttribution: { displayName: '홍길동' },
-            publishTime: '2024-01-01',
-          },
-        ],
-      };
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'ko',
+      );
 
-      mockGooglePlacesClient.getDetails.mockResolvedValue(placeDetails);
-      mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([
-        'https://example.com/photo1.jpg',
-      ]);
-
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation);
-
+      expect(mockGooglePlacesClient.getDetails).not.toHaveBeenCalled();
       expect(result.history.id).toBe(1);
       expect(result.history.hasPlaceRecommendations).toBe(true);
       expect(result.places).toHaveLength(1);
       expect(result.places[0]).toEqual({
         placeId: 'place-1',
         reason: '평점이 높습니다',
+        reasonTags: [],
         menuName: '김치찌개',
         name: '맛있는 식당',
+        localizedName: 'Delicious Restaurant',
         address: '서울시 강남구',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        openNow: true,
-        photos: ['https://example.com/photo1.jpg'],
-        reviews: [
-          {
-            rating: 5,
-            text: '좋아요',
-            authorName: '홍길동',
-            publishTime: '2024-01-01',
-          },
-        ],
+        localizedAddress: 'Gangnam-gu, Seoul',
+        rating: null,
+        userRatingCount: null,
+        priceLevel: null,
+        businessStatus: null,
+        openNow: null,
+        photos: [],
+        reviews: null,
         source: PlaceRecommendationSource.GOOGLE,
       });
     });
@@ -994,7 +994,7 @@ describe('PlaceService', () => {
       expect(result.places).toEqual([]);
     });
 
-    it('should handle place details fetch failure gracefully', async () => {
+    it('should use DB fallback when place data not available', async () => {
       const placeRecommendations = [
         PlaceRecommendationFactory.create({
           placeId: 'place-1',
@@ -1007,19 +1007,19 @@ describe('PlaceService', () => {
         placeRecommendations,
       });
 
-      mockGooglePlacesClient.getDetails.mockRejectedValue(
-        new Error('API failed'),
-      );
-
       const result =
         await service.buildRecommendationDetailResponse(recommendation);
 
+      expect(mockGooglePlacesClient.getDetails).not.toHaveBeenCalled();
       expect(result.places[0]).toEqual({
         placeId: 'place-1',
         reason: '추천',
+        reasonTags: [],
         menuName: '김치찌개',
         name: null,
+        localizedName: null,
         address: null,
+        localizedAddress: null,
         rating: null,
         userRatingCount: null,
         priceLevel: null,
@@ -1228,7 +1228,7 @@ describe('PlaceService', () => {
 
       expect(result.place?.reviews).toEqual([
         {
-          rating: null,
+          rating: 0,
           text: '리뷰',
           authorName: '작성자',
           publishTime: '2024-01-01',
@@ -1266,7 +1266,7 @@ describe('PlaceService', () => {
         {
           rating: 5,
           text: '리뷰',
-          authorName: null,
+          authorName: '',
           publishTime: '2024-01-01',
         },
       ]);
@@ -1303,7 +1303,7 @@ describe('PlaceService', () => {
           rating: 5,
           text: '리뷰',
           authorName: '작성자',
-          publishTime: null,
+          publishTime: '',
         },
       ]);
     });
@@ -1330,9 +1330,11 @@ describe('PlaceService', () => {
       const result = await service.getPlaceDetail(placeId);
 
       expect(result.place).toEqual({
-        id: null,
+        id: placeId,
         name: null,
+        localizedName: null,
         address: null,
+        localizedAddress: null,
         location: null,
         rating: null,
         userRatingCount: null,
@@ -1347,7 +1349,7 @@ describe('PlaceService', () => {
   });
 
   describe('buildRecommendationDetailResponse - all conditional branches', () => {
-    it('should use text.text when originalText is unavailable in detail reviews', async () => {
+    it('should return DB fallback data when no cache available', async () => {
       const placeRecommendations = [
         PlaceRecommendationFactory.create({
           placeId: 'place-1',
@@ -1360,214 +1362,19 @@ describe('PlaceService', () => {
         placeRecommendations,
       });
 
-      const placeDetails = {
-        id: 'place-1',
-        displayName: { text: '식당' },
-        formattedAddress: '서울시',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        currentOpeningHours: { openNow: true },
-        photos: [],
-        reviews: [
-          {
-            rating: 5,
-            originalText: undefined,
-            text: { text: 'fallback review text' },
-            authorAttribution: { displayName: '리뷰어' },
-            publishTime: '2024-01-01',
-          },
-        ],
-      };
-
-      mockGooglePlacesClient.getDetails.mockResolvedValue(placeDetails);
-      mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([]);
-
       const result =
         await service.buildRecommendationDetailResponse(recommendation);
 
-      expect(result.places[0].reviews).toEqual([
-        {
-          rating: 5,
-          text: 'fallback review text',
-          authorName: '리뷰어',
-          publishTime: '2024-01-01',
-        },
-      ]);
-    });
-
-    it('should handle null rating in recommendation detail reviews', async () => {
-      const placeRecommendations = [
-        PlaceRecommendationFactory.create({
-          placeId: 'place-1',
-          reason: '추천',
-          menuName: '김치찌개',
-        }),
-      ];
-
-      const recommendation = MenuRecommendationFactory.create({
-        placeRecommendations,
-      });
-
-      const placeDetails = {
-        id: 'place-1',
-        displayName: { text: '식당' },
-        formattedAddress: '서울시',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        currentOpeningHours: { openNow: true },
-        photos: [],
-        reviews: [
-          {
-            rating: undefined,
-            originalText: { text: '리뷰' },
-            authorAttribution: { displayName: '리뷰어' },
-            publishTime: '2024-01-01',
-          },
-        ],
-      };
-
-      mockGooglePlacesClient.getDetails.mockResolvedValue(placeDetails);
-      mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([]);
-
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation);
-
-      expect(result.places[0].reviews).toEqual([
-        {
-          rating: null,
-          text: '리뷰',
-          authorName: '리뷰어',
-          publishTime: '2024-01-01',
-        },
-      ]);
-    });
-
-    it('should handle null authorName in recommendation detail reviews', async () => {
-      const placeRecommendations = [
-        PlaceRecommendationFactory.create({
-          placeId: 'place-1',
-          reason: '추천',
-          menuName: '김치찌개',
-        }),
-      ];
-
-      const recommendation = MenuRecommendationFactory.create({
-        placeRecommendations,
-      });
-
-      const placeDetails = {
-        id: 'place-1',
-        displayName: { text: '식당' },
-        formattedAddress: '서울시',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        currentOpeningHours: { openNow: true },
-        photos: [],
-        reviews: [
-          {
-            rating: 5,
-            originalText: { text: '리뷰' },
-            authorAttribution: undefined,
-            publishTime: '2024-01-01',
-          },
-        ],
-      };
-
-      mockGooglePlacesClient.getDetails.mockResolvedValue(placeDetails);
-      mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([]);
-
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation);
-
-      expect(result.places[0].reviews).toEqual([
-        {
-          rating: 5,
-          text: '리뷰',
-          authorName: null,
-          publishTime: '2024-01-01',
-        },
-      ]);
-    });
-
-    it('should handle null publishTime in recommendation detail reviews', async () => {
-      const placeRecommendations = [
-        PlaceRecommendationFactory.create({
-          placeId: 'place-1',
-          reason: '추천',
-          menuName: '김치찌개',
-        }),
-      ];
-
-      const recommendation = MenuRecommendationFactory.create({
-        placeRecommendations,
-      });
-
-      const placeDetails = {
-        id: 'place-1',
-        displayName: { text: '식당' },
-        formattedAddress: '서울시',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        currentOpeningHours: { openNow: true },
-        photos: [],
-        reviews: [
-          {
-            rating: 5,
-            originalText: { text: '리뷰' },
-            authorAttribution: { displayName: '리뷰어' },
-            publishTime: undefined,
-          },
-        ],
-      };
-
-      mockGooglePlacesClient.getDetails.mockResolvedValue(placeDetails);
-      mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([]);
-
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation);
-
-      expect(result.places[0].reviews).toEqual([
-        {
-          rating: 5,
-          text: '리뷰',
-          authorName: '리뷰어',
-          publishTime: null,
-        },
-      ]);
-    });
-
-    it('should return null when place details is null', async () => {
-      const placeRecommendations = [
-        PlaceRecommendationFactory.create({
-          placeId: 'place-1',
-          reason: '추천',
-          menuName: '김치찌개',
-        }),
-      ];
-
-      const recommendation = MenuRecommendationFactory.create({
-        placeRecommendations,
-      });
-
-      mockGooglePlacesClient.getDetails.mockResolvedValue(null);
-
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation);
-
+      expect(mockGooglePlacesClient.getDetails).not.toHaveBeenCalled();
       expect(result.places[0]).toEqual({
         placeId: 'place-1',
         reason: '추천',
+        reasonTags: [],
         menuName: '김치찌개',
         name: null,
+        localizedName: null,
         address: null,
+        localizedAddress: null,
         rating: null,
         userRatingCount: null,
         priceLevel: null,
@@ -1605,8 +1412,10 @@ describe('PlaceService', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue({
         recommendations: null as unknown as Array<{
           placeId: string;
-          name: string;
+          nameKo: string;
+          nameEn: string;
           reason: string;
+          reasonTags: string[];
           menuName: string;
           source: 'GEMINI';
         }>,
@@ -1653,8 +1462,10 @@ describe('PlaceService', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue({
         recommendations: undefined as unknown as Array<{
           placeId: string;
-          name: string;
+          nameKo: string;
+          nameEn: string;
           reason: string;
+          reasonTags: string[];
           menuName: string;
           source: 'GEMINI';
         }>,
@@ -1721,7 +1532,9 @@ describe('PlaceService', () => {
       expect(result.place).toEqual({
         id: 'user_place_123',
         name: '우리집 단골 식당',
+        localizedName: null,
         address: '서울시 강남구 역삼동 123-45',
+        localizedAddress: null,
         location: {
           latitude: 37.5012345,
           longitude: 127.0456789,
@@ -1804,7 +1617,7 @@ describe('PlaceService', () => {
       expect(mockUserPlaceRepository.findOne).not.toHaveBeenCalled();
       expect(mockGooglePlacesClient.getDetails).toHaveBeenCalledWith(
         googlePlaceId,
-        { includeBusinessStatus: true },
+        { includeBusinessStatus: true, languageCode: 'ko' },
       );
     });
   });
@@ -1853,9 +1666,12 @@ describe('PlaceService', () => {
       expect(result.places[0]).toEqual({
         placeId: 'user_place_456',
         reason: '집 근처에서 가장 맛있는 중식당',
+        reasonTags: [],
         menuName: '짜장면',
         name: '추천 식당',
+        localizedName: null,
         address: '서울시 강남구',
+        localizedAddress: null,
         rating: null,
         userRatingCount: null,
         priceLevel: null,
@@ -1891,9 +1707,12 @@ describe('PlaceService', () => {
       expect(result.places[0]).toEqual({
         placeId: 'user_place_999',
         reason: '추천',
+        reasonTags: [],
         menuName: '김치찌개',
         name: null,
+        localizedName: null,
         address: null,
+        localizedAddress: null,
         rating: null,
         userRatingCount: null,
         priceLevel: null,
@@ -1955,19 +1774,6 @@ describe('PlaceService', () => {
         photos: [],
       };
 
-      const googlePlaceDetails = {
-        id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-        displayName: { text: 'Google 식당' },
-        formattedAddress: '서울시 서초구',
-        rating: 4.5,
-        userRatingCount: 100,
-        priceLevel: 'PRICE_LEVEL_MODERATE',
-        businessStatus: 'OPERATIONAL',
-        currentOpeningHours: { openNow: true },
-        photos: [],
-        reviews: [],
-      };
-
       const placeRecommendations = [
         PlaceRecommendationFactory.create({
           placeId: 'user_place_100',
@@ -1978,6 +1784,8 @@ describe('PlaceService', () => {
           placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
           reason: 'Google 추천 장소',
           menuName: '된장찌개',
+          nameKo: 'Google 식당',
+          nameEn: 'Google Restaurant',
         }),
       ];
 
@@ -1986,12 +1794,17 @@ describe('PlaceService', () => {
       });
 
       mockUserPlaceRepository.find.mockResolvedValue([userPlace as UserPlace]);
-      mockGooglePlacesClient.getDetails.mockResolvedValue(googlePlaceDetails);
-      mockGooglePlacesClient.resolvePhotoUris.mockResolvedValue([]);
 
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation);
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'ko',
+      );
 
+      expect(mockUserPlaceRepository.find).toHaveBeenCalledWith({
+        where: { id: In([100]) },
+        withDeleted: false,
+      });
+      expect(mockGooglePlacesClient.getDetails).not.toHaveBeenCalled();
       expect(result.places).toHaveLength(2);
       expect(result.places[0].source).toBe('USER');
       expect(result.places[0].name).toBe('사용자 식당');
@@ -2007,14 +1820,17 @@ describe('PlaceService', () => {
         id: 1,
         user,
         placeRecommendations: [],
+        requestAddress: 'query',
       });
 
       const geminiRecommendations = {
         recommendations: [
           {
             placeId: 'gemini_12345678',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '좋아요',
+            reasonTags: [],
             menuName: '김치찌개',
             source: 'GEMINI' as const,
           },
@@ -2057,14 +1873,17 @@ describe('PlaceService', () => {
         id: 1,
         user,
         placeRecommendations: [],
+        requestAddress: 'query',
       });
 
       const geminiRecommendations = {
         recommendations: [
           {
             placeId: 'gemini_12345678',
-            name: 'Restaurant',
+            nameKo: 'Restaurant',
+            nameEn: 'Restaurant',
             reason: 'Good',
+            reasonTags: [],
             menuName: 'kimchi',
             source: 'GEMINI' as const,
           },
@@ -2107,14 +1926,17 @@ describe('PlaceService', () => {
         id: 1,
         user,
         placeRecommendations: [],
+        requestAddress: 'query',
       });
 
       const geminiRecommendations = {
         recommendations: [
           {
             placeId: 'gemini_12345678',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '좋아요',
+            reasonTags: [],
             menuName: '김치찌개',
             source: 'GEMINI' as const,
           },
@@ -2160,14 +1982,17 @@ describe('PlaceService', () => {
         id: 1,
         user,
         placeRecommendations: [],
+        requestAddress: 'query',
       });
 
       const geminiRecommendations = {
         recommendations: [
           {
             placeId: 'gemini_12345678',
-            name: '식당',
+            nameKo: '식당',
+            nameEn: 'Restaurant',
             reason: '좋아요',
+            reasonTags: [],
             menuName: '김치찌개',
             source: 'GEMINI' as const,
           },
@@ -2210,14 +2035,17 @@ describe('PlaceService', () => {
         id: 1,
         user,
         placeRecommendations: [],
+        requestAddress: 'query',
       });
 
       const geminiRecommendations = {
         recommendations: [
           {
             placeId: 'gemini_12345678',
-            name: 'Restaurant',
+            nameKo: 'Restaurant',
+            nameEn: 'Restaurant',
             reason: 'Good',
+            reasonTags: [],
             menuName: 'kimchi',
             source: 'GEMINI' as const,
           },

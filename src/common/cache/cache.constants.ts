@@ -2,31 +2,31 @@
  * 캐시 TTL (초 단위)
  */
 export const CACHE_TTL = {
-  /** Google Place 상세정보 - 30일 */
-  PLACE_DETAIL: 30 * 24 * 60 * 60,
-  /** Google Place 사진 URL - 30일 */
-  PHOTO_URL: 30 * 24 * 60 * 60,
-  /** 블로그 검색 결과 - 7일 */
-  BLOG_SEARCH: 7 * 24 * 60 * 60,
+  /** 사용자 선호도 - 30분 */
+  USER_PREFERENCES: 30 * 60,
+  /** 사용자 주소 목록 - 30분 */
+  USER_ADDRESSES: 30 * 60,
+  /** 웹서치 요약 - 7일 */
+  WEB_SEARCH_SUMMARY: 7 * 24 * 60 * 60,
+  /** 사용자 프로필 - 30분 */
+  USER_PROFILE: 30 * 60,
 } as const;
 
 /**
  * 캐시 키 빌더
  */
 export const CACHE_KEY = {
-  /** Google Place 상세정보 키 */
-  place: (placeId: string) => `ext:google:place:${placeId}`,
-  /** Google Place 사진 URL 키 */
-  photo: (photoName: string) => `ext:google:photo:${photoName}`,
-  /** 블로그 검색 결과 키 */
-  blog: (query: string, language: string) => {
-    const normalized = query
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, ' ') // Normalize whitespace to single spaces first
-      .replace(/\s/g, '_') // Then replace with underscores
-      .replace(/_+/g, '_') // Collapse multiple underscores
-      .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
-    return `ext:google:blog:${language}:${normalized}`;
-  },
+  /** 사용자 선호도 키 */
+  userPreferences: (userId: number) => `user:${userId}:preferences`,
+  /** 사용자 주소 목록 키 */
+  userAddresses: (userId: number) => `user:${userId}:addresses`,
+  /** 사용자 프로필 키 */
+  userProfile: (userId: number) => `user:${userId}:profile`,
+  /** 웹서치 요약 키 */
+  webSearchSummary: (
+    region: string,
+    ageGroup: string,
+    gender: string,
+    month: string,
+  ) => `ai:websearch:${region}:${ageGroup}:${gender}:${month}`,
 } as const;

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InvalidMenuRequestException } from '@/common/exceptions/invalid-menu-request.exception';
+import { streamingAsyncLocalStorage } from '@/common/utils/retry-context';
 import type { StructuredAnalysis } from '@/external/openai/prompts';
 import { Gpt4oMiniValidationService } from '../gpt/gpt4o-mini-validation.service';
 import { Gpt51MenuService } from '../gpt/gpt51-menu.service';
@@ -44,8 +45,11 @@ export class TwoStageMenuService {
     compactSummary?: string,
     structuredAnalysis?: StructuredAnalysis,
   ): Promise<MenuRecommendationsResponse> {
+    const context = streamingAsyncLocalStorage.getStore();
+    context?.onStatus?.('validating');
+
     // Stage 1: 요청 검증 및 의도 분류
-    this.logger.log('📋 [Stage 1: 검증 시작] GPT-4o-mini');
+    this.logger.log('[Stage 1: 검증 시작] GPT-4o-mini');
     const validationResult = await this.validationService.validateMenuRequest(
       prompt,
       likes,
@@ -66,7 +70,7 @@ export class TwoStageMenuService {
 
     // Stage 1 성공: ValidationContext 구성
     const validationContext: ValidationContext = {
-      intent: validationResult.intent,
+      intent: validationResult.intent || 'mixed', // 기본값 추가
       constraints: validationResult.constraints || {
         budget: 'medium' as const,
         dietary: [],
@@ -75,12 +79,14 @@ export class TwoStageMenuService {
       suggestedCategories: validationResult.suggestedCategories || [],
     };
 
-    this.logger.log('✅ [Stage 1: 검증 완료]');
+    this.logger.log('[Stage 1: 검증 완료]');
     this.logger.log(`   유효성: ${validationResult.isValid}`);
     this.logger.log(`   의도: ${validationContext.intent}`);
 
+    context?.onStatus?.('searching');
+
     // Stage 2: 심층 메뉴 추천 생성
-    this.logger.log('🍽️ [Stage 2: 추천 시작] GPT-5.1 + web_search');
+    this.logger.log('[Stage 2: 추천 시작] GPT-5.1 + web_search');
     this.logger.log(`   사용자 주소: ${userAddress || '없음'}`);
     if (userBirthYear || userGender) {
       this.logger.log(`   사용자 프로필: 제공됨`);
@@ -118,7 +124,7 @@ export class TwoStageMenuService {
       );
     }
 
-    this.logger.log('✅ [Stage 2: 추천 완료]');
+    this.logger.log('[Stage 2: 추천 완료]');
 
     return recommendations;
   }

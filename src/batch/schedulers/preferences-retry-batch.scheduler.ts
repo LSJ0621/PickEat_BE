@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { SCHEDULER_LOCKS } from '@/common/constants/business.constants';
+import { withAdvisoryLock } from '@/common/utils/advisory-lock.util';
 import { PreferenceBatchService } from '../services/preference-batch.service';
 import {
   MenuSelection,
@@ -17,6 +19,7 @@ export class PreferencesRetryBatchScheduler {
     private readonly preferenceBatchService: PreferenceBatchService,
     @InjectRepository(MenuSelection)
     private readonly menuSelectionRepository: Repository<MenuSelection>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -29,24 +32,39 @@ export class PreferencesRetryBatchScheduler {
       '🔄 [재시도 배치 스케줄러] 시작 - 매주 수요일 18시 실패 건 재처리',
     );
 
-    try {
-      // First, handle expired BATCH_PROCESSING items
-      await this.handleExpiredBatchProcessingItems();
+    const { acquired } = await withAdvisoryLock(
+      this.dataSource,
+      SCHEDULER_LOCKS.PREFERENCES_RETRY,
+      async () => {
+        try {
+          // First, handle expired BATCH_PROCESSING items
+          await this.handleExpiredBatchProcessingItems();
 
-      // Then submit retry batch for failed items
-      const batchJob = await this.preferenceBatchService.submitRetryBatch();
+          // Then submit retry batch for failed items
+          const batchJob = await this.preferenceBatchService.submitRetryBatch();
 
-      if (batchJob) {
-        this.logger.log(
-          `✅ [재시도 배치 제출 완료] BatchJob ID: ${batchJob.id}, ` +
-            `총 요청: ${batchJob.totalRequests}건`,
-        );
-      } else {
-        this.logger.log('ℹ️ [재시도 배치] 처리할 실패 건이 없습니다.');
-      }
-    } catch (error) {
-      this.logger.error(
-        `❌ [재시도 배치 실패] ${error instanceof Error ? error.message : 'Unknown error'}`,
+          if (batchJob) {
+            this.logger.log(
+              `[재시도 배치 제출 완료] BatchJob ID: ${batchJob.id}, ` +
+                `총 요청: ${batchJob.totalRequests}건`,
+            );
+          } else {
+            this.logger.log('[재시도 배치] 처리할 실패 건이 없습니다.');
+          }
+
+          return { success: true };
+        } catch (error) {
+          this.logger.error(
+            `❌ [재시도 배치 실패] ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
+          return { success: false };
+        }
+      },
+    );
+
+    if (!acquired) {
+      this.logger.warn(
+        '⚠️ [재시도 배치 스케줄러] 다른 인스턴스에서 이미 실행 중입니다.',
       );
     }
   }

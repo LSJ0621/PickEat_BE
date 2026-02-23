@@ -3,19 +3,25 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
+  Logger,
   Param,
   Patch,
   Post,
   Query,
+  Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { Request, Response } from 'express';
 import {
   AuthUserPayload,
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
 import { ErrorCode } from '../common/constants/error-codes';
+import { streamingAsyncLocalStorage } from '../common/utils/retry-context';
+import { isAbortError } from '../common/utils/retry.util';
 import { parseLanguage } from '../common/utils/language.util';
 import { UserService } from '../user/user.service';
 import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
@@ -45,6 +51,7 @@ export class MenuController {
   ) {}
 
   @Post('recommend')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async recommend(
     @Body() recommendMenuDto: RecommendMenuDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -126,6 +133,7 @@ export class MenuController {
   // 가게 이름 기반 블로그/웹 문서 검색 (썸네일, URL, 제목, 스니펫, 출처)
   // 예: GET /menu/restaurant/blogs?query=부산시 해운대구 마라탕집&restaurantName=마라탕집&language=ko
   @Get('restaurant/blogs')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   async searchRestaurantBlogs(@Query() dto: SearchRestaurantBlogsDto) {
     return this.menuService.searchRestaurantBlogs(
       dto.query,
@@ -136,37 +144,9 @@ export class MenuController {
     );
   }
 
-  // Google Places 텍스트 검색 + LLM 추천까지 한 번에 수행
-  // (사용자가 "가게 추천받기" 버튼을 눌렀을 때 호출되는 엔드포인트)
-  @Get('recommend/places')
-  async recommendRestaurantsWithGooglePlacesAndLlm(
-    @Query('query') query: string,
-    @Query('menuName') menuName: string,
-    @Query('historyId') historyId: string | undefined,
-    @CurrentUser() authUser: AuthUserPayload,
-  ) {
-    if (!menuName) {
-      throw new BadRequestException({
-        errorCode: ErrorCode.MENU_NAME_REQUIRED,
-      });
-    }
-    const entity = await this.userService.getAuthenticatedEntity(
-      authUser.email,
-    );
-    const numericHistoryId =
-      historyId !== undefined && historyId !== null
-        ? Number(historyId)
-        : undefined;
-    return this.menuService.recommendRestaurantsWithGooglePlacesAndLlm(
-      entity,
-      query,
-      menuName,
-      numericHistoryId,
-    );
-  }
-
   // 검색 기반 가게 추천 (Gemini with Google Search Grounding)
   @Get('recommend/places/search')
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   async recommendSearchPlaces(
     @Query() dto: RecommendCommunityPlacesDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -194,21 +174,8 @@ export class MenuController {
     );
 
     // Map Gemini response (통합 Grounding: Search + Maps)
-    return {
-      recommendations: result.recommendations.map((rec) => ({
-        placeId: rec.placeId,
-        name: rec.name,
-        reason: rec.reason,
-        menuName: rec.menuName,
-        source: PlaceRecommendationSource.GEMINI,
-        address: rec.address,
-        location: rec.location,
-        localizedName: rec.localizedName,
-        localizedAddress: rec.localizedAddress,
-        searchName: rec.searchName,
-        searchAddress: rec.searchAddress,
-      })),
-    };
+    const language = parseLanguage(entity.preferredLanguage);
+    return this.mapGeminiRecommendationResponse(result, language);
   }
 
   // 커뮤니티 등록 가게 추천 (UserPlace)
@@ -221,15 +188,11 @@ export class MenuController {
       authUser.email,
     );
 
-    // Get MenuRecommendation
+    // Get MenuRecommendation (findById throws NotFoundException if not found)
     const menuRecommendation = await this.menuRecommendationService.findById(
       dto.menuRecommendationId,
       entity,
     );
-
-    if (!menuRecommendation) {
-      throw new NotFoundException('Menu recommendation not found');
-    }
 
     // Parse language
     const language = parseLanguage(dto.language || entity.preferredLanguage);
@@ -251,6 +214,7 @@ export class MenuController {
         placeId: rec.placeId,
         name: rec.userPlace?.name || '',
         reason: rec.reason,
+        reasonTags: rec.reasonTags ?? [],
         menuName: rec.menuName || undefined,
         source: rec.source,
         userPlaceId: rec.userPlace?.id || undefined,
@@ -260,6 +224,7 @@ export class MenuController {
 
   // Gemini 기반 가게 추천 (V2)
   @Get('recommend/places/v2')
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   async recommendPlacesV2(
     @Query() dto: RecommendPlacesV2Dto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -267,7 +232,16 @@ export class MenuController {
     const entity = await this.userService.getAuthenticatedEntity(
       authUser.email,
     );
-    return this.menuService.recommendPlacesWithGemini(dto, entity.id);
+    const language = parseLanguage(entity.preferredLanguage);
+    const result = await this.menuService.recommendPlacesWithGemini(
+      dto,
+      entity.id,
+    );
+    return {
+      ...this.mapGeminiRecommendationResponse(result, language),
+      searchEntryPointHtml: result.searchEntryPointHtml,
+      googleMapsWidgetContextToken: result.googleMapsWidgetContextToken,
+    };
   }
 
   // 특정 추천 이력 1건 + 그 이력에서 생성된 AI 가게 추천 상세 조회
@@ -292,26 +266,272 @@ export class MenuController {
   // 단일 placeId에 대한 Google Places 상세 조회
   // 예: GET /menu/places/:placeId/detail
   @Get('places/:placeId/detail')
-  async getPlaceDetail(@Param('placeId') placeId: string) {
-    return this.menuService.getPlaceDetail(placeId);
+  async getPlaceDetail(
+    @Param('placeId') placeId: string,
+    @CurrentUser() authUser: AuthUserPayload,
+  ) {
+    const entity = await this.userService.getAuthenticatedEntity(
+      authUser.email,
+    );
+    const language = parseLanguage(entity.preferredLanguage);
+    return this.menuService.getPlaceDetail(placeId, language);
   }
 
-  // [TEST] Google Places 검색 결과만 확인 (OpenAI 추천 제외)
-  @Get('test/places/search')
-  async testGooglePlacesSearch(
-    @Query('query') query: string,
-    @Query('latitude') latitude?: string,
-    @Query('longitude') longitude?: string,
-    @Query('language') language?: 'ko' | 'en',
+  // SSE streaming: 메뉴 추천 (retry/status 이벤트 포함)
+  @Post('recommend/stream')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async recommendStream(
+    @Body() recommendMenuDto: RecommendMenuDto,
+    @CurrentUser() authUser: AuthUserPayload,
+    @Req() req: Request,
+    @Res() res: Response,
   ) {
-    const lat = latitude ? parseFloat(latitude) : undefined;
-    const lng = longitude ? parseFloat(longitude) : undefined;
-    return this.placeService.searchRestaurantsWithGooglePlaces(
-      query,
-      lat,
-      lng,
-      language,
-    );
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const logger = new Logger('MenuController');
+    const sendEvent = (event: Record<string, unknown>) => {
+      logger.debug(`[SSE-DEBUG] sendEvent: ${JSON.stringify(event)}`);
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    const abortController = new AbortController();
+    const closeHandler = () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    };
+    req.on('close', closeHandler);
+
+    try {
+      if (abortController.signal.aborted) return;
+      const entity = await this.userService.getAuthenticatedEntity(
+        authUser.email,
+      );
+      if (abortController.signal.aborted) return;
+      const result = await streamingAsyncLocalStorage.run(
+        {
+          onRetry: (attempt) => sendEvent({ type: 'retrying', attempt }),
+          onStatus: (status) => sendEvent({ type: 'status', status }),
+          signal: abortController.signal,
+        },
+        () => this.menuService.recommend(entity, recommendMenuDto.prompt),
+      );
+      sendEvent({ type: 'result', data: result });
+    } catch (error) {
+      if (!isAbortError(error) && !res.writableEnded) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
+        sendEvent({ type: 'error', message });
+      }
+    } finally {
+      req.removeListener('close', closeHandler);
+      if (!res.writableEnded) res.end();
+    }
+  }
+
+  // SSE streaming: 검색 기반 가게 추천 (retry/status 이벤트 포함)
+  @Get('recommend/places/search/stream')
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
+  async recommendSearchPlacesStream(
+    @Query() dto: RecommendCommunityPlacesDto,
+    @CurrentUser() authUser: AuthUserPayload,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const sendEvent = (event: Record<string, unknown>) =>
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    const abortController = new AbortController();
+    const closeHandler = () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    };
+    req.on('close', closeHandler);
+
+    try {
+      if (abortController.signal.aborted) return;
+      const entity = await this.userService.getAuthenticatedEntity(
+        authUser.email,
+      );
+
+      if (abortController.signal.aborted) return;
+      await this.menuRecommendationService.findById(
+        dto.menuRecommendationId,
+        entity,
+      );
+
+      if (abortController.signal.aborted) return;
+      const textQuery = dto.menuName;
+
+      const result = await streamingAsyncLocalStorage.run(
+        {
+          onRetry: (attempt) => sendEvent({ type: 'retrying', attempt }),
+          onStatus: (status) => sendEvent({ type: 'status', status }),
+          signal: abortController.signal,
+        },
+        async () => {
+          sendEvent({ type: 'status', status: 'searching' });
+          return this.placeService.recommendRestaurants(
+            entity,
+            textQuery,
+            dto.menuName,
+            dto.menuRecommendationId,
+            dto.latitude,
+            dto.longitude,
+          );
+        },
+      );
+
+      const language = parseLanguage(entity.preferredLanguage);
+      const response: PlaceRecommendationResponse =
+        this.mapGeminiRecommendationResponse(result, language);
+      sendEvent({ type: 'result', data: response });
+    } catch (error) {
+      if (!isAbortError(error) && !res.writableEnded) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
+        sendEvent({ type: 'error', message });
+      }
+    } finally {
+      req.removeListener('close', closeHandler);
+      if (!res.writableEnded) res.end();
+    }
+  }
+
+  // SSE streaming: 커뮤니티 가게 추천 (retry/status 이벤트 포함)
+  @Get('recommend/places/community/stream')
+  async recommendCommunityPlacesStream(
+    @Query() dto: RecommendCommunityPlacesDto,
+    @CurrentUser() authUser: AuthUserPayload,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const sendEvent = (event: Record<string, unknown>) =>
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    const abortController = new AbortController();
+    const closeHandler = () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    };
+    req.on('close', closeHandler);
+
+    try {
+      if (abortController.signal.aborted) return;
+      const entity = await this.userService.getAuthenticatedEntity(
+        authUser.email,
+      );
+
+      if (abortController.signal.aborted) return;
+      // findById throws NotFoundException if not found
+      const menuRecommendation = await this.menuRecommendationService.findById(
+        dto.menuRecommendationId,
+        entity,
+      );
+
+      if (abortController.signal.aborted) return;
+      const language = parseLanguage(dto.language || entity.preferredLanguage);
+
+      const placeRecommendations = await streamingAsyncLocalStorage.run(
+        {
+          onRetry: (attempt) => sendEvent({ type: 'retrying', attempt }),
+          onStatus: (status) => sendEvent({ type: 'status', status }),
+          signal: abortController.signal,
+        },
+        async () => {
+          sendEvent({ type: 'status', status: 'searching' });
+          return this.communityPlaceService.recommendCommunityPlaces(
+            entity,
+            dto.latitude,
+            dto.longitude,
+            dto.menuName,
+            menuRecommendation,
+            language,
+          );
+        },
+      );
+
+      const response: PlaceRecommendationResponse = {
+        recommendations: placeRecommendations.map((rec) => ({
+          placeId: rec.placeId,
+          name: rec.userPlace?.name || '',
+          reason: rec.reason,
+          reasonTags: rec.reasonTags ?? [],
+          menuName: rec.menuName || undefined,
+          source: rec.source,
+          userPlaceId: rec.userPlace?.id || undefined,
+        })),
+      };
+      sendEvent({ type: 'result', data: response });
+    } catch (error) {
+      if (!isAbortError(error) && !res.writableEnded) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
+        sendEvent({ type: 'error', message });
+      }
+    } finally {
+      req.removeListener('close', closeHandler);
+      if (!res.writableEnded) res.end();
+    }
+  }
+
+  private mapGeminiRecommendationResponse(
+    result: {
+      recommendations: Array<{
+        placeId: string | null;
+        nameKo: string;
+        nameEn: string;
+        nameLocal?: string | null;
+        reason: string;
+        reasonTags?: string[];
+        menuName?: string;
+        addressKo?: string;
+        addressEn?: string;
+        addressLocal?: string | null;
+        location?: { latitude: number; longitude: number };
+        searchName?: string;
+        searchAddress?: string;
+      }>;
+    },
+    language: 'ko' | 'en',
+  ): PlaceRecommendationResponse {
+    return {
+      recommendations: result.recommendations.map((rec) => ({
+        placeId: rec.placeId,
+        name: language === 'ko' ? rec.nameKo : rec.nameEn,
+        reason: rec.reason,
+        reasonTags: rec.reasonTags ?? [],
+        menuName: rec.menuName,
+        source: PlaceRecommendationSource.GEMINI,
+        address: language === 'ko' ? rec.addressKo : rec.addressEn,
+        location: rec.location,
+        localizedName:
+          rec.nameLocal ?? (language === 'ko' ? rec.nameEn : rec.nameKo),
+        localizedAddress:
+          rec.addressLocal ??
+          (language === 'ko' ? rec.addressEn : rec.addressKo),
+        searchName: rec.searchName,
+        searchAddress: rec.searchAddress,
+      })),
+    };
   }
 
   private buildSelectionResponse(selection: MenuSelection) {

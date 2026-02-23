@@ -1,17 +1,24 @@
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   name?: string;
 
   @IsOptional()
-  @IsInt({ message: 'Birth year must be an integer' })
-  @Min(1900, { message: 'Birth year must be 1900 or later' })
-  @Max(new Date().getFullYear(), {
-    message: 'Birth year cannot be in the future',
+  @IsString()
+  @MaxLength(10)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Birth date must be in YYYY-MM-DD format',
   })
-  birthYear?: number;
+  birthDate?: string;
 
   @IsOptional()
   @IsEnum(['male', 'female', 'other'], {

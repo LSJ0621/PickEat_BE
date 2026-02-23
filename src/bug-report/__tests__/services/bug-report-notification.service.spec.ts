@@ -39,7 +39,7 @@ describe('BugReportNotificationService', () => {
 
       expect(result.should).toBe(false);
       expect(result.lastThreshold).toBeNull();
-      expect(notificationRepository.find).not.toHaveBeenCalled();
+      expect(notificationRepository.findOne).not.toHaveBeenCalled();
     });
 
     it('should return false for count 0', async () => {
@@ -50,20 +50,19 @@ describe('BugReportNotificationService', () => {
     });
 
     it('should return true for first notification at threshold 10', async () => {
-      notificationRepository.find.mockResolvedValue([]);
+      notificationRepository.findOne.mockResolvedValue(null);
 
       const result = await service.shouldSendNotification(10);
 
       expect(result.should).toBe(true);
       expect(result.lastThreshold).toBeNull();
-      expect(notificationRepository.find).toHaveBeenCalledWith({
+      expect(notificationRepository.findOne).toHaveBeenCalledWith({
         order: { sentAt: 'DESC' },
-        take: 1,
       });
     });
 
     it('should return true for first notification at threshold 20', async () => {
-      notificationRepository.find.mockResolvedValue([]);
+      notificationRepository.findOne.mockResolvedValue(null);
 
       const result = await service.shouldSendNotification(25);
 
@@ -79,7 +78,7 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date(),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       const result = await service.shouldSendNotification(15);
 
@@ -95,7 +94,7 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date(),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       const result = await service.shouldSendNotification(22);
 
@@ -111,7 +110,7 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date(),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       const result = await service.shouldSendNotification(35);
 
@@ -127,7 +126,7 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date(),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       const result = await service.shouldSendNotification(105);
 
@@ -143,7 +142,7 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date(),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       // Count increased but still in same threshold (10-19)
       const result = await service.shouldSendNotification(18);
@@ -160,7 +159,7 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date(),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       // Exactly at next threshold
       const result = await service.shouldSendNotification(20);
@@ -317,19 +316,18 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date('2024-01-15T10:00:00Z'),
       } as BugReportNotification;
 
-      notificationRepository.find.mockResolvedValue([lastNotification]);
+      notificationRepository.findOne.mockResolvedValue(lastNotification);
 
       const result = await service.getLastNotification();
 
-      expect(notificationRepository.find).toHaveBeenCalledWith({
+      expect(notificationRepository.findOne).toHaveBeenCalledWith({
         order: { sentAt: 'DESC' },
-        take: 1,
       });
       expect(result).toEqual(lastNotification);
     });
 
     it('should return null if no notifications exist', async () => {
-      notificationRepository.find.mockResolvedValue([]);
+      notificationRepository.findOne.mockResolvedValue(null);
 
       const result = await service.getLastNotification();
 
@@ -344,8 +342,8 @@ describe('BugReportNotificationService', () => {
         sentAt: new Date('2024-01-15T10:00:00Z'),
       } as BugReportNotification;
 
-      // Repository should return only the most recent due to take: 1
-      notificationRepository.find.mockResolvedValue([newerNotification]);
+      // Repository should return only the most recent due to ORDER BY DESC
+      notificationRepository.findOne.mockResolvedValue(newerNotification);
 
       const result = await service.getLastNotification();
 

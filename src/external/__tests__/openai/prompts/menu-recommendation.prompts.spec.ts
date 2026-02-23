@@ -31,8 +31,9 @@ describe('menu-recommendation.prompts', () => {
 
     it('should contain output format specification', () => {
       expect(SYSTEM_PROMPT).toContain('<output_format>');
+      expect(SYSTEM_PROMPT).toContain('intro');
       expect(SYSTEM_PROMPT).toContain('recommendations');
-      expect(SYSTEM_PROMPT).toContain('reason');
+      expect(SYSTEM_PROMPT).toContain('closing');
     });
 
     it('should contain recommendation principles in Korean', () => {
@@ -58,9 +59,9 @@ describe('menu-recommendation.prompts', () => {
     });
 
     it('should contain reason writing guide in Korean', () => {
-      expect(SYSTEM_PROMPT).toContain('<reason_writing_guide>');
-      expect(SYSTEM_PROMPT).toContain('**reason 작성 가이드**');
-      expect(SYSTEM_PROMPT).toContain('금지 사항:');
+      expect(SYSTEM_PROMPT).toContain('<response_structure_guide>');
+      expect(SYSTEM_PROMPT).toContain('intro');
+      expect(SYSTEM_PROMPT).toContain('금지:');
     });
 
     it('should contain language rule', () => {
@@ -146,7 +147,7 @@ describe('menu-recommendation.prompts', () => {
       it('should include USER_PROMPT section with user input', () => {
         const result = buildUserPrompt('test prompt', [], [], undefined);
 
-        expect(result).toContain('USER_PROMPT:');
+        expect(result).toContain('<user_prompt>');
         expect(result).toContain('test prompt');
       });
 
@@ -345,15 +346,16 @@ describe('menu-recommendation.prompts', () => {
 
         expect(lines[0]).toBe('RESPONSE_LANGUAGE: Korean');
         expect(lines[1]).toBe('');
-        expect(lines[2]).toBe('USER_PROMPT:');
+        expect(lines[2]).toBe('<user_prompt>');
         expect(lines[3]).toBe('테스트 프롬프트');
-        expect(lines[4]).toBe('---');
-        expect(lines[5]).toBe('PREFERENCES (use only what is needed):');
-        expect(lines[6]).toBe('Likes: 한식');
-        expect(lines[7]).toBe('Dislikes: 양식');
-        expect(lines[8]).toBe('---');
-        expect(lines[9]).toBe('PREFERENCE_ANALYSIS:');
-        expect(lines[10]).toBe('분석 내용');
+        expect(lines[4]).toBe('</user_prompt>');
+        expect(lines[5]).toBe('---');
+        expect(lines[6]).toBe('PREFERENCES (use only what is needed):');
+        expect(lines[7]).toBe('Likes: 한식');
+        expect(lines[8]).toBe('Dislikes: 양식');
+        expect(lines[9]).toBe('---');
+        expect(lines[10]).toBe('PREFERENCE_ANALYSIS:');
+        expect(lines[11]).toBe('분석 내용');
       });
 
       it('should include separator lines', () => {
@@ -367,7 +369,7 @@ describe('menu-recommendation.prompts', () => {
         const result = buildUserPrompt('', [], [], undefined);
 
         expect(result).toContain('RESPONSE_LANGUAGE:');
-        expect(result).toContain('USER_PROMPT:');
+        expect(result).toContain('<user_prompt>');
         expect(result).toContain('PREFERENCES (use only what is needed):');
         expect(result).toContain('PREFERENCE_ANALYSIS:');
       });
@@ -383,7 +385,7 @@ describe('menu-recommendation.prompts', () => {
         );
 
         expect(result).toContain('RESPONSE_LANGUAGE: English');
-        expect(result).toContain('USER_PROMPT:');
+        expect(result).toContain('<user_prompt>');
         expect(result).toContain(
           'I want something light and healthy for lunch today',
         );
@@ -443,7 +445,7 @@ describe('menu-recommendation.prompts', () => {
       );
 
       expect(result).toContain('RESPONSE_LANGUAGE: English');
-      expect(result).toContain('USER_PROMPT:');
+      expect(result).toContain('<user_prompt>');
       expect(result).toContain('I want pizza');
       expect(result).toContain('Likes: Italian, Fast food');
       expect(result).toContain('Dislikes: Spicy');
@@ -741,11 +743,13 @@ describe('menu-recommendation.prompts', () => {
       ).toBe('array');
     });
 
-    it('should define recommendations items as strings with minLength 1', () => {
+    it('should define recommendations items as objects with condition and menu', () => {
       const recommendations =
         MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.items.type).toBe('string');
-      expect(recommendations.items.minLength).toBe(1);
+      expect(recommendations.items.type).toBe('object');
+      expect(recommendations.items.properties.condition).toBeDefined();
+      expect(recommendations.items.properties.menu).toBeDefined();
+      expect(recommendations.items.required).toEqual(['condition', 'menu']);
     });
 
     it('should define recommendations minItems as 1', () => {
@@ -763,34 +767,32 @@ describe('menu-recommendation.prompts', () => {
     it('should have recommendations description in Korean', () => {
       const recommendations =
         MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.description).toContain(
-        '구체적인 단일 요리명만 사용',
-      );
-      expect(recommendations.description).toContain('수식어 제외');
+      expect(recommendations.description).toContain('조건 + 메뉴 배열');
     });
 
-    it('should define reason property as string', () => {
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason).toBeDefined();
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason.type).toBe(
+    it('should define intro property as string', () => {
+      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro).toBeDefined();
+      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro.type).toBe(
         'string',
       );
     });
 
-    it('should define reason minLength as 1', () => {
-      const reason = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason;
-      expect(reason.minLength).toBe(1);
+    it('should define intro minLength and maxLength', () => {
+      const intro = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro;
+      expect(intro.minLength).toBe(50);
+      expect(intro.maxLength).toBe(500);
     });
 
-    it('should define reason maxLength as 1000', () => {
-      const reason = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason;
-      expect(reason.maxLength).toBe(1000);
+    it('should define closing property as string', () => {
+      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.closing).toBeDefined();
+      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.closing.type).toBe(
+        'string',
+      );
     });
 
-    it('should have reason description in Korean', () => {
-      const reason = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.reason;
-      expect(reason.description).toContain('추천 이유');
-      expect(reason.description).toContain('존댓말');
-      expect(reason.description).toContain('700-800자');
+    it('should have intro description in Korean', () => {
+      const intro = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro;
+      expect(intro.description).toContain('첫 설명');
     });
 
     it('should have required fields array', () => {
@@ -800,10 +802,11 @@ describe('menu-recommendation.prompts', () => {
       );
     });
 
-    it('should require recommendations and reason fields', () => {
+    it('should require intro, recommendations and closing fields', () => {
       expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.required).toEqual([
+        'intro',
         'recommendations',
-        'reason',
+        'closing',
       ]);
     });
 
@@ -838,7 +841,7 @@ describe('menu-recommendation.prompts', () => {
       it('should contain Korean-specific instructions', () => {
         expect(SYSTEM_PROMPT_KO).toContain('존댓말');
         expect(SYSTEM_PROMPT_KO).toContain('메뉴명');
-        expect(SYSTEM_PROMPT_KO).toContain('추천 이유');
+        expect(SYSTEM_PROMPT_KO).toContain('intro');
       });
     });
 
@@ -859,9 +862,9 @@ describe('menu-recommendation.prompts', () => {
       });
 
       it('should contain English-specific instructions', () => {
-        expect(SYSTEM_PROMPT_EN).toContain('polite tone');
-        expect(SYSTEM_PROMPT_EN).toContain('menu names');
-        expect(SYSTEM_PROMPT_EN).toContain('recommendation reasons');
+        expect(SYSTEM_PROMPT_EN).toContain('warm');
+        expect(SYSTEM_PROMPT_EN).toContain('menu');
+        expect(SYSTEM_PROMPT_EN).toContain('intro');
       });
     });
 
@@ -1001,37 +1004,31 @@ describe('menu-recommendation.prompts', () => {
       it('should return Korean schema when language is "ko"', () => {
         const schema = getMenuRecommendationsJsonSchema('ko');
 
+        expect(schema.properties.intro.description).toContain('첫 설명');
         expect(schema.properties.recommendations.description).toContain(
-          '구체적인 단일 요리명만 사용',
+          '조건 + 메뉴 배열',
         );
-        expect(schema.properties.recommendations.description).toContain(
-          '수식어 제외',
-        );
-        expect(schema.properties.reason.description).toContain('추천 이유');
-        expect(schema.properties.reason.description).toContain('존댓말');
+        expect(schema.properties.closing.description).toContain('마무리 말');
       });
 
       it('should return English schema when language is "en"', () => {
         const schema = getMenuRecommendationsJsonSchema('en');
 
-        expect(schema.properties.recommendations.description).toContain(
-          'Specific single dish names only',
+        expect(schema.properties.intro.description).toContain(
+          'Opening explanation',
         );
         expect(schema.properties.recommendations.description).toContain(
-          'no category names',
+          'Condition + menu array',
         );
-        expect(schema.properties.reason.description).toContain(
-          'recommendation rationale',
+        expect(schema.properties.closing.description).toContain(
+          'Closing remark',
         );
-        expect(schema.properties.reason.description).toContain('polite tone');
       });
 
       it('should default to Korean when no language parameter is provided', () => {
         const schema = getMenuRecommendationsJsonSchema();
 
-        expect(schema.properties.recommendations.description).toContain(
-          '구체적인 단일 요리명만 사용',
-        );
+        expect(schema.properties.intro.description).toContain('첫 설명');
       });
 
       it('should have same structure for both languages', () => {
@@ -1040,6 +1037,9 @@ describe('menu-recommendation.prompts', () => {
 
         expect(koSchema.type).toBe(enSchema.type);
         expect(koSchema.required).toEqual(enSchema.required);
+        expect(koSchema.properties.intro.type).toBe(
+          enSchema.properties.intro.type,
+        );
         expect(koSchema.properties.recommendations.type).toBe(
           enSchema.properties.recommendations.type,
         );
@@ -1049,11 +1049,8 @@ describe('menu-recommendation.prompts', () => {
         expect(koSchema.properties.recommendations.maxItems).toBe(
           enSchema.properties.recommendations.maxItems,
         );
-        expect(koSchema.properties.reason.type).toBe(
-          enSchema.properties.reason.type,
-        );
-        expect(koSchema.properties.reason.maxLength).toBe(
-          enSchema.properties.reason.maxLength,
+        expect(koSchema.properties.closing.type).toBe(
+          enSchema.properties.closing.type,
         );
       });
 
@@ -1061,11 +1058,14 @@ describe('menu-recommendation.prompts', () => {
         const koSchema = getMenuRecommendationsJsonSchema('ko');
         const enSchema = getMenuRecommendationsJsonSchema('en');
 
+        expect(koSchema.properties.intro.description).not.toBe(
+          enSchema.properties.intro.description,
+        );
         expect(koSchema.properties.recommendations.description).not.toBe(
           enSchema.properties.recommendations.description,
         );
-        expect(koSchema.properties.reason.description).not.toBe(
-          enSchema.properties.reason.description,
+        expect(koSchema.properties.closing.description).not.toBe(
+          enSchema.properties.closing.description,
         );
       });
     });

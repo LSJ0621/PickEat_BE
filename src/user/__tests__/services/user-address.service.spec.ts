@@ -1,7 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { USER_LIMITS } from '@/common/constants/business.constants';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import {
   UserAddressFactory,
   UserFactory,
@@ -18,10 +21,48 @@ describe('UserAddressService', () => {
   let userAddressRepository: ReturnType<
     typeof createMockRepository<UserAddress>
   >;
+  let mockCacheService: Partial<RedisCacheService>;
+  let mockDataSource: Partial<DataSource>;
+  let mockTransactionManager: {
+    save: jest.Mock;
+    update: jest.Mock;
+    softRemove: jest.Mock;
+    create: jest.Mock;
+    findOne: jest.Mock;
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     userAddressRepository = createMockRepository<UserAddress>();
+    mockCacheService = {
+      getUserAddresses: jest.fn().mockResolvedValue(null),
+      setUserAddresses: jest.fn().mockResolvedValue(undefined),
+      invalidateUserAddresses: jest.fn().mockResolvedValue(undefined),
+      invalidateUserProfile: jest.fn().mockResolvedValue(undefined),
+    };
+
+    // Create mock transaction manager that can be inspected in tests
+    mockTransactionManager = {
+      save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      softRemove: jest
+        .fn()
+        .mockImplementation((entity) => Promise.resolve(entity)),
+      create: jest.fn().mockImplementation((EntityClass, data) => {
+        if (typeof EntityClass === 'function') {
+          return { ...data, id: 1 };
+        }
+        return { ...EntityClass, id: 1 };
+      }),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
+    // Default transaction mock - can be overridden in individual tests
+    mockDataSource = {
+      transaction: jest.fn().mockImplementation(async (callback) => {
+        return callback(mockTransactionManager as any);
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -29,6 +70,14 @@ describe('UserAddressService', () => {
         {
           provide: getRepositoryToken(UserAddress),
           useValue: userAddressRepository,
+        },
+        {
+          provide: RedisCacheService,
+          useValue: mockCacheService,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
         },
       ],
     }).compile();
@@ -94,8 +143,8 @@ describe('UserAddressService', () => {
         isDefault: true,
         isSearchAddress: true,
       });
-      userAddressRepository.create.mockReturnValue(createdAddress);
-      userAddressRepository.save.mockResolvedValue(createdAddress);
+      mockTransactionManager.create.mockReturnValue(createdAddress);
+      mockTransactionManager.save.mockResolvedValue(createdAddress);
 
       // Act
       const result = await service.createAddress(user, dto);
@@ -103,7 +152,7 @@ describe('UserAddressService', () => {
       // Assert
       expect(result.isDefault).toBe(true);
       expect(result.isSearchAddress).toBe(true);
-      expect(userAddressRepository.save).toHaveBeenCalled();
+      expect(mockTransactionManager.save).toHaveBeenCalled();
     });
 
     it('should throw error when max address limit reached', async () => {
@@ -124,10 +173,11 @@ describe('UserAddressService', () => {
 
       // Act & Assert
       await expect(service.createAddress(user, dto)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.createAddress(user, dto)).rejects.toThrow(
-        `주소는 최대 ${USER_LIMITS.MAX_ADDRESSES}개까지만 저장할 수 있습니다.`,
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.ADDRESS_MAX_LIMIT,
+          }),
+        }),
       );
     });
 
@@ -147,16 +197,19 @@ describe('UserAddressService', () => {
       };
 
       userAddressRepository.count.mockResolvedValue(1);
-      userAddressRepository.update.mockResolvedValue(createMockUpdateResult(1));
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
       const createdAddress = UserAddressFactory.create();
-      userAddressRepository.create.mockReturnValue(createdAddress);
-      userAddressRepository.save.mockResolvedValue(createdAddress);
+      mockTransactionManager.create.mockReturnValue(createdAddress);
+      mockTransactionManager.save.mockResolvedValue(createdAddress);
 
       // Act
       await service.createAddress(user, dto);
 
       // Assert
-      expect(userAddressRepository.update).toHaveBeenCalledWith(
+      expect(mockTransactionManager.update).toHaveBeenCalledWith(
+        UserAddress,
         expect.objectContaining({ isDefault: true }),
         { isDefault: false },
       );
@@ -180,14 +233,15 @@ describe('UserAddressService', () => {
       const createdAddress = UserAddressFactory.create({
         roadAddress: '도로명주소',
       });
-      userAddressRepository.create.mockReturnValue(createdAddress);
-      userAddressRepository.save.mockResolvedValue(createdAddress);
+      mockTransactionManager.create.mockReturnValue(createdAddress);
+      mockTransactionManager.save.mockResolvedValue(createdAddress);
 
       // Act
       await service.createAddress(user, dto);
 
       // Assert
-      expect(userAddressRepository.create).toHaveBeenCalledWith(
+      expect(mockTransactionManager.create).toHaveBeenCalledWith(
+        UserAddress,
         expect.objectContaining({
           roadAddress: '도로명주소',
         }),
@@ -210,14 +264,15 @@ describe('UserAddressService', () => {
 
       userAddressRepository.count.mockResolvedValue(0);
       const createdAddress = UserAddressFactory.create();
-      userAddressRepository.create.mockReturnValue(createdAddress);
-      userAddressRepository.save.mockResolvedValue(createdAddress);
+      mockTransactionManager.create.mockReturnValue(createdAddress);
+      mockTransactionManager.save.mockResolvedValue(createdAddress);
 
       // Act
       await service.createAddress(user, dto);
 
       // Assert
-      expect(userAddressRepository.create).toHaveBeenCalledWith(
+      expect(mockTransactionManager.create).toHaveBeenCalledWith(
+        UserAddress,
         expect.objectContaining({
           latitude: 37.5012345,
           longitude: 127.0398765,
@@ -237,7 +292,7 @@ describe('UserAddressService', () => {
       };
 
       userAddressRepository.findOne.mockResolvedValue(address);
-      userAddressRepository.save.mockResolvedValue({ ...address, ...dto });
+      mockTransactionManager.save.mockResolvedValue({ ...address, ...dto });
 
       // Act
       const result = await service.updateAddress(user, 1, dto);
@@ -269,8 +324,10 @@ describe('UserAddressService', () => {
       const dto = { isDefault: true };
 
       userAddressRepository.findOne.mockResolvedValue(address);
-      userAddressRepository.update.mockResolvedValue(createMockUpdateResult(1));
-      userAddressRepository.save.mockResolvedValue({
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({
         ...address,
         isDefault: true,
       });
@@ -279,7 +336,8 @@ describe('UserAddressService', () => {
       await service.updateAddress(user, 1, dto);
 
       // Assert
-      expect(userAddressRepository.update).toHaveBeenCalledWith(
+      expect(mockTransactionManager.update).toHaveBeenCalledWith(
+        UserAddress,
         expect.objectContaining({ isDefault: true }),
         { isDefault: false },
       );
@@ -299,14 +357,16 @@ describe('UserAddressService', () => {
       };
 
       userAddressRepository.findOne.mockResolvedValue(address);
-      userAddressRepository.update.mockResolvedValue(createMockUpdateResult(1));
-      userAddressRepository.save.mockResolvedValue({ ...address, ...dto });
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({ ...address, ...dto });
 
       // Act
       await service.updateAddress(user, 1, dto);
 
       // Assert
-      expect(userAddressRepository.save).toHaveBeenCalledWith(
+      expect(mockTransactionManager.save).toHaveBeenCalledWith(
         expect.objectContaining(dto),
       );
     });
@@ -324,13 +384,13 @@ describe('UserAddressService', () => {
       });
 
       userAddressRepository.findOne.mockResolvedValue(address);
-      userAddressRepository.softRemove.mockResolvedValue(address);
+      mockTransactionManager.softRemove.mockResolvedValue(address);
 
       // Act
       await service.deleteAddress(user, 1);
 
       // Assert
-      expect(userAddressRepository.softRemove).toHaveBeenCalledWith(address);
+      expect(mockTransactionManager.softRemove).toHaveBeenCalledWith(address);
     });
 
     it('should throw NotFoundException when address not found', async () => {
@@ -358,17 +418,16 @@ describe('UserAddressService', () => {
         isDefault: false,
       });
 
-      userAddressRepository.findOne
-        .mockResolvedValueOnce(defaultAddress)
-        .mockResolvedValueOnce(otherAddress);
-      userAddressRepository.save.mockResolvedValue(otherAddress);
-      userAddressRepository.softRemove.mockResolvedValue(defaultAddress);
+      userAddressRepository.findOne.mockResolvedValue(defaultAddress);
+      mockTransactionManager.findOne.mockResolvedValue(otherAddress);
+      mockTransactionManager.save.mockResolvedValue(otherAddress);
+      mockTransactionManager.softRemove.mockResolvedValue(defaultAddress);
 
       // Act
       await service.deleteAddress(user, 1);
 
       // Assert
-      expect(userAddressRepository.save).toHaveBeenCalledWith(
+      expect(mockTransactionManager.save).toHaveBeenCalledWith(
         expect.objectContaining({ isDefault: true }),
       );
     });
@@ -387,17 +446,16 @@ describe('UserAddressService', () => {
         isSearchAddress: false,
       });
 
-      userAddressRepository.findOne
-        .mockResolvedValueOnce(searchAddress)
-        .mockResolvedValueOnce(otherAddress);
-      userAddressRepository.save.mockResolvedValue(otherAddress);
-      userAddressRepository.softRemove.mockResolvedValue(searchAddress);
+      userAddressRepository.findOne.mockResolvedValue(searchAddress);
+      mockTransactionManager.findOne.mockResolvedValue(otherAddress);
+      mockTransactionManager.save.mockResolvedValue(otherAddress);
+      mockTransactionManager.softRemove.mockResolvedValue(searchAddress);
 
       // Act
       await service.deleteAddress(user, 1);
 
       // Assert
-      expect(userAddressRepository.save).toHaveBeenCalledWith(
+      expect(mockTransactionManager.save).toHaveBeenCalledWith(
         expect.objectContaining({ isSearchAddress: true }),
       );
     });
@@ -413,13 +471,13 @@ describe('UserAddressService', () => {
       ];
 
       userAddressRepository.find.mockResolvedValue(addresses);
-      userAddressRepository.softRemove.mockResolvedValue({} as UserAddress);
+      mockTransactionManager.softRemove.mockResolvedValue({} as UserAddress);
 
       // Act
       await service.deleteAddresses(user, [1, 2]);
 
       // Assert
-      expect(userAddressRepository.softRemove).toHaveBeenCalledTimes(2);
+      expect(mockTransactionManager.softRemove).toHaveBeenCalledTimes(2);
     });
 
     it('should throw error when no address IDs provided', async () => {
@@ -443,10 +501,11 @@ describe('UserAddressService', () => {
 
       // Act & Assert
       await expect(service.deleteAddresses(user, [1])).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.deleteAddresses(user, [1])).rejects.toThrow(
-        '기본 주소는 삭제할 수 없습니다',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.ADDRESS_CANNOT_DELETE_DEFAULT,
+          }),
+        }),
       );
     });
 
@@ -481,15 +540,15 @@ describe('UserAddressService', () => {
       });
 
       userAddressRepository.find.mockResolvedValue(addresses);
-      userAddressRepository.softRemove.mockResolvedValue({} as UserAddress);
-      userAddressRepository.findOne.mockResolvedValue(remainingAddress);
-      userAddressRepository.save.mockResolvedValue(remainingAddress);
+      mockTransactionManager.softRemove.mockResolvedValue({} as UserAddress);
+      mockTransactionManager.findOne.mockResolvedValue(remainingAddress);
+      mockTransactionManager.save.mockResolvedValue(remainingAddress);
 
       // Act
       await service.deleteAddresses(user, [1]);
 
       // Assert
-      expect(userAddressRepository.save).toHaveBeenCalledWith(
+      expect(mockTransactionManager.save).toHaveBeenCalledWith(
         expect.objectContaining({ isSearchAddress: true }),
       );
     });
@@ -506,8 +565,10 @@ describe('UserAddressService', () => {
       });
 
       userAddressRepository.findOne.mockResolvedValue(address);
-      userAddressRepository.update.mockResolvedValue(createMockUpdateResult(1));
-      userAddressRepository.save.mockResolvedValue({
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({
         ...address,
         isDefault: true,
       });
@@ -517,7 +578,8 @@ describe('UserAddressService', () => {
 
       // Assert
       expect(result.isDefault).toBe(true);
-      expect(userAddressRepository.update).toHaveBeenCalledWith(
+      expect(mockTransactionManager.update).toHaveBeenCalledWith(
+        UserAddress,
         expect.objectContaining({ isDefault: true }),
         { isDefault: false },
       );
@@ -546,8 +608,10 @@ describe('UserAddressService', () => {
       });
 
       userAddressRepository.findOne.mockResolvedValue(address);
-      userAddressRepository.update.mockResolvedValue(createMockUpdateResult(1));
-      userAddressRepository.save.mockResolvedValue({
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({
         ...address,
         isSearchAddress: true,
       });
@@ -557,6 +621,11 @@ describe('UserAddressService', () => {
 
       // Assert
       expect(result.isSearchAddress).toBe(true);
+      expect(mockTransactionManager.update).toHaveBeenCalledWith(
+        UserAddress,
+        expect.objectContaining({ isSearchAddress: true }),
+        { isSearchAddress: false },
+      );
     });
   });
 
@@ -676,7 +745,13 @@ describe('UserAddressService', () => {
       // Act & Assert
       await expect(
         service.updateSingleAddress(user, selectedAddress),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
+          }),
+        }),
+      );
     });
 
     it('should update first address when no search address exists', async () => {
@@ -727,7 +802,13 @@ describe('UserAddressService', () => {
       // Act & Assert
       await expect(
         service.updateSingleAddress(user, selectedAddress),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.ADDRESS_UPDATE_FAILED,
+          }),
+        }),
+      );
     });
   });
 });

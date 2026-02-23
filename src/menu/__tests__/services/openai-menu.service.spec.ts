@@ -57,8 +57,13 @@ describe('OpenAiMenuService', () => {
 
     it('should delegate to TwoStageMenuService', async () => {
       const expectedResult = {
-        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-        reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+        intro: '한식을 좋아하시는 것 같아 추천드립니다.',
+        recommendations: [
+          { condition: '조건1', menu: '김치찌개' },
+          { condition: '조건2', menu: '된장찌개' },
+          { condition: '조건3', menu: '순두부찌개' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockTwoStageMenuService.generateMenuRecommendations.mockResolvedValue(
@@ -75,13 +80,25 @@ describe('OpenAiMenuService', () => {
       expect(result).toEqual(expectedResult);
       expect(
         mockTwoStageMenuService.generateMenuRecommendations,
-      ).toHaveBeenCalledWith(prompt, likes, dislikes, analysis);
+      ).toHaveBeenCalledWith(
+        prompt,
+        likes,
+        dislikes,
+        analysis,
+        'ko',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should pass all parameters to TwoStageMenuService', async () => {
       mockTwoStageMenuService.generateMenuRecommendations.mockResolvedValue({
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '마무리',
       });
 
       await service.generateMenuRecommendations(
@@ -96,13 +113,25 @@ describe('OpenAiMenuService', () => {
       ).toHaveBeenCalledTimes(1);
       expect(
         mockTwoStageMenuService.generateMenuRecommendations,
-      ).toHaveBeenCalledWith(prompt, likes, dislikes, analysis);
+      ).toHaveBeenCalledWith(
+        prompt,
+        likes,
+        dislikes,
+        analysis,
+        'ko',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should work without analysis parameter', async () => {
       const expectedResult = {
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '마무리',
       };
 
       mockTwoStageMenuService.generateMenuRecommendations.mockResolvedValue(
@@ -118,7 +147,18 @@ describe('OpenAiMenuService', () => {
       expect(result).toEqual(expectedResult);
       expect(
         mockTwoStageMenuService.generateMenuRecommendations,
-      ).toHaveBeenCalledWith(prompt, likes, dislikes, undefined);
+      ).toHaveBeenCalledWith(
+        prompt,
+        likes,
+        dislikes,
+        undefined,
+        'ko',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should propagate errors from TwoStageMenuService', async () => {
@@ -134,8 +174,9 @@ describe('OpenAiMenuService', () => {
 
     it('should handle empty likes and dislikes arrays', async () => {
       const expectedResult = {
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '마무리',
       };
 
       mockTwoStageMenuService.generateMenuRecommendations.mockResolvedValue(
@@ -147,7 +188,18 @@ describe('OpenAiMenuService', () => {
       expect(result).toEqual(expectedResult);
       expect(
         mockTwoStageMenuService.generateMenuRecommendations,
-      ).toHaveBeenCalledWith(prompt, [], [], undefined);
+      ).toHaveBeenCalledWith(
+        prompt,
+        [],
+        [],
+        undefined,
+        'ko',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
   });
 });

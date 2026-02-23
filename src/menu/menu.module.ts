@@ -9,6 +9,7 @@ import { PlaceRecommendation } from './entities/place-recommendation.entity';
 import { Gpt4oMiniValidationService } from './gpt/gpt4o-mini-validation.service';
 import { Gpt51MenuService } from './gpt/gpt51-menu.service';
 import { GptWebSearchMenuService } from './gpt/gpt-web-search-menu.service';
+import { WebSearchSummaryService } from './gpt/web-search-summary.service';
 import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
 import { CommunityPlaceService } from './services/community-place.service';
@@ -55,6 +56,7 @@ import { TwoStageMenuService } from './services/two-stage-menu.service';
     TwoStageMenuService,
     Gpt4oMiniValidationService,
     Gpt51MenuService,
+    WebSearchSummaryService,
     GptWebSearchMenuService,
   ],
 })

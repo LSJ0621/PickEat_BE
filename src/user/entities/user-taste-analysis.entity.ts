@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
@@ -21,7 +22,7 @@ export class UserTasteAnalysis {
   @Column({ type: 'int' })
   userId: number;
 
-  @OneToOne(() => User, (user) => user.tasteAnalysis)
+  @OneToOne(() => User, (user) => user.tasteAnalysis, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
 
@@ -73,4 +74,7 @@ export class UserTasteAnalysis {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

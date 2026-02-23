@@ -68,7 +68,7 @@ describe('google-places-recommendation.prompts', () => {
           '후보 목록에서만 선택',
         );
         expect(GOOGLE_PLACES_SYSTEM_PROMPT_KO).toContain('최대 3곳');
-        expect(GOOGLE_PLACES_SYSTEM_PROMPT_KO).toContain('존댓말 사용');
+        expect(GOOGLE_PLACES_SYSTEM_PROMPT_KO).toContain('존댓말');
         expect(GOOGLE_PLACES_SYSTEM_PROMPT_KO).toContain('한국어 응답');
         expect(GOOGLE_PLACES_SYSTEM_PROMPT_KO).toContain('영어 응답');
       });
@@ -332,10 +332,10 @@ describe('google-places-recommendation.prompts', () => {
         ).toHaveProperty('reason');
         expect(
           schema.properties.recommendations.items.properties.reason.minLength,
-        ).toBe(100);
+        ).toBe(150);
         expect(
           schema.properties.recommendations.items.properties.reason.maxLength,
-        ).toBe(300);
+        ).toBe(200);
       });
     });
 

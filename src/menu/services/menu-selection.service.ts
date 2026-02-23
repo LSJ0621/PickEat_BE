@@ -1,10 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { User } from '../../user/entities/user.entity';
 import { UpdateMenuSelectionDto } from '../dto/update-menu-selection.dto';
-import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import {
   MenuSelection,
   MenuSelectionStatus,
@@ -15,6 +14,7 @@ import {
   normalizeMenuName,
   normalizeMenuPayload,
 } from '../menu-payload.util';
+import { assertValidTransition } from '../utilities/menu-selection-state-machine';
 import { MenuRecommendationService } from './menu-recommendation.service';
 
 /**
@@ -30,6 +30,7 @@ export class MenuSelectionService {
     @InjectRepository(MenuSelection)
     private readonly menuSelectionRepository: Repository<MenuSelection>,
     private readonly menuRecommendationService: MenuRecommendationService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -48,38 +49,34 @@ export class MenuSelectionService {
     const now = new Date();
     const selectedDate = this.toDateString(now);
 
-    const existing = await this.menuSelectionRepository.findOne({
-      where: { user: { id: user.id }, selectedDate },
-      relations: ['user'],
-    });
+    return this.dataSource.transaction(async (manager) => {
+      const existing = await manager.findOne(MenuSelection, {
+        where: { user: { id: user.id }, selectedDate },
+        relations: ['user'],
+        lock: { mode: 'pessimistic_write' },
+      });
 
-    if (existing) {
-      return this.mergeExistingSelection(
-        existing,
+      if (existing) {
+        return this.mergeExistingSelectionInTransaction(
+          manager,
+          existing,
+          menuPayload,
+          now,
+          selectedDate,
+          historyId,
+          user,
+        );
+      }
+
+      return this.createNewSelectionInTransaction(
+        manager,
         menuPayload,
+        user,
         now,
         selectedDate,
         historyId,
-        () =>
-          this.menuRecommendationService.findOwnedRecommendation(
-            historyId!,
-            user,
-          ),
       );
-    }
-
-    return this.createNewSelection(
-      menuPayload,
-      user,
-      now,
-      selectedDate,
-      historyId,
-      () =>
-        this.menuRecommendationService.findOwnedRecommendation(
-          historyId!,
-          user,
-        ),
-    );
+    });
   }
 
   /**
@@ -150,37 +147,43 @@ export class MenuSelectionService {
     }
   }
 
-  private async mergeExistingSelection(
+  private async mergeExistingSelectionInTransaction(
+    manager: EntityManager,
     existing: MenuSelection,
     menuPayload: ReturnType<typeof buildMenuPayloadFromSlotInputs>,
     now: Date,
     selectedDate: string,
     historyId: number | undefined,
-    findRecommendation: () => Promise<MenuRecommendation>,
+    user: User,
   ): Promise<MenuSelection> {
     const existingPayload = normalizeMenuPayload(existing.menuPayload);
     existing.menuPayload = mergeMenuPayload(existingPayload, menuPayload);
     existing.selectedAt = now;
     existing.selectedDate = selectedDate;
+    assertValidTransition(existing.status, MenuSelectionStatus.PENDING);
     existing.status = MenuSelectionStatus.PENDING;
     existing.retryCount = 0;
 
     if (historyId !== undefined) {
-      existing.menuRecommendation = await findRecommendation();
+      existing.menuRecommendation =
+        await this.menuRecommendationService.findOwnedRecommendation(
+          historyId,
+          user,
+        );
     }
 
-    return this.menuSelectionRepository.save(existing);
+    return manager.save(existing);
   }
 
-  private async createNewSelection(
+  private async createNewSelectionInTransaction(
+    manager: EntityManager,
     menuPayload: ReturnType<typeof buildMenuPayloadFromSlotInputs>,
     user: User,
     now: Date,
     selectedDate: string,
     historyId: number | undefined,
-    findRecommendation: () => Promise<MenuRecommendation>,
   ): Promise<MenuSelection> {
-    const selection = this.menuSelectionRepository.create({
+    const selection = manager.create(MenuSelection, {
       menuPayload,
       user,
       selectedAt: now,
@@ -190,10 +193,14 @@ export class MenuSelectionService {
     });
 
     if (historyId !== undefined) {
-      selection.menuRecommendation = await findRecommendation();
+      selection.menuRecommendation =
+        await this.menuRecommendationService.findOwnedRecommendation(
+          historyId,
+          user,
+        );
     }
 
-    return this.menuSelectionRepository.save(selection);
+    return manager.save(selection);
   }
 
   private async performUpdate(
@@ -204,6 +211,7 @@ export class MenuSelectionService {
     const selectedDate = this.toDateString(now);
 
     if (dto.cancel) {
+      assertValidTransition(selection.status, MenuSelectionStatus.CANCELLED);
       await this.menuSelectionRepository.update(selection.id, {
         status: MenuSelectionStatus.CANCELLED,
         menuPayload: { breakfast: [], lunch: [], dinner: [], etc: [] },
@@ -213,6 +221,7 @@ export class MenuSelectionService {
       });
     } else {
       const updatedPayload = this.buildUpdatedPayload(selection, dto);
+      assertValidTransition(selection.status, MenuSelectionStatus.PENDING);
 
       await this.menuSelectionRepository.update(selection.id, {
         menuPayload: updatedPayload,

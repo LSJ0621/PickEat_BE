@@ -143,6 +143,7 @@ describe('CommunityPlaceService', () => {
             name: '김치찌개 전문점',
             address: '서울시 강남구 테헤란로 123',
             matchReason: '김치찌개 전문점으로 메뉴와 정확히 일치합니다.',
+            matchReasonTags: [],
             matchScore: 95,
           },
           {
@@ -150,6 +151,7 @@ describe('CommunityPlaceService', () => {
             name: '할머니 손맛',
             address: '서울시 강남구 역삼로 456',
             matchReason: '가정식 한식으로 김치찌개를 제공합니다.',
+            matchReasonTags: [],
             matchScore: 85,
           },
         ],
@@ -289,6 +291,7 @@ describe('CommunityPlaceService', () => {
             name: string;
             address: string;
             matchReason: string;
+            matchReasonTags: string[];
             matchScore: number;
           }>,
         },
@@ -331,6 +334,7 @@ describe('CommunityPlaceService', () => {
             name: '식당1',
             address: '서울시',
             matchReason: '유효한 추천',
+            matchReasonTags: [],
             matchScore: 90,
           },
           {
@@ -338,6 +342,7 @@ describe('CommunityPlaceService', () => {
             name: '존재하지 않는 식당',
             address: '서울시',
             matchReason: '무효한 추천',
+            matchReasonTags: [],
             matchScore: 80,
           },
         ],
@@ -405,6 +410,7 @@ describe('CommunityPlaceService', () => {
             name: '존재하지 않는 식당',
             address: '서울시',
             matchReason: '무효한 추천',
+            matchReasonTags: [],
             matchScore: 80,
           },
         ],
@@ -721,6 +727,7 @@ describe('CommunityPlaceService', () => {
             name: '식당',
             address: '서울시',
             matchReason: '추천 이유',
+            matchReasonTags: [],
             matchScore: 90,
           },
         ],
@@ -857,6 +864,7 @@ describe('CommunityPlaceService', () => {
             name: '존재하지 않는 식당',
             address: '서울시',
             matchReason: '무효한 추천',
+            matchReasonTags: [],
             matchScore: 80,
           },
         ],
@@ -908,6 +916,7 @@ describe('CommunityPlaceService', () => {
             name: '존재하지 않는 식당',
             address: '서울시',
             matchReason: '무효한 추천',
+            matchReasonTags: [],
             matchScore: 80,
           },
         ],

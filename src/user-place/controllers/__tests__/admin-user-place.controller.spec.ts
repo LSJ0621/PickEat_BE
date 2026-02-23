@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminUserPlaceController } from '../admin-user-place.controller';
-import { UserPlaceService } from '../../user-place.service';
+import { AdminUserPlaceService } from '../../services/admin-user-place.service';
 import { UserService } from '@/user/user.service';
 import { createMockService } from '../../../../test/utils/test-helpers';
 import { UserFactory } from '../../../../test/factories/entity.factory';
@@ -43,7 +43,7 @@ const createMockUserPlace = (overrides = {}) =>
 
 describe('AdminUserPlaceController', () => {
   let controller: AdminUserPlaceController;
-  let userPlaceService: jest.Mocked<UserPlaceService>;
+  let userPlaceService: jest.Mocked<AdminUserPlaceService>;
   let userService: jest.Mocked<UserService>;
 
   const adminUser: AuthUserPayload = {
@@ -59,7 +59,7 @@ describe('AdminUserPlaceController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    userPlaceService = createMockService<UserPlaceService>([
+    userPlaceService = createMockService<AdminUserPlaceService>([
       'findAllForAdmin',
       'findOneForAdmin',
       'approvePlace',
@@ -72,7 +72,7 @@ describe('AdminUserPlaceController', () => {
       controllers: [AdminUserPlaceController],
       providers: [
         {
-          provide: UserPlaceService,
+          provide: AdminUserPlaceService,
           useValue: userPlaceService,
         },
         {
@@ -116,6 +116,7 @@ describe('AdminUserPlaceController', () => {
       const result = await controller.update(
         placeId,
         dto,
+        [],
         adminUser,
         mockRequest,
       );
@@ -127,6 +128,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         '192.168.1.1',
+        [],
       );
       expect(result).toEqual(updatedPlace);
       expect(result.name).toBe(dto.name);
@@ -155,6 +157,7 @@ describe('AdminUserPlaceController', () => {
       const result = await controller.update(
         placeId,
         dto,
+        [],
         adminUser,
         mockRequest,
       );
@@ -165,6 +168,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         '192.168.1.1',
+        [],
       );
       expect(result.name).toBe(dto.name);
     });
@@ -179,10 +183,10 @@ describe('AdminUserPlaceController', () => {
 
       // Act & Assert
       await expect(
-        controller.update(placeId, dto, adminUser, mockRequest),
+        controller.update(placeId, dto, [], adminUser, mockRequest),
       ).rejects.toThrow(NotFoundException);
       await expect(
-        controller.update(placeId, dto, adminUser, mockRequest),
+        controller.update(placeId, dto, [], adminUser, mockRequest),
       ).rejects.toThrow('Admin user not found');
       expect(userPlaceService.updatePlaceByAdmin).not.toHaveBeenCalled();
     });
@@ -213,7 +217,13 @@ describe('AdminUserPlaceController', () => {
       userPlaceService.updatePlaceByAdmin.mockResolvedValue(updatedPlace);
 
       // Act
-      await controller.update(placeId, dto, adminUser, requestWithForwarded);
+      await controller.update(
+        placeId,
+        dto,
+        [],
+        adminUser,
+        requestWithForwarded,
+      );
 
       // Assert
       expect(userPlaceService.updatePlaceByAdmin).toHaveBeenCalledWith(
@@ -221,6 +231,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         '10.0.0.1', // First IP from x-forwarded-for
+        [],
       );
     });
 
@@ -253,6 +264,7 @@ describe('AdminUserPlaceController', () => {
       await controller.update(
         placeId,
         dto,
+        [],
         adminUser,
         requestWithForwardedArray,
       );
@@ -263,6 +275,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         '10.0.0.2', // First IP from array
+        [],
       );
     });
 
@@ -291,7 +304,13 @@ describe('AdminUserPlaceController', () => {
       userPlaceService.updatePlaceByAdmin.mockResolvedValue(updatedPlace);
 
       // Act
-      await controller.update(placeId, dto, adminUser, requestWithoutForwarded);
+      await controller.update(
+        placeId,
+        dto,
+        [],
+        adminUser,
+        requestWithoutForwarded,
+      );
 
       // Assert
       expect(userPlaceService.updatePlaceByAdmin).toHaveBeenCalledWith(
@@ -299,6 +318,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         '203.0.113.1',
+        [],
       );
     });
 
@@ -314,7 +334,7 @@ describe('AdminUserPlaceController', () => {
         latitude: 37.4912345,
         longitude: 127.0298765,
         menuTypes: ['중식', '일식', '양식'],
-        photos: [
+        existingPhotos: [
           'https://s3.amazonaws.com/photo1.jpg',
           'https://s3.amazonaws.com/photo2.jpg',
         ],
@@ -325,7 +345,16 @@ describe('AdminUserPlaceController', () => {
       };
       const updatedPlace = createMockUserPlace({
         id: placeId,
-        ...dto,
+        name: dto.name,
+        address: dto.address,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        menuTypes: dto.menuTypes,
+        photos: dto.existingPhotos,
+        openingHours: dto.openingHours,
+        phoneNumber: dto.phoneNumber,
+        category: dto.category,
+        description: dto.description,
         status: UserPlaceStatus.APPROVED,
       });
 
@@ -336,6 +365,7 @@ describe('AdminUserPlaceController', () => {
       const result = await controller.update(
         placeId,
         dto,
+        [],
         adminUser,
         mockRequest,
       );
@@ -346,7 +376,7 @@ describe('AdminUserPlaceController', () => {
       expect(result.latitude).toBe(dto.latitude);
       expect(result.longitude).toBe(dto.longitude);
       expect(result.menuTypes).toEqual(dto.menuTypes);
-      expect(result.photos).toEqual(dto.photos);
+      expect(result.photos).toEqual(dto.existingPhotos);
       expect(result.openingHours).toBe(dto.openingHours);
       expect(result.phoneNumber).toBe(dto.phoneNumber);
       expect(result.category).toBe(dto.category);
@@ -372,6 +402,7 @@ describe('AdminUserPlaceController', () => {
       const result = await controller.update(
         placeId,
         dto,
+        [],
         adminUser,
         mockRequest,
       );
@@ -382,6 +413,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         '192.168.1.1',
+        [],
       );
       expect(result).toEqual(originalPlace);
     });
@@ -414,6 +446,7 @@ describe('AdminUserPlaceController', () => {
       const result = await controller.update(
         placeId,
         dto,
+        [],
         adminUser,
         mockRequest,
       );
@@ -447,7 +480,7 @@ describe('AdminUserPlaceController', () => {
       userPlaceService.updatePlaceByAdmin.mockResolvedValue(updatedPlace);
 
       // Act
-      await controller.update(placeId, dto, adminUser, requestWithoutIp);
+      await controller.update(placeId, dto, [], adminUser, requestWithoutIp);
 
       // Assert
       expect(userPlaceService.updatePlaceByAdmin).toHaveBeenCalledWith(
@@ -455,6 +488,7 @@ describe('AdminUserPlaceController', () => {
         adminEntity.id,
         dto,
         'unknown',
+        [],
       );
     });
   });

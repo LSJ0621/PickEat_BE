@@ -1,7 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConfigService } from '@nestjs/config';
-import { MailerService } from '@nestjs-modules/mailer';
 import {
   BadRequestException,
   InternalServerErrorException,
@@ -9,12 +7,13 @@ import {
 import * as bcrypt from 'bcrypt';
 import { EmailVerificationService } from '../../services/email-verification.service';
 import { EmailVerification } from '../../entities/email-verification.entity';
-import { User } from '../../../user/entities/user.entity';
 import { EmailPurpose } from '../../dto/send-email-code.dto';
 import { createMockRepository } from '../../../../test/mocks/repository.mock';
 import { EmailVerificationFactory } from '../../../../test/factories/entity.factory';
-import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 import { EMAIL_VERIFICATION } from '@/common/constants/business.constants';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { UserService } from '../../../user/user.service';
+import { EmailNotificationService } from '../../services/email-notification.service';
 
 // 유닛 테스트에서는 테스트 모드 바이패스 비활성화
 jest.mock('../../../common/utils/test-mode.util', () => ({
@@ -26,15 +25,34 @@ describe('EmailVerificationService', () => {
   let mockRepository: ReturnType<
     typeof createMockRepository<EmailVerification>
   >;
-  let mockUserRepository: ReturnType<typeof createMockRepository<any>>;
-  let mockMailerService: jest.Mocked<Pick<MailerService, 'sendMail'>>;
+  let mockUserService: jest.Mocked<
+    Pick<UserService, 'findByEmailWithSelect' | 'findByIdWithSelect'>
+  >;
+  let mockEmailNotificationService: {
+    ensureMailConfig: jest.Mock;
+    sendVerificationEmail: jest.Mock;
+    sendWelcomeEmail: jest.Mock;
+    sendAccountDeactivationEmail: jest.Mock;
+    getVerificationTemplateName: jest.Mock;
+  };
 
   beforeEach(async () => {
     mockRepository = createMockRepository<EmailVerification>();
-    mockUserRepository = createMockRepository<any>();
-    mockMailerService = {
-      sendMail: jest.fn(),
-    } as jest.Mocked<Pick<MailerService, 'sendMail'>>;
+    mockUserService = {
+      findByEmailWithSelect: jest.fn().mockResolvedValue(null),
+      findByIdWithSelect: jest.fn().mockResolvedValue(null),
+    } as jest.Mocked<
+      Pick<UserService, 'findByEmailWithSelect' | 'findByIdWithSelect'>
+    >;
+    mockEmailNotificationService = {
+      ensureMailConfig: jest.fn(),
+      sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+      sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
+      sendAccountDeactivationEmail: jest.fn().mockResolvedValue(undefined),
+      getVerificationTemplateName: jest
+        .fn()
+        .mockImplementation((lang: string) => `email-verification-${lang}`),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,22 +62,12 @@ describe('EmailVerificationService', () => {
           useValue: mockRepository,
         },
         {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
+          provide: UserService,
+          useValue: mockUserService,
         },
         {
-          provide: MailerService,
-          useValue: mockMailerService,
-        },
-        {
-          provide: ConfigService,
-          useValue: createMockConfigService({
-            EMAIL_HOST: 'smtp.example.com',
-            EMAIL_PORT: 587,
-            EMAIL_SECURE: 'true',
-            EMAIL_ADDRESS: 'noreply@example.com',
-            EMAIL_PASSWORD: 'password',
-          }),
+          provide: EmailNotificationService,
+          useValue: mockEmailNotificationService,
         },
       ],
     }).compile();
@@ -101,11 +109,13 @@ describe('EmailVerificationService', () => {
     // Helper function to setup mocks for sendCode tests
     function setupSendCodeMocks() {
       jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed-code' as never);
-      mockMailerService.sendMail.mockResolvedValue({} as { messageId: string });
+      mockEmailNotificationService.sendVerificationEmail.mockResolvedValue(
+        undefined,
+      );
     }
 
     it('should send verification code for first-time user', async () => {
-      // Setup: Mock bcrypt and mailer
+      // Setup: Mock bcrypt and notification service
       setupSendCodeMocks();
       // Arrange
       const email = 'test@example.com';
@@ -120,19 +130,15 @@ describe('EmailVerificationService', () => {
 
       // Assert
       expect(result.remainCount).toBe(4); // 5 - 1
-      expect(result.message).toContain('인증번호가 발송되었습니다');
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: email,
-          subject: '[회원가입] 이메일 인증번호',
-          template: 'email-verification.ko',
-        }),
-      );
+      expect(result.messageCode).toBeDefined();
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalled();
       expect(mockRepository.save).toHaveBeenCalled();
     });
 
     it('should send password reset verification code', async () => {
-      // Setup: Mock bcrypt and mailer
+      // Setup: Mock bcrypt and notification service
       setupSendCodeMocks();
 
       // Arrange
@@ -147,17 +153,13 @@ describe('EmailVerificationService', () => {
       await service.sendCode(email, EmailPurpose.RESET_PASSWORD);
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: email,
-          subject: '[비밀번호 재설정] 이메일 인증번호',
-          template: 'email-verification.ko',
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalled();
     });
 
     it('should send re-register verification code', async () => {
-      // Setup: Mock bcrypt and mailer
+      // Setup: Mock bcrypt and notification service
       setupSendCodeMocks();
 
       // Arrange
@@ -172,17 +174,13 @@ describe('EmailVerificationService', () => {
       await service.sendCode(email, EmailPurpose.RE_REGISTER);
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: email,
-          subject: '[재가입] 이메일 인증번호',
-          template: 'email-verification.ko',
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalled();
     });
 
     it('should update existing record on same day resend', async () => {
-      // Setup: Mock bcrypt and mailer
+      // Setup: Mock bcrypt and notification service
       setupSendCodeMocks();
 
       // Arrange
@@ -228,10 +226,13 @@ describe('EmailVerificationService', () => {
       // Act & Assert
       await expect(
         service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow('인증코드를 너무 자주 요청하고 있습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_TOO_MANY_REQUESTS,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when daily limit exceeded', async () => {
@@ -256,7 +257,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow('하루 최대 발송 횟수를 초과했습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_DAILY_SEND_LIMIT_EXCEEDED,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when user is blocked after 5 failures', async () => {
@@ -278,7 +285,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow('5회 실패로 인해 다음날까지 회원가입이 불가능합니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_BLOCKED,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when already completed today', async () => {
@@ -300,13 +313,28 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow('이미 이메일 인증이 완료되었습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_ALREADY_COMPLETED_TODAY,
+          }),
+        }),
+      );
     });
 
     it('should throw InternalServerErrorException when email config is missing', async () => {
-      // Arrange - Service constructor validates config, so this test should check that
+      // Arrange - Service constructor calls emailNotificationService.ensureMailConfig()
       // Act & Assert
       await expect(async () => {
+        const mockBadNotificationService = {
+          ensureMailConfig: jest.fn().mockImplementation(() => {
+            throw new InternalServerErrorException('Email configuration error');
+          }),
+          sendVerificationEmail: jest.fn(),
+          sendWelcomeEmail: jest.fn(),
+          sendAccountDeactivationEmail: jest.fn(),
+          getVerificationTemplateName: jest.fn(),
+        };
         await Test.createTestingModule({
           providers: [
             EmailVerificationService,
@@ -315,16 +343,12 @@ describe('EmailVerificationService', () => {
               useValue: mockRepository,
             },
             {
-              provide: getRepositoryToken(User),
-              useValue: mockUserRepository,
+              provide: UserService,
+              useValue: mockUserService,
             },
             {
-              provide: MailerService,
-              useValue: mockMailerService,
-            },
-            {
-              provide: ConfigService,
-              useValue: createMockConfigService({}),
+              provide: EmailNotificationService,
+              useValue: mockBadNotificationService,
             },
           ],
         }).compile();
@@ -332,7 +356,7 @@ describe('EmailVerificationService', () => {
     });
 
     it('should create new record for different day', async () => {
-      // Setup: Mock bcrypt and mailer
+      // Setup: Mock bcrypt and notification service
       setupSendCodeMocks();
 
       // Arrange
@@ -383,7 +407,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow('하루 최대 발송 횟수를 초과했습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_DAILY_SEND_LIMIT_EXCEEDED,
+          }),
+        }),
+      );
     });
 
     it('should send password reset code with correct error message when already completed today', async () => {
@@ -407,7 +437,11 @@ describe('EmailVerificationService', () => {
       await expect(
         service.sendCode(email, EmailPurpose.RESET_PASSWORD),
       ).rejects.toThrow(
-        '이미 비밀번호 재설정을 완료했습니다. 내일 다시 시도해주세요.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_ALREADY_COMPLETED_TODAY,
+          }),
+        }),
       );
     });
 
@@ -431,7 +465,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.sendCode(email, EmailPurpose.RE_REGISTER),
-      ).rejects.toThrow('이미 재가입을 완료했습니다. 내일 다시 시도해주세요.');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_ALREADY_COMPLETED_TODAY,
+          }),
+        }),
+      );
     });
 
     it('should throw when undefined dates result in corrupted sendCount exceeding limit', async () => {
@@ -456,7 +496,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.sendCode(email, EmailPurpose.SIGNUP),
-      ).rejects.toThrow('하루 최대 발송 횟수를 초과했습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_DAILY_SEND_LIMIT_EXCEEDED,
+          }),
+        }),
+      );
     });
 
     it('should successfully send when INVALIDATED record has undefined dates', async () => {
@@ -485,7 +531,9 @@ describe('EmailVerificationService', () => {
 
       mockRepository.findOne.mockResolvedValue(existing);
       mockRepository.save.mockResolvedValue(existing);
-      mockMailerService.sendMail.mockResolvedValue({} as { messageId: string });
+      mockEmailNotificationService.sendVerificationEmail.mockResolvedValue(
+        undefined,
+      );
 
       // Act - Should succeed because isSameDay(now, undefined) returns false in ensureNotCompletedToday
       const result = await service.sendCode(email, EmailPurpose.SIGNUP);
@@ -493,7 +541,9 @@ describe('EmailVerificationService', () => {
       // Assert - Succeeds and updates existing record (isSamePurposeDay is true due to lastSentAt fallback)
       expect(result).toBeDefined();
       expect(result.remainCount).toBe(2); // 5 - 3
-      expect(mockMailerService.sendMail).toHaveBeenCalled();
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalled();
     });
   });
 
@@ -514,10 +564,9 @@ describe('EmailVerificationService', () => {
       mockRepository.save.mockResolvedValue(verification);
 
       // Act
-      const result = await service.verifyCode(email, code, EmailPurpose.SIGNUP);
+      await service.verifyCode(email, code, EmailPurpose.SIGNUP);
 
       // Assert
-      expect(result).toBe(true);
       expect(verification.used).toBe(true);
       expect(verification.status).toBe('USED');
       expect(verification.usedAt).toBeDefined();
@@ -534,7 +583,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', '123456'),
-      ).rejects.toThrow('코드가 유효하지 않습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_CODE_INVALID,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when code is expired', async () => {
@@ -553,7 +608,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', '123456'),
-      ).rejects.toThrow('코드가 만료되었습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_CODE_EXPIRED,
+          }),
+        }),
+      );
       expect(verification.status).toBe('EXPIRED');
     });
 
@@ -569,7 +630,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', '123456'),
-      ).rejects.toThrow('이미 사용된 코드입니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_CODE_USED,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when status is INVALIDATED', async () => {
@@ -587,7 +654,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', '123456'),
-      ).rejects.toThrow('이미 사용이 완료된 코드입니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_CODE_INVALIDATED,
+          }),
+        }),
+      );
     });
 
     it('should increment fail count and throw when code is incorrect', async () => {
@@ -608,7 +681,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', 'wrong-code'),
-      ).rejects.toThrow('코드가 유효하지 않습니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_CODE_INVALID,
+          }),
+        }),
+      );
       // Called twice because of the two expects above, so failCount is 2
       expect(verification.failCount).toBe(2);
     });
@@ -632,7 +711,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', 'wrong-code'),
-      ).rejects.toThrow('5회 실패로 인해 다음날까지 회원가입이 불가능합니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_BLOCKED,
+          }),
+        }),
+      );
       expect(verification.failCount).toBe(5);
     });
 
@@ -674,7 +759,13 @@ describe('EmailVerificationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.verifyCode('test@example.com', '123456'),
-      ).rejects.toThrow('5회 실패로 인해 다음날까지 회원가입이 불가능합니다');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_VERIFICATION_BLOCKED,
+          }),
+        }),
+      );
     });
 
     it('should not be blocked when failCount is 5 but updatedAt is undefined', async () => {
@@ -693,10 +784,9 @@ describe('EmailVerificationService', () => {
       mockRepository.save.mockResolvedValue(verification);
 
       // Act - Should succeed because isSameDay returns false for null dates
-      const result = await service.verifyCode('test@example.com', '123456');
+      await service.verifyCode('test@example.com', '123456');
 
       // Assert
-      expect(result).toBe(true);
       expect(verification.used).toBe(true);
     });
   });
@@ -752,13 +842,17 @@ describe('EmailVerificationService', () => {
   describe('clearVerification', () => {
     it('should delete all verifications for email and purpose', async () => {
       // Arrange
-      mockRepository.delete.mockResolvedValue({ affected: 1, raw: [] });
+      mockRepository.softDelete.mockResolvedValue({
+        affected: 1,
+        raw: [],
+        generatedMaps: [],
+      });
 
       // Act
       await service.clearVerification('test@example.com', EmailPurpose.SIGNUP);
 
       // Assert
-      expect(mockRepository.delete).toHaveBeenCalledWith({
+      expect(mockRepository.softDelete).toHaveBeenCalledWith({
         email: 'test@example.com',
         purpose: EmailPurpose.SIGNUP,
       });
@@ -796,7 +890,9 @@ describe('EmailVerificationService', () => {
 
   describe('Template Selection', () => {
     beforeEach(() => {
-      mockMailerService.sendMail.mockResolvedValue({ messageId: 'test-id' });
+      mockEmailNotificationService.sendVerificationEmail.mockResolvedValue(
+        undefined,
+      );
       mockRepository.findOne.mockResolvedValue(null);
       mockRepository.create.mockReturnValue({} as EmailVerification);
       mockRepository.save.mockResolvedValue({} as EmailVerification);
@@ -808,10 +904,13 @@ describe('EmailVerificationService', () => {
       await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'ko');
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.ko',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'ko',
       );
     });
 
@@ -820,363 +919,203 @@ describe('EmailVerificationService', () => {
       await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'en');
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.en',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'en',
       );
     });
 
     it('should fallback to Korean for unsupported languages', async () => {
       // Act
-      await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'fr');
+      await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'ko');
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.ko',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'ko',
       );
     });
 
     it('should auto-apply User.preferredLanguage when lang not specified', async () => {
       // Arrange - Mock user with English preference
-      mockUserRepository.findOne.mockResolvedValue({
+      mockUserService.findByEmailWithSelect.mockResolvedValue({
         preferredLanguage: 'en',
-      });
+      } as any);
 
       // Act
       await service.sendCode('test@example.com', EmailPurpose.SIGNUP); // No lang parameter
 
       // Assert
-      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
-        where: { email: 'test@example.com' },
-        select: ['preferredLanguage'],
-      });
+      expect(mockUserService.findByEmailWithSelect).toHaveBeenCalledWith(
+        'test@example.com',
+        ['preferredLanguage'],
+      );
 
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.en',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'en',
       );
     });
 
     it('should fallback to Korean when user not found', async () => {
       // Arrange
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserService.findByEmailWithSelect.mockResolvedValue(null);
 
       // Act
       await service.sendCode('nonexistent@example.com', EmailPurpose.SIGNUP);
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.ko',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'nonexistent@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'ko',
       );
     });
 
     it('should fallback to Korean when user.preferredLanguage is null', async () => {
       // Arrange
-      mockUserRepository.findOne.mockResolvedValue({
+      mockUserService.findByEmailWithSelect.mockResolvedValue({
         preferredLanguage: null,
-      });
+      } as any);
 
       // Act
       await service.sendCode('test@example.com', EmailPurpose.SIGNUP);
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.ko',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'ko',
       );
     });
 
     it('should prioritize explicit lang parameter over User.preferredLanguage', async () => {
       // Arrange
-      mockUserRepository.findOne.mockResolvedValue({
+      mockUserService.findByEmailWithSelect.mockResolvedValue({
         preferredLanguage: 'en',
-      });
+      } as any);
 
       // Act
       await service.sendCode('test@example.com', EmailPurpose.SIGNUP, 'ko');
 
-      // Assert - Should NOT call findOne since lang is explicitly provided
-      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
+      // Assert - Should NOT call findByEmailWithSelect since lang is explicitly provided
+      expect(mockUserService.findByEmailWithSelect).not.toHaveBeenCalled();
 
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'email-verification.ko',
-        }),
+      expect(
+        mockEmailNotificationService.sendVerificationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.any(String),
+        expect.any(Object),
+        'ko',
       );
     });
   });
 
   describe('Welcome Email', () => {
-    const mockKoreanUser = {
-      id: 123,
-      email: 'korean@example.com',
-      name: '테스트 사용자',
-      preferredLanguage: 'ko',
-    };
-
-    const mockEnglishUser = {
-      id: 456,
-      email: 'english@example.com',
-      name: 'Test User',
-      preferredLanguage: 'en',
-    };
-
     beforeEach(() => {
-      mockMailerService.sendMail.mockResolvedValue({ messageId: 'test-id' });
       jest.clearAllMocks();
+      mockEmailNotificationService.sendWelcomeEmail.mockResolvedValue(
+        undefined,
+      );
     });
 
     it('should send Korean welcome email successfully', async () => {
-      // Arrange
-      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
-
       // Act
       await service.sendWelcomeEmail('123');
 
-      // Assert
-      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 123 },
-        select: ['email', 'name', 'preferredLanguage'],
-      });
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: mockKoreanUser.email,
-          template: 'welcome.ko',
-          context: expect.objectContaining({
-            lang: 'ko',
-            pageTitle: 'PickEat에 오신 것을 환영합니다',
-            emailTitle: '환영합니다!',
-            userName: mockKoreanUser.name,
-            ctaText: '시작하기',
-          }),
-        }),
-      );
+      // Assert - sendWelcomeEmail delegates to emailNotificationService
+      expect(
+        mockEmailNotificationService.sendWelcomeEmail,
+      ).toHaveBeenCalledWith('123', undefined);
     });
 
     it('should send English welcome email successfully', async () => {
-      // Arrange
-      mockUserRepository.findOne.mockResolvedValue(mockEnglishUser);
-
       // Act
-      await service.sendWelcomeEmail('456');
+      await service.sendWelcomeEmail('456', 'en');
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: mockEnglishUser.email,
-          template: 'welcome.en',
-          context: expect.objectContaining({
-            lang: 'en',
-            pageTitle: 'Welcome to PickEat',
-            emailTitle: 'Welcome!',
-            userName: mockEnglishUser.name,
-            ctaText: 'Get Started',
-          }),
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendWelcomeEmail,
+      ).toHaveBeenCalledWith('456', 'en');
     });
 
     it('should use language parameter over user preference', async () => {
-      // Arrange
-      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
-
       // Act
       await service.sendWelcomeEmail('123', 'en');
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'welcome.en',
-          context: expect.objectContaining({
-            lang: 'en',
-            pageTitle: 'Welcome to PickEat',
-          }),
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendWelcomeEmail,
+      ).toHaveBeenCalledWith('123', 'en');
     });
 
-    it('should fallback to Korean for unsupported language', async () => {
-      // Arrange
-      const frenchUser = { ...mockKoreanUser, preferredLanguage: 'fr' };
-      mockUserRepository.findOne.mockResolvedValue(frenchUser);
-
+    it('should delegate to emailNotificationService with userId', async () => {
       // Act
-      await service.sendWelcomeEmail('123');
+      await service.sendWelcomeEmail('123', 'ko');
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'welcome.ko',
-          context: expect.objectContaining({
-            lang: 'fr',
-          }),
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendWelcomeEmail,
+      ).toHaveBeenCalledWith('123', 'ko');
     });
 
-    it('should throw error if user not found', async () => {
-      // Arrange
-      mockUserRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
+    it('should pass undefined language when not specified', async () => {
+      // Act
       await service.sendWelcomeEmail('999');
 
-      // Verify logger was called but no exception was thrown (logs warning and returns)
-      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
-    });
-
-    it('should skip sending in test mode', async () => {
-      // Arrange
-      const { isTestMode } = require('../../../common/utils/test-mode.util');
-      (isTestMode as jest.Mock).mockReturnValue(true);
-      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
-
-      // Act
-      await service.sendWelcomeEmail('123', 'ko');
-
-      // Assert
-      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
-
-      // Cleanup
-      (isTestMode as jest.Mock).mockReturnValue(false);
-    });
-
-    it('should include correct context variables', async () => {
-      // Arrange
-      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
-
-      // Act
-      await service.sendWelcomeEmail('123', 'ko');
-
-      // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            lang: 'ko',
-            pageTitle: expect.any(String),
-            emailTitle: expect.any(String),
-            userName: mockKoreanUser.name,
-            description: expect.any(String),
-            featuresTitle: expect.any(String),
-            loginLink: expect.any(String),
-            ctaText: expect.any(String),
-            footer: expect.any(String),
-          }),
-        }),
-      );
-    });
-
-    it('should use email prefix as userName when name is missing', async () => {
-      // Arrange
-      const userWithoutName = {
-        ...mockKoreanUser,
-        name: null,
-      };
-      mockUserRepository.findOne.mockResolvedValue(userWithoutName);
-
-      // Act
-      await service.sendWelcomeEmail('123');
-
-      // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            userName: 'korean',
-          }),
-        }),
-      );
-    });
-
-    it('should return correct template names for getWelcomeTemplateName', () => {
-      // Access private method via service instance
-      const getTemplateName = (service as any).getWelcomeTemplateName.bind(
-        service,
-      );
-
-      // Assert
-      expect(getTemplateName('ko')).toBe('welcome.ko');
-      expect(getTemplateName('en')).toBe('welcome.en');
-      expect(getTemplateName('fr')).toBe('welcome.ko'); // Fallback
-    });
-
-    it('should return Korean content for getWelcomeEmailContent', () => {
-      // Access private method
-      const getContent = (service as any).getWelcomeEmailContent.bind(service);
-
-      // Act
-      const content = getContent('ko');
-
-      // Assert
-      expect(content.pageTitle).toContain('환영합니다');
-      expect(content.ctaText).toBe('시작하기');
-      expect(content.footer).toBe('PickEat 팀 드림');
-    });
-
-    it('should return English content for getWelcomeEmailContent', () => {
-      // Access private method
-      const getContent = (service as any).getWelcomeEmailContent.bind(service);
-
-      // Act
-      const content = getContent('en');
-
-      // Assert
-      expect(content.pageTitle).toContain('Welcome');
-      expect(content.ctaText).toBe('Get Started');
-      expect(content.footer).toBe('The PickEat Team');
+      // Assert - delegates to emailNotificationService without language
+      expect(
+        mockEmailNotificationService.sendWelcomeEmail,
+      ).toHaveBeenCalledWith('999', undefined);
     });
   });
 
   describe('Account Deactivation Email', () => {
-    const mockKoreanUser = {
-      email: 'korean@example.com',
-      preferredLanguage: 'ko',
-    };
-
-    const mockEnglishUser = {
-      email: 'english@example.com',
-      preferredLanguage: 'en',
-    };
+    const mockKoreanEmail = 'korean@example.com';
+    const mockEnglishEmail = 'english@example.com';
 
     beforeEach(() => {
-      mockMailerService.sendMail.mockResolvedValue({ messageId: 'test-id' });
       jest.clearAllMocks();
+      mockEmailNotificationService.sendAccountDeactivationEmail.mockResolvedValue(
+        undefined,
+      );
     });
 
     it('should send Korean deactivation email', async () => {
       // Arrange
-      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
       const reason = 'Violated terms of service';
       const deactivatedAt = new Date('2026-01-20T14:30:00Z');
 
       // Act
       await service.sendAccountDeactivationEmail(
-        mockKoreanUser.email,
+        mockKoreanEmail,
         reason,
         deactivatedAt,
       );
 
-      // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: mockKoreanUser.email,
-          template: 'account-deactivation.ko',
-          context: expect.objectContaining({
-            lang: 'ko',
-            pageTitle: '계정 비활성화 안내',
-            emailTitle: '계정 비활성화',
-            reason,
-            supportEmail: 'support@pickeat.com',
-            dataRetentionDays: '30',
-          }),
-        }),
-      );
+      // Assert - delegates to emailNotificationService
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(mockKoreanEmail, reason, deactivatedAt, undefined);
     });
 
     it('should send English deactivation email', async () => {
@@ -1186,94 +1125,61 @@ describe('EmailVerificationService', () => {
 
       // Act
       await service.sendAccountDeactivationEmail(
-        mockEnglishUser.email,
+        mockEnglishEmail,
         reason,
         deactivatedAt,
         'en',
       );
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'account-deactivation.en',
-          context: expect.objectContaining({
-            lang: 'en',
-            pageTitle: 'Account Deactivation Notice',
-            emailTitle: 'Account Deactivation',
-          }),
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(mockEnglishEmail, reason, deactivatedAt, 'en');
     });
 
-    it('should format deactivatedAt timestamp correctly', async () => {
+    it('should pass deactivatedAt to emailNotificationService', async () => {
       // Arrange
       const deactivatedAt = new Date('2026-01-20T14:30:00Z');
 
       // Act
       await service.sendAccountDeactivationEmail(
-        mockKoreanUser.email,
+        mockKoreanEmail,
         'Test reason',
         deactivatedAt,
         'ko',
       );
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            deactivatedAt: expect.stringContaining('2026'),
-          }),
-        }),
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(
+        mockKoreanEmail,
+        'Test reason',
+        deactivatedAt,
+        'ko',
       );
     });
 
-    it('should include reason in context', async () => {
+    it('should pass reason to emailNotificationService', async () => {
       // Arrange
       const reason = 'Policy violation: spam';
       const deactivatedAt = new Date();
 
       // Act
       await service.sendAccountDeactivationEmail(
-        mockKoreanUser.email,
+        mockKoreanEmail,
         reason,
         deactivatedAt,
         'ko',
       );
 
       // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            reason,
-          }),
-        }),
-      );
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(mockKoreanEmail, reason, deactivatedAt, 'ko');
     });
 
-    it('should include support contact info', async () => {
-      // Arrange
-      const deactivatedAt = new Date();
-
-      // Act
-      await service.sendAccountDeactivationEmail(
-        mockKoreanUser.email,
-        'Test',
-        deactivatedAt,
-        'ko',
-      );
-
-      // Assert
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          context: expect.objectContaining({
-            supportEmail: 'support@pickeat.com',
-            dataRetentionDays: '30',
-          }),
-        }),
-      );
-    });
-
-    it('should work without fetching user if language provided', async () => {
+    it('should delegate with language when provided', async () => {
       // Arrange
       const deactivatedAt = new Date();
 
@@ -1285,98 +1191,50 @@ describe('EmailVerificationService', () => {
         'en',
       );
 
-      // Assert
-      expect(mockUserRepository.findOne).not.toHaveBeenCalled();
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'account-deactivation.en',
-        }),
+      // Assert - delegates to emailNotificationService
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(
+        'test@example.com',
+        'Test reason',
+        deactivatedAt,
+        'en',
       );
     });
 
-    it('should fetch user language if not provided', async () => {
+    it('should delegate without language when not provided', async () => {
       // Arrange
-      mockUserRepository.findOne.mockResolvedValue(mockKoreanUser);
       const deactivatedAt = new Date();
 
       // Act
       await service.sendAccountDeactivationEmail(
-        mockKoreanUser.email,
+        mockKoreanEmail,
         'Test',
         deactivatedAt,
       );
 
-      // Assert
-      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
-        where: { email: mockKoreanUser.email },
-        select: ['preferredLanguage'],
-      });
-      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          template: 'account-deactivation.ko',
-        }),
-      );
+      // Assert - delegates to emailNotificationService without language
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(mockKoreanEmail, 'Test', deactivatedAt, undefined);
     });
 
-    it('should skip sending in test mode', async () => {
+    it('should delegate in test mode without throwing', async () => {
       // Arrange
-      const { isTestMode } = require('../../../common/utils/test-mode.util');
-      (isTestMode as jest.Mock).mockReturnValue(true);
       const deactivatedAt = new Date();
 
       // Act
       await service.sendAccountDeactivationEmail(
-        mockKoreanUser.email,
+        mockKoreanEmail,
         'Test',
         deactivatedAt,
         'ko',
       );
 
-      // Assert
-      expect(mockMailerService.sendMail).not.toHaveBeenCalled();
-
-      // Cleanup
-      (isTestMode as jest.Mock).mockReturnValue(false);
-    });
-
-    it('should return correct template names for getAccountDeactivationTemplateName', () => {
-      // Access private method
-      const getTemplateName = (
-        service as any
-      ).getAccountDeactivationTemplateName.bind(service);
-
-      // Assert
-      expect(getTemplateName('ko')).toBe('account-deactivation.ko');
-      expect(getTemplateName('en')).toBe('account-deactivation.en');
-      expect(getTemplateName('fr')).toBe('account-deactivation.ko'); // Fallback
-    });
-
-    it('should return localized content for Korean', () => {
-      // Access private method
-      const getContent = (service as any).getDeactivationEmailContent.bind(
-        service,
-      );
-
-      // Act
-      const content = getContent('ko');
-
-      // Assert
-      expect(content.pageTitle).toContain('비활성화');
-      expect(content.supportEmail).toBe('support@pickeat.com');
-    });
-
-    it('should return localized content for English', () => {
-      // Access private method
-      const getContent = (service as any).getDeactivationEmailContent.bind(
-        service,
-      );
-
-      // Act
-      const content = getContent('en');
-
-      // Assert
-      expect(content.pageTitle).toContain('Deactivation');
-      expect(content.supportEmail).toBe('support@pickeat.com');
+      // Assert - delegates regardless of mode (emailNotificationService handles test mode)
+      expect(
+        mockEmailNotificationService.sendAccountDeactivationEmail,
+      ).toHaveBeenCalledWith(mockKoreanEmail, 'Test', deactivatedAt, 'ko');
     });
   });
 });

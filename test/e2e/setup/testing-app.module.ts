@@ -20,9 +20,6 @@ import { GoogleOAuthClient } from '@/external/google/clients/google-oauth.client
 import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
 import { GoogleSearchClient } from '@/external/google/clients/google-search.client';
 import { KakaoOAuthClient } from '@/external/kakao/clients/kakao-oauth.client';
-import { KakaoLocalClient } from '@/external/kakao/clients/kakao-local.client';
-import { NaverSearchClient } from '@/external/naver/clients/naver-search.client';
-import { NaverMapClient } from '@/external/naver/clients/naver-map.client';
 import { S3Client } from '@/external/aws/clients/s3.client';
 import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook.client';
 
@@ -36,18 +33,12 @@ import {
   createMockGooglePlacesClient,
   createMockGoogleSearchClient,
   createMockKakaoOAuthClient,
-  createMockKakaoLocalClient,
-  createMockNaverSearchClient,
-  createMockNaverMapClient,
   createMockS3Client,
   createMockDiscordWebhookClient,
   mockGoogleOAuthResponses,
   mockGooglePlacesResponses,
   mockGoogleCseResponses,
   mockKakaoOAuthResponses,
-  mockKakaoLocalResponses,
-  mockNaverSearchResponses,
-  mockNaverMapResponses,
   mockS3Responses,
 } from '../../mocks/external-clients.mock';
 
@@ -97,24 +88,6 @@ export function createAllMockClients() {
     mockKakaoOAuthResponses.userInfoSuccess,
   );
 
-  // Kakao Local
-  const mockKakaoLocalClient = createMockKakaoLocalClient();
-  mockKakaoLocalClient.searchAddress.mockResolvedValue(
-    mockKakaoLocalResponses.addressSearchSuccess,
-  );
-
-  // Naver Search
-  const mockNaverSearchClient = createMockNaverSearchClient();
-  mockNaverSearchClient.searchLocal.mockResolvedValue(
-    mockNaverSearchResponses.localSearchSuccess.items,
-  );
-
-  // Naver Map
-  const mockNaverMapClient = createMockNaverMapClient();
-  mockNaverMapClient.reverseGeocode.mockResolvedValue(
-    mockNaverMapResponses.reverseGeocodeSuccess.results,
-  );
-
   // S3
   const mockS3ClientInstance = createMockS3Client();
   mockS3ClientInstance.uploadBugReportImage.mockResolvedValue(
@@ -158,9 +131,6 @@ export function createAllMockClients() {
     mockGooglePlacesClient,
     mockGoogleSearchClient,
     mockKakaoOAuthClient,
-    mockKakaoLocalClient,
-    mockNaverSearchClient,
-    mockNaverMapClient,
     mockS3Client: mockS3ClientInstance,
     mockDiscordWebhookClient: mockDiscordWebhookClientInstance,
     mockMailerService: mockMailerServiceInstance,
@@ -216,12 +186,6 @@ export async function createTestingApp(): Promise<{
     .useValue(mocks.mockGoogleSearchClient)
     .overrideProvider(KakaoOAuthClient)
     .useValue(mocks.mockKakaoOAuthClient)
-    .overrideProvider(KakaoLocalClient)
-    .useValue(mocks.mockKakaoLocalClient)
-    .overrideProvider(NaverSearchClient)
-    .useValue(mocks.mockNaverSearchClient)
-    .overrideProvider(NaverMapClient)
-    .useValue(mocks.mockNaverMapClient)
     .overrideProvider(S3Client)
     .useValue(mocks.mockS3Client)
     .overrideProvider(DiscordWebhookClient)
@@ -287,12 +251,6 @@ export async function createIntegrationTestingModule(
     .useValue(mocks.mockGoogleSearchClient)
     .overrideProvider(KakaoOAuthClient)
     .useValue(mocks.mockKakaoOAuthClient)
-    .overrideProvider(KakaoLocalClient)
-    .useValue(mocks.mockKakaoLocalClient)
-    .overrideProvider(NaverSearchClient)
-    .useValue(mocks.mockNaverSearchClient)
-    .overrideProvider(NaverMapClient)
-    .useValue(mocks.mockNaverMapClient)
     .overrideProvider(S3Client)
     .useValue(mocks.mockS3Client)
     .overrideProvider(DiscordWebhookClient)

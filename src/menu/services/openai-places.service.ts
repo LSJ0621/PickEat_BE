@@ -1,43 +1,25 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import {
   buildGooglePlacesUserPrompt,
   getGooglePlacesRecommendationsJsonSchema,
   getGooglePlacesSystemPrompt,
 } from '@/external/openai/prompts';
 import { detectLanguage } from '@/common/utils/language.util';
-import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
-import { OPENAI_CONFIG } from '../../external/openai/openai.constants';
+import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
+import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
 import {
   PlaceCandidate,
   PlaceRecommendationsResponse,
 } from '../interface/openai-places.interface';
+import { logOpenAiTokenUsage } from '@/common/utils/openai-token-logger.util';
+import { BaseOpenAiService } from './base-openai.service';
 
 @Injectable()
-export class OpenAiPlacesService implements OnModuleInit {
-  private readonly logger = new Logger(OpenAiPlacesService.name);
-  private openai: OpenAI | null = null;
-  private readonly model: string;
-
-  constructor(private readonly config: ConfigService) {
-    this.model =
-      this.config.get<string>('OPENAI_PLACES_MODEL') ||
-      this.config.get<string>('OPENAI_MODEL') ||
-      OPENAI_CONFIG.DEFAULT_MODEL;
-  }
-
-  onModuleInit() {
-    const apiKey = this.config.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      this.logger.error('OPENAI_API_KEY is not configured');
-      return;
-    }
-
-    this.openai = new OpenAI({
-      apiKey,
-    });
+export class OpenAiPlacesService extends BaseOpenAiService {
+  constructor(config: ConfigService) {
+    super(config, OpenAiPlacesService.name, 'OPENAI_PLACES_MODEL');
   }
 
   async recommendFromGooglePlaces(
@@ -77,49 +59,34 @@ export class OpenAiPlacesService implements OnModuleInit {
     );
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'google_places_recommendations',
-            schema: jsonSchema,
-            strict: true,
-          },
+      const response = await retryWithExponentialBackoff(
+        () =>
+          this.openai!.chat.completions.create({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'google_places_recommendations',
+                schema: jsonSchema,
+                strict: true,
+              },
+            },
+            // GPT-5.1 계열: temperature 대신 max_completion_tokens 사용
+            max_completion_tokens: 800,
+          }),
+        {
+          maxRetries: 3,
+          initialDelayMs: 1000,
         },
-        // GPT-5.1 계열: temperature 대신 max_completion_tokens 사용
-        max_completion_tokens: 800,
-      });
+        this.logger,
+      );
 
       // 토큰 사용량 로깅 (프롬프트/완료/전체)
-      const usage = (
-        response as {
-          usage?: {
-            prompt_tokens?: number;
-            input_tokens?: number;
-            completion_tokens?: number;
-            output_tokens?: number;
-            total_tokens?: number;
-          };
-        }
-      ).usage;
-
-      if (usage) {
-        const promptTokens =
-          usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
-        const completionTokens =
-          usage.completion_tokens ?? usage.output_tokens ?? 0;
-        const totalTokensRaw =
-          usage.total_tokens ?? promptTokens + completionTokens;
-
-        this.logger.log(
-          `🧮 [OpenAI 토큰 사용량] prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
-        );
-      }
+      logOpenAiTokenUsage(this.logger, this.model, response.usage);
 
       const choice = response.choices[0];
       const content = choice?.message?.content;

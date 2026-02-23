@@ -286,7 +286,7 @@ describe('OpenAiPlacesService', () => {
         expect.stringContaining('[OpenAI 장소 추천 요청 시작]'),
       );
       expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[OpenAI 토큰 사용량]'),
+        expect.stringContaining('[OpenAI token usage]'),
       );
     });
 

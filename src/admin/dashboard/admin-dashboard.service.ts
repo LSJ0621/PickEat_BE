@@ -15,11 +15,7 @@ import { DashboardSummaryResponseDto } from './dto/dashboard-summary.response.dt
 import { RecentActivitiesResponseDto } from './dto/recent-activities.response.dto';
 import { TrendsQueryDto } from './dto/trends-query.dto';
 import { TrendsResponseDto } from './dto/trends.response.dto';
-
-interface DailyTrendItem {
-  date: string;
-  count: number;
-}
+import type { DailyTrendItem } from '@/admin/interfaces/admin-dashboard.interface';
 
 @Injectable()
 export class AdminDashboardService {
@@ -114,18 +110,18 @@ export class AdminDashboardService {
         id: user.id,
         email: user.email,
         socialType: user.socialType,
-        createdAt: user.createdAt,
+        createdAt: user.createdAt.toISOString(),
       })),
       recentBugReports: recentBugReports.map((bugReport) => ({
         id: bugReport.id,
         title: bugReport.title,
         category: bugReport.category,
-        createdAt: bugReport.createdAt,
+        createdAt: bugReport.createdAt.toISOString(),
       })),
       recentDeletedUsers: recentDeletedUsers.map((user) => ({
         id: user.id,
         email: user.email,
-        deletedAt: user.deletedAt!,
+        deletedAt: user.deletedAt!.toISOString(),
       })),
     };
   }

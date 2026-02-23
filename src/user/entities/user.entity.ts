@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -16,6 +17,10 @@ import { UserAddress } from './user-address.entity';
 import { UserTasteAnalysis } from './user-taste-analysis.entity';
 
 @Entity()
+@Index('idx_user_role', ['role'])
+@Index('idx_user_social_type', ['socialType'])
+@Index('idx_user_deactivated', ['isDeactivated'])
+@Index('idx_user_deleted_deactivated', ['deletedAt', 'isDeactivated'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -35,8 +40,8 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   name: string | null;
 
-  @Column({ type: 'int', nullable: true })
-  birthYear: number | null;
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  birthDate: string | null;
 
   @Column({ type: 'varchar', length: 10, nullable: true })
   gender: 'male' | 'female' | 'other' | null;

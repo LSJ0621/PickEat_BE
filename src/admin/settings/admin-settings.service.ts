@@ -38,8 +38,8 @@ export class AdminSettingsService {
       email: admin.email,
       name: admin.name,
       role: admin.role as Role,
-      lastLoginAt: admin.lastLoginAt,
-      createdAt: admin.createdAt,
+      lastLoginAt: admin.lastLoginAt ? admin.lastLoginAt.toISOString() : null,
+      createdAt: admin.createdAt.toISOString(),
     }));
   }
 

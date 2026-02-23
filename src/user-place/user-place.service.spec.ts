@@ -6,24 +6,19 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 import { USER_PLACE } from '@/common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
-import { AUDIT_ACTIONS } from '@/admin/settings/constants/audit-action.constants';
-import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity';
 import { createMockRepository } from '../../test/mocks/repository.mock';
 import { createMockS3Client } from '../../test/mocks/external-clients.mock';
 import { UserFactory } from '../../test/factories/entity.factory';
 import { S3Client } from '@/external/aws/clients/s3.client';
 import { UserPlace } from './entities/user-place.entity';
-import { UserPlaceRejectionHistory } from './entities/user-place-rejection-history.entity';
 import { UserPlaceStatus } from './enum/user-place-status.enum';
 import { UserPlaceService } from './user-place.service';
 import { CheckRegistrationDto } from './dto/check-registration.dto';
 import { CreateUserPlaceDto } from './dto/create-user-place.dto';
 import { UpdateUserPlaceDto } from './dto/update-user-place.dto';
 import { UserPlaceListQueryDto } from './dto/user-place-list-query.dto';
-import { RejectUserPlaceDto } from './dto/reject-user-place.dto';
 
 /**
  * Factory function to create UserPlace entities for testing
@@ -83,14 +78,7 @@ class UserPlaceFactory {
 describe('UserPlaceService', () => {
   let service: UserPlaceService;
   let userPlaceRepository: ReturnType<typeof createMockRepository<UserPlace>>;
-  let rejectionHistoryRepository: ReturnType<
-    typeof createMockRepository<UserPlaceRejectionHistory>
-  >;
-  let auditLogRepository: ReturnType<
-    typeof createMockRepository<AdminAuditLog>
-  >;
   let s3Client: ReturnType<typeof createMockS3Client>;
-  let mockDataSource: jest.Mocked<DataSource>;
 
   // Mock QueryBuilder for PostGIS spatial queries
   const createMockQueryBuilder = () => {
@@ -109,34 +97,10 @@ describe('UserPlaceService', () => {
     return mockQueryBuilder;
   };
 
-  // Mock QueryRunner for transaction testing
-  const createMockQueryRunner = () => {
-    const mockQueryRunner = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      startTransaction: jest.fn().mockResolvedValue(undefined),
-      commitTransaction: jest.fn().mockResolvedValue(undefined),
-      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-      release: jest.fn().mockResolvedValue(undefined),
-      manager: {
-        save: jest.fn(),
-        create: jest.fn(),
-      },
-    };
-    return mockQueryRunner;
-  };
-
   beforeEach(async () => {
     jest.clearAllMocks();
     userPlaceRepository = createMockRepository<UserPlace>();
-    rejectionHistoryRepository =
-      createMockRepository<UserPlaceRejectionHistory>();
-    auditLogRepository = createMockRepository<AdminAuditLog>();
     s3Client = createMockS3Client();
-
-    const mockQueryRunner = createMockQueryRunner();
-    mockDataSource = {
-      createQueryRunner: jest.fn(() => mockQueryRunner),
-    } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -146,20 +110,8 @@ describe('UserPlaceService', () => {
           useValue: userPlaceRepository,
         },
         {
-          provide: getRepositoryToken(UserPlaceRejectionHistory),
-          useValue: rejectionHistoryRepository,
-        },
-        {
-          provide: getRepositoryToken(AdminAuditLog),
-          useValue: auditLogRepository,
-        },
-        {
           provide: S3Client,
           useValue: s3Client,
-        },
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
         },
       ],
     }).compile();
@@ -765,17 +717,37 @@ describe('UserPlaceService', () => {
         } as Express.Multer.File,
       ];
 
+      const createdPlace = UserPlaceFactory.create({
+        user,
+        ...dto,
+        photos: null, // No photos due to upload failure
+      });
+
       userPlaceRepository.count.mockResolvedValue(0);
       userPlaceRepository.findOne.mockResolvedValue(null);
+      userPlaceRepository.create.mockReturnValue(createdPlace);
+      userPlaceRepository.save.mockResolvedValue(createdPlace);
       s3Client.uploadUserPlaceImage.mockRejectedValue(
         new Error('S3 upload failed'),
       );
 
-      // Act & Assert
-      await expect(service.create(userId, dto, mockFiles)).rejects.toThrow(
-        'S3 upload failed',
+      // Mock logger to capture warnings
+      const loggerWarnSpy = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation();
+
+      // Act - Promise.allSettled allows partial failures, so this should not throw
+      const result = await service.create(userId, dto, mockFiles);
+
+      // Assert - Service continues despite S3 upload failure
+      expect(result).toBeDefined();
+      expect(result.photos).toBeNull(); // No photos due to upload failure
+      expect(userPlaceRepository.save).toHaveBeenCalled();
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('user place image upload(s) failed'),
       );
-      expect(userPlaceRepository.save).not.toHaveBeenCalled();
+
+      loggerWarnSpy.mockRestore();
     });
 
     it('should handle different image file types', async () => {
@@ -1188,7 +1160,7 @@ describe('UserPlaceService', () => {
       );
     });
 
-    it('should throw BadRequestException when version mismatch occurs', async () => {
+    it('should throw ConflictException when version mismatch occurs', async () => {
       // Arrange
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createPending(user);
@@ -1204,7 +1176,7 @@ describe('UserPlaceService', () => {
 
       // Act & Assert
       await expect(service.update(userId, placeId, dto)).rejects.toThrow(
-        BadRequestException,
+        ConflictException,
       );
       await expect(service.update(userId, placeId, dto)).rejects.toThrow(
         expect.objectContaining({
@@ -1249,6 +1221,7 @@ describe('UserPlaceService', () => {
       const place = UserPlaceFactory.createPending(user);
       place.id = placeId;
       place.version = 1;
+      place.photos = ['https://example.com/photo.jpg'];
 
       const dto: UpdateUserPlaceDto = {
         name: '새 이름',
@@ -1256,7 +1229,7 @@ describe('UserPlaceService', () => {
         latitude: 37.123,
         longitude: 127.456,
         menuTypes: ['중식', '짜장면', '짬뽕'],
-        photos: ['https://example.com/photo.jpg'],
+        existingPhotos: ['https://example.com/photo.jpg'],
         openingHours: '매일 10:00-22:00',
         phoneNumber: '02-1111-2222',
         category: '중식',
@@ -1278,7 +1251,7 @@ describe('UserPlaceService', () => {
       expect(result.latitude).toBe(dto.latitude);
       expect(result.longitude).toBe(dto.longitude);
       expect(result.menuTypes).toEqual(dto.menuTypes);
-      expect(result.photos).toEqual(dto.photos);
+      expect(result.photos).toEqual(dto.existingPhotos);
       expect(result.openingHours).toBe(dto.openingHours);
       expect(result.phoneNumber).toBe(dto.phoneNumber);
       expect(result.category).toBe(dto.category);
@@ -1696,10 +1669,13 @@ describe('UserPlaceService', () => {
         const place = UserPlaceFactory.createPending(user);
         place.id = placeId;
         place.version = 1;
-        place.photos = null;
+        place.photos = [
+          'https://example.com/old-photo.jpg',
+          'https://example.com/new-photo.jpg',
+        ];
 
         const dto: UpdateUserPlaceDto = {
-          photos: ['https://example.com/new-photo.jpg'],
+          existingPhotos: ['https://example.com/new-photo.jpg'],
           version: 1,
         };
 
@@ -1712,7 +1688,7 @@ describe('UserPlaceService', () => {
         const result = await service.update(userId, placeId, dto);
 
         // Assert
-        expect(result.photos).toEqual(dto.photos);
+        expect(result.photos).toEqual(dto.existingPhotos);
       });
     });
 
@@ -2181,1079 +2157,6 @@ describe('UserPlaceService', () => {
       expect(result.nearbyPlaces[1].distance).toBe(45); // Rounded from 45.2
       expect(result.nearbyPlaces[2].distance).toBe(90); // Rounded from 89.7
       expect(mockQueryBuilder.orderBy).toHaveBeenCalled();
-    });
-  });
-
-  describe('approvePlace', () => {
-    const placeId = 1;
-    const adminId = 999;
-    const ipAddress = '192.168.1.1';
-
-    it('should approve PENDING place successfully', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-
-      const approvedPlace = {
-        ...pendingPlace,
-        status: UserPlaceStatus.APPROVED,
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue(approvedPlace);
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      const result = await service.approvePlace(placeId, adminId, ipAddress);
-
-      // Assert
-      expect(result.status).toBe(UserPlaceStatus.APPROVED);
-      expect(userPlaceRepository.findOne).toHaveBeenCalledWith({
-        where: { id: placeId, deletedAt: expect.anything() },
-        relations: ['user'],
-      });
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
-        UserPlace,
-        expect.objectContaining({
-          id: placeId,
-          status: UserPlaceStatus.APPROVED,
-        }),
-      );
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should create audit log when approving place', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-
-      const approvedPlace = {
-        ...pendingPlace,
-        status: UserPlaceStatus.APPROVED,
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue(approvedPlace);
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      await service.approvePlace(placeId, adminId, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          adminId,
-          action: AUDIT_ACTIONS.PLACE_APPROVED,
-          target: `user-place:${placeId}`,
-          previousValue: { status: UserPlaceStatus.PENDING },
-          newValue: { status: UserPlaceStatus.APPROVED },
-          ipAddress,
-        }),
-      );
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.anything(),
-      );
-    });
-
-    it('should throw NotFoundException when place does not exist', async () => {
-      // Arrange
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.approvePlace(999999, adminId, ipAddress),
-      ).rejects.toThrow(NotFoundException);
-      await expect(
-        service.approvePlace(999999, adminId, ipAddress),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.USER_PLACE_NOT_FOUND,
-          }),
-        }),
-      );
-    });
-
-    it('should throw ConflictException when place is already APPROVED', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.status = UserPlaceStatus.APPROVED;
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act & Assert
-      await expect(
-        service.approvePlace(placeId, adminId, ipAddress),
-      ).rejects.toThrow(ConflictException);
-      await expect(
-        service.approvePlace(placeId, adminId, ipAddress),
-      ).rejects.toThrow(/Cannot approve place with status APPROVED/);
-    });
-
-    it('should throw ConflictException when place is REJECTED', async () => {
-      // Arrange
-      const rejectedPlace = UserPlaceFactory.createRejected();
-      rejectedPlace.id = placeId;
-      rejectedPlace.status = UserPlaceStatus.REJECTED;
-
-      userPlaceRepository.findOne.mockResolvedValue(rejectedPlace);
-
-      // Act & Assert
-      await expect(
-        service.approvePlace(placeId, adminId, ipAddress),
-      ).rejects.toThrow(ConflictException);
-      await expect(
-        service.approvePlace(placeId, adminId, ipAddress),
-      ).rejects.toThrow(/Cannot approve place with status REJECTED/);
-    });
-
-    it('should record previousValue with PENDING status in audit log', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-
-      const approvedPlace = {
-        ...pendingPlace,
-        status: UserPlaceStatus.APPROVED,
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue(approvedPlace);
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      await service.approvePlace(placeId, adminId, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          previousValue: { status: UserPlaceStatus.PENDING },
-        }),
-      );
-    });
-
-    it('should not allow approving soft-deleted place', async () => {
-      // Arrange
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.approvePlace(placeId, adminId, ipAddress),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('rejectPlace', () => {
-    const placeId = 1;
-    const adminId = 999;
-    const ipAddress = '192.168.1.1';
-    const dto: RejectUserPlaceDto = {
-      reason:
-        '주소 정보가 불명확하여 거절합니다. 정확한 도로명 주소를 입력해주세요.',
-    };
-
-    it('should reject PENDING place successfully', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-      pendingPlace.rejectionCount = 0;
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-            rejectionReason: dto.reason,
-            rejectionCount: 1,
-            lastRejectedAt: expect.any(Date),
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      const result = await service.rejectPlace(
-        placeId,
-        adminId,
-        dto,
-        ipAddress,
-      );
-
-      // Assert
-      expect(result.status).toBe(UserPlaceStatus.REJECTED);
-      expect(result.rejectionReason).toBe(dto.reason);
-      expect(result.rejectionCount).toBe(1);
-      expect(result.lastRejectedAt).toBeDefined();
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should increment rejectionCount when rejecting place', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-      pendingPlace.rejectionCount = 2; // Already rejected 2 times before
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-            rejectionReason: dto.reason,
-            rejectionCount: 3,
-            lastRejectedAt: expect.any(Date),
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      const result = await service.rejectPlace(
-        placeId,
-        adminId,
-        dto,
-        ipAddress,
-      );
-
-      // Assert
-      expect(result.rejectionCount).toBe(3);
-    });
-
-    it('should update rejectionReason with new reason', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-      pendingPlace.rejectionReason = '이전 거절 사유';
-
-      const newDto: RejectUserPlaceDto = {
-        reason: '새로운 거절 사유입니다. 카테고리가 적절하지 않습니다.',
-      };
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-            rejectionReason: newDto.reason,
-            rejectionCount: 1,
-            lastRejectedAt: expect.any(Date),
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      const result = await service.rejectPlace(
-        placeId,
-        adminId,
-        newDto,
-        ipAddress,
-      );
-
-      // Assert
-      expect(result.rejectionReason).toBe(newDto.reason);
-    });
-
-    it('should update lastRejectedAt timestamp', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-      pendingPlace.lastRejectedAt = null;
-
-      const beforeReject = new Date();
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockImplementation((entity, data) => {
-            const saved = { ...data };
-            if (!saved.lastRejectedAt) {
-              saved.lastRejectedAt = new Date();
-            }
-            return Promise.resolve(saved);
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      const result = await service.rejectPlace(
-        placeId,
-        adminId,
-        dto,
-        ipAddress,
-      );
-
-      // Assert
-      expect(result.lastRejectedAt).toBeDefined();
-      expect(result.lastRejectedAt!.getTime()).toBeGreaterThanOrEqual(
-        beforeReject.getTime(),
-      );
-    });
-
-    it('should create rejection history entry', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      await service.rejectPlace(placeId, adminId, dto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        UserPlaceRejectionHistory,
-        expect.objectContaining({
-          userPlace: { id: placeId },
-          admin: { id: adminId },
-          reason: dto.reason,
-        }),
-      );
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
-        UserPlaceRejectionHistory,
-        expect.anything(),
-      );
-    });
-
-    it('should create audit log entry', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-      pendingPlace.rejectionCount = 0;
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      await service.rejectPlace(placeId, adminId, dto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          adminId,
-          action: AUDIT_ACTIONS.PLACE_REJECTED,
-          target: `user-place:${placeId}`,
-          previousValue: {
-            status: UserPlaceStatus.PENDING,
-            rejectionCount: 0,
-          },
-          newValue: expect.objectContaining({
-            status: UserPlaceStatus.REJECTED,
-            rejectionReason: dto.reason,
-          }),
-          ipAddress,
-        }),
-      );
-    });
-
-    it('should throw NotFoundException when place does not exist', async () => {
-      // Arrange
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.rejectPlace(999999, adminId, dto, ipAddress),
-      ).rejects.toThrow(NotFoundException);
-      await expect(
-        service.rejectPlace(999999, adminId, dto, ipAddress),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.USER_PLACE_NOT_FOUND,
-          }),
-        }),
-      );
-    });
-
-    it('should throw ConflictException when place is already APPROVED', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.status = UserPlaceStatus.APPROVED;
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act & Assert
-      await expect(
-        service.rejectPlace(placeId, adminId, dto, ipAddress),
-      ).rejects.toThrow(ConflictException);
-      await expect(
-        service.rejectPlace(placeId, adminId, dto, ipAddress),
-      ).rejects.toThrow(/Cannot reject place with status APPROVED/);
-    });
-
-    it('should throw ConflictException when place is already REJECTED', async () => {
-      // Arrange
-      const rejectedPlace = UserPlaceFactory.createRejected();
-      rejectedPlace.id = placeId;
-      rejectedPlace.status = UserPlaceStatus.REJECTED;
-
-      userPlaceRepository.findOne.mockResolvedValue(rejectedPlace);
-
-      // Act & Assert
-      await expect(
-        service.rejectPlace(placeId, adminId, dto, ipAddress),
-      ).rejects.toThrow(ConflictException);
-      await expect(
-        service.rejectPlace(placeId, adminId, dto, ipAddress),
-      ).rejects.toThrow(/Cannot reject place with status REJECTED/);
-    });
-
-    it('should rollback transaction when error occurs', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockRejectedValue(new Error('Database error')),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act & Assert
-      await expect(
-        service.rejectPlace(placeId, adminId, dto, ipAddress),
-      ).rejects.toThrow('Database error');
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should execute all operations in single transaction', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      await service.rejectPlace(placeId, adminId, dto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.connect).toHaveBeenCalled();
-      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledTimes(3); // UserPlace, RejectionHistory, AuditLog
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should record previous rejectionCount in audit log', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-      pendingPlace.status = UserPlaceStatus.PENDING;
-      pendingPlace.rejectionCount = 5;
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockResolvedValue({
-            ...pendingPlace,
-            status: UserPlaceStatus.REJECTED,
-            rejectionCount: 6,
-          }),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      // Act
-      await service.rejectPlace(placeId, adminId, dto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          previousValue: expect.objectContaining({
-            rejectionCount: 5,
-          }),
-          newValue: expect.objectContaining({
-            rejectionCount: 6,
-          }),
-        }),
-      );
-    });
-
-    it('should not allow rejecting soft-deleted place', async () => {
-      // Arrange
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(
-        service.rejectPlace(placeId, adminId, dto, ipAddress),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('updatePlaceByAdmin', () => {
-    const placeId = 1;
-    const adminId = 999;
-    const ipAddress = '192.168.1.1';
-
-    it('should update APPROVED place successfully with all fields', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.name = '원래 이름';
-      approvedPlace.address = '원래 주소';
-      approvedPlace.latitude = 37.5012345;
-      approvedPlace.longitude = 127.0398765;
-      approvedPlace.menuTypes = ['한식'];
-      approvedPlace.photos = ['https://s3.amazonaws.com/old-photo.jpg'];
-      approvedPlace.openingHours = '10:00-22:00';
-      approvedPlace.phoneNumber = '02-1234-5678';
-      approvedPlace.category = '한식';
-      approvedPlace.description = '원래 설명';
-
-      const updateDto = {
-        name: '업데이트된 이름',
-        address: '업데이트된 주소',
-        latitude: 37.6012345,
-        longitude: 127.1398765,
-        menuTypes: ['중식', '일식'],
-        photos: [
-          'https://s3.amazonaws.com/new-photo1.jpg',
-          'https://s3.amazonaws.com/new-photo2.jpg',
-        ],
-        openingHours: '11:00-23:00',
-        phoneNumber: '02-9999-8888',
-        category: '중식',
-        description: '업데이트된 설명',
-      };
-
-      const updatedPlace = {
-        ...approvedPlace,
-        ...updateDto,
-        location: {
-          type: 'Point',
-          coordinates: [127.1398765, 37.6012345],
-        },
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue(updatedPlace);
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      const result = await service.updatePlaceByAdmin(
-        placeId,
-        adminId,
-        updateDto,
-        ipAddress,
-      );
-
-      // Assert
-      expect(result.name).toBe(updateDto.name);
-      expect(result.address).toBe(updateDto.address);
-      expect(result.latitude).toBe(updateDto.latitude);
-      expect(result.longitude).toBe(updateDto.longitude);
-      expect(result.menuTypes).toEqual(updateDto.menuTypes);
-      expect(result.photos).toEqual(updateDto.photos);
-      expect(result.openingHours).toBe(updateDto.openingHours);
-      expect(result.phoneNumber).toBe(updateDto.phoneNumber);
-      expect(result.category).toBe(updateDto.category);
-      expect(result.description).toBe(updateDto.description);
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should update place partially when only some fields are provided', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.name = '원래 이름';
-      approvedPlace.address = '원래 주소';
-      approvedPlace.phoneNumber = '02-1234-5678';
-
-      const updateDto = {
-        name: '업데이트된 이름만',
-      };
-
-      const updatedPlace = {
-        ...approvedPlace,
-        name: updateDto.name,
-        // Other fields remain unchanged
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue(updatedPlace);
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      const result = await service.updatePlaceByAdmin(
-        placeId,
-        adminId,
-        updateDto,
-        ipAddress,
-      );
-
-      // Assert
-      expect(result.name).toBe(updateDto.name);
-      expect(result.address).toBe(approvedPlace.address); // Unchanged
-      expect(result.phoneNumber).toBe(approvedPlace.phoneNumber); // Unchanged
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-    });
-
-    it('should throw NotFoundException when place does not exist', async () => {
-      // Arrange
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      const updateDto = {
-        name: '업데이트된 이름',
-      };
-
-      // Act & Assert
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(NotFoundException);
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.USER_PLACE_NOT_FOUND,
-          }),
-        }),
-      );
-    });
-
-    it('should throw BadRequestException when place is PENDING', async () => {
-      // Arrange
-      const pendingPlace = UserPlaceFactory.createPending();
-      pendingPlace.id = placeId;
-
-      userPlaceRepository.findOne.mockResolvedValue(pendingPlace);
-
-      const updateDto = {
-        name: '업데이트된 이름',
-      };
-
-      // Act & Assert
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(
-        'Cannot edit place with status PENDING. Only APPROVED places can be edited by admin.',
-      );
-    });
-
-    it('should throw BadRequestException when place is REJECTED', async () => {
-      // Arrange
-      const rejectedPlace = UserPlaceFactory.createRejected();
-      rejectedPlace.id = placeId;
-
-      userPlaceRepository.findOne.mockResolvedValue(rejectedPlace);
-
-      const updateDto = {
-        name: '업데이트된 이름',
-      };
-
-      // Act & Assert
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(
-        'Cannot edit place with status REJECTED. Only APPROVED places can be edited by admin.',
-      );
-    });
-
-    it('should create audit log with PLACE_UPDATED action', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.name = '원래 이름';
-      approvedPlace.address = '원래 주소';
-
-      const updateDto = {
-        name: '업데이트된 이름',
-        address: '업데이트된 주소',
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue({
-        ...approvedPlace,
-        ...updateDto,
-      });
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      await service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          adminId,
-          action: AUDIT_ACTIONS.PLACE_UPDATED,
-          target: `user-place:${placeId}`,
-          previousValue: expect.objectContaining({
-            name: '원래 이름',
-            address: '원래 주소',
-          }),
-          newValue: expect.objectContaining({
-            name: '업데이트된 이름',
-            address: '업데이트된 주소',
-          }),
-          ipAddress,
-        }),
-      );
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.any(Object),
-      );
-    });
-
-    it('should update location point when latitude or longitude changes', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.latitude = 37.5012345;
-      approvedPlace.longitude = 127.0398765;
-
-      const updateDto = {
-        latitude: 37.6012345,
-        longitude: 127.1398765,
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockImplementation((entity, data) => {
-        return Promise.resolve(data);
-      });
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      await service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
-        UserPlace,
-        expect.objectContaining({
-          latitude: updateDto.latitude,
-          longitude: updateDto.longitude,
-          location: {
-            type: 'Point',
-            coordinates: [updateDto.longitude, updateDto.latitude],
-          },
-        }),
-      );
-    });
-
-    it('should update location point when only latitude changes', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.latitude = 37.5012345;
-      approvedPlace.longitude = 127.0398765;
-
-      const updateDto = {
-        latitude: 37.6012345,
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockImplementation((entity, data) => {
-        return Promise.resolve(data);
-      });
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      await service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
-        UserPlace,
-        expect.objectContaining({
-          latitude: updateDto.latitude,
-          longitude: approvedPlace.longitude,
-          location: {
-            type: 'Point',
-            coordinates: [approvedPlace.longitude, updateDto.latitude],
-          },
-        }),
-      );
-    });
-
-    it('should track all changed fields in audit log', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-      approvedPlace.name = '원래 이름';
-      approvedPlace.menuTypes = ['한식'];
-      approvedPlace.phoneNumber = '02-1234-5678';
-      approvedPlace.category = '한식';
-
-      const updateDto = {
-        name: '업데이트된 이름',
-        menuTypes: ['중식', '일식'],
-        phoneNumber: '02-9999-8888',
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue({
-        ...approvedPlace,
-        ...updateDto,
-      });
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      await service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          previousValue: expect.objectContaining({
-            name: '원래 이름',
-            menuTypes: ['한식'],
-            phoneNumber: '02-1234-5678',
-          }),
-          newValue: expect.objectContaining({
-            name: '업데이트된 이름',
-            menuTypes: ['중식', '일식'],
-            phoneNumber: '02-9999-8888',
-          }),
-        }),
-      );
-      // Unchanged fields should NOT be in audit log
-      expect(mockQueryRunner.manager.create).not.toHaveBeenCalledWith(
-        AdminAuditLog,
-        expect.objectContaining({
-          previousValue: expect.objectContaining({
-            category: expect.anything(),
-          }),
-        }),
-      );
-    });
-
-    it('should rollback transaction when save fails', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-
-      const updateDto = {
-        name: '업데이트된 이름',
-      };
-
-      const mockQueryRunner = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        startTransaction: jest.fn().mockResolvedValue(undefined),
-        commitTransaction: jest.fn().mockResolvedValue(undefined),
-        rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-        release: jest.fn().mockResolvedValue(undefined),
-        manager: {
-          save: jest.fn().mockRejectedValue(new Error('Database error')),
-          create: jest.fn((entity, data) => data),
-        },
-      };
-
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act & Assert
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow('Database error');
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should execute all operations in single transaction', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-
-      const updateDto = {
-        name: '업데이트된 이름',
-      };
-
-      const mockQueryRunner = createMockQueryRunner();
-      mockQueryRunner.manager.save.mockResolvedValue({
-        ...approvedPlace,
-        ...updateDto,
-      });
-      mockQueryRunner.manager.create.mockReturnValue({} as AdminAuditLog);
-      mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner as any);
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act
-      await service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress);
-
-      // Assert
-      expect(mockQueryRunner.connect).toHaveBeenCalled();
-      expect(mockQueryRunner.startTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.manager.save).toHaveBeenCalledTimes(2); // UserPlace, AuditLog
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should not allow updating soft-deleted place', async () => {
-      // Arrange
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      const updateDto = {
-        name: '업데이트된 이름',
-      };
-
-      // Act & Assert
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw BadRequestException when no fields provided', async () => {
-      // Arrange
-      const approvedPlace = UserPlaceFactory.createApproved();
-      approvedPlace.id = placeId;
-
-      const updateDto = {};
-
-      userPlaceRepository.findOne.mockResolvedValue(approvedPlace);
-
-      // Act & Assert
-      await expect(
-        service.updatePlaceByAdmin(placeId, adminId, updateDto, ipAddress),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 });

@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { MessageCode } from '@/common/constants/message-codes';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { User } from '../../user/entities/user.entity';
 import { UserService } from '../../user/user.service';
 import { AuthService } from '../auth.service';
@@ -11,6 +12,7 @@ import { EmailPurpose } from '../dto/send-email-code.dto';
 import { AuthSocialService } from '../services/auth-social.service';
 import { AuthTokenService } from '../services/auth-token.service';
 import { EmailVerificationService } from '../services/email-verification.service';
+import { RedisCacheService } from '@/common/cache/cache.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -19,6 +21,7 @@ describe('AuthService', () => {
   let authSocialService: jest.Mocked<AuthSocialService>;
   let emailVerificationService: jest.Mocked<EmailVerificationService>;
   let userRepository: jest.Mocked<Repository<User>>;
+  let cacheService: jest.Mocked<RedisCacheService>;
 
   const mockUser: User = {
     id: 1,
@@ -26,10 +29,13 @@ describe('AuthService', () => {
     password: '$2b$10$hashedpassword',
     name: 'Test User',
     role: 'USER',
+    birthDate: null,
+    gender: null,
     preferredLanguage: 'ko',
     emailVerified: true,
     reRegisterEmailVerified: false,
     preferences: null,
+    tasteAnalysis: null,
     refreshToken: null,
     socialId: null,
     socialType: null,
@@ -90,6 +96,19 @@ describe('AuthService', () => {
       create: jest.fn(),
     };
 
+    const mockDataSource = {
+      transaction: jest.fn().mockImplementation(async (runInTransaction) => {
+        const manager = {
+          getRepository: jest.fn().mockReturnValue({
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
+            findOne: jest.fn().mockResolvedValue(null),
+            save: jest.fn(),
+          }),
+        };
+        return runInTransaction(manager);
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -110,8 +129,29 @@ describe('AuthService', () => {
           useValue: mockEmailVerificationService,
         },
         {
+          provide: RedisCacheService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            getUserProfile: jest.fn(),
+            setUserProfile: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
           provide: getRepositoryToken(User),
           useValue: mockUserRepository,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
+        },
+        {
+          provide: 'ConfigService',
+          useValue: {
+            get: jest.fn(),
+            getOrThrow: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -122,6 +162,7 @@ describe('AuthService', () => {
     authSocialService = module.get(AuthSocialService);
     emailVerificationService = module.get(EmailVerificationService);
     userRepository = module.get(getRepositoryToken(User));
+    cacheService = module.get(RedisCacheService);
   });
 
   afterEach(() => {
@@ -144,6 +185,9 @@ describe('AuthService', () => {
         latitude: null,
         longitude: null,
         preferences: null,
+        birthDate: null,
+        gender: null,
+        preferredLanguage: 'ko' as const,
       };
 
       authSocialService.kakaoLogin.mockResolvedValue(expectedResult);
@@ -153,6 +197,7 @@ describe('AuthService', () => {
       expect(authSocialService.kakaoLogin).toHaveBeenCalledWith(
         code,
         expect.any(Function),
+        undefined,
       );
       expect(result).toEqual(expectedResult);
     });
@@ -170,6 +215,9 @@ describe('AuthService', () => {
         latitude: null,
         longitude: null,
         preferences: null,
+        birthDate: null,
+        gender: null,
+        preferredLanguage: 'ko' as const,
       };
 
       authSocialService.kakaoLoginWithToken.mockResolvedValue(expectedResult);
@@ -179,6 +227,7 @@ describe('AuthService', () => {
       expect(authSocialService.kakaoLoginWithToken).toHaveBeenCalledWith(
         accessToken,
         expect.any(Function),
+        undefined,
       );
       expect(result).toEqual(expectedResult);
     });
@@ -196,6 +245,9 @@ describe('AuthService', () => {
         latitude: null,
         longitude: null,
         preferences: null,
+        birthDate: null,
+        gender: null,
+        preferredLanguage: 'ko' as const,
       };
 
       authSocialService.googleLogin.mockResolvedValue(expectedResult);
@@ -205,6 +257,7 @@ describe('AuthService', () => {
       expect(authSocialService.googleLogin).toHaveBeenCalledWith(
         code,
         expect.any(Function),
+        undefined,
       );
       expect(result).toEqual(expectedResult);
     });
@@ -279,7 +332,11 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue(mockUser);
 
       await expect(service.register(registerDto)).rejects.toThrow(
-        '이미 등록된 이메일입니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_ALREADY_EXISTS,
+          }),
+        }),
       );
     });
   });
@@ -294,10 +351,11 @@ describe('AuthService', () => {
 
       const result = await service.validateUser(email, password);
 
-      expect(result).toEqual(mockUser);
+      expect(result.user).toEqual(mockUser);
+      expect(result.reason).toBe('success');
     });
 
-    it('should return null when user does not exist', async () => {
+    it('should return null user when user does not exist', async () => {
       const email = 'nonexistent@example.com';
       const password = 'password123';
 
@@ -305,25 +363,28 @@ describe('AuthService', () => {
 
       const result = await service.validateUser(email, password);
 
-      expect(result).toBeNull();
+      expect(result.user).toBeNull();
+      expect(result.reason).toBe('not_found');
     });
 
-    it('should return null when user is deleted', async () => {
+    it('should return null user when user is deleted', async () => {
       const deletedUser = { ...mockUser, deletedAt: new Date() };
       userRepository.findOne.mockResolvedValue(deletedUser);
 
       const result = await service.validateUser('test@example.com', 'password');
 
-      expect(result).toBeNull();
+      expect(result.user).toBeNull();
+      expect(result.reason).toBe('deleted');
     });
 
-    it('should return null when password is invalid', async () => {
+    it('should return null user when password is invalid', async () => {
       userRepository.findOne.mockResolvedValue(mockUser);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
       const result = await service.validateUser('test@example.com', 'wrongpw');
 
-      expect(result).toBeNull();
+      expect(result.user).toBeNull();
+      expect(result.reason).toBe('wrong_password');
     });
   });
 
@@ -339,6 +400,9 @@ describe('AuthService', () => {
         latitude: null,
         longitude: null,
         preferences: null,
+        birthDate: null,
+        gender: null,
+        preferredLanguage: 'ko' as const,
       };
 
       userRepository.findOne.mockResolvedValue(mockUser);
@@ -371,7 +435,11 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValueOnce(mockUser);
 
       await expect(service.login(loginDto)).rejects.toThrow(
-        '이메일 또는 비밀번호가 올바르지 않습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_INVALID_CREDENTIALS,
+          }),
+        }),
       );
     });
 
@@ -391,24 +459,13 @@ describe('AuthService', () => {
       // Second call is to check if user is deactivated
       userRepository.findOne.mockResolvedValueOnce(deactivatedUser);
 
-      try {
-        await service.login(loginDto);
-        fail('Should have thrown HttpException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(HttpException);
-        const httpError = error as HttpException;
-        expect(httpError.getStatus()).toBe(HttpStatus.FORBIDDEN);
-        const response = httpError.getResponse() as {
-          statusCode: number;
-          message: string;
-          error: string;
-        };
-        expect(response.statusCode).toBe(HttpStatus.FORBIDDEN);
-        expect(response.message).toBe(
-          '계정이 비활성화되었습니다. 관리자에게 문의해주세요.',
-        );
-        expect(response.error).toBe('USER_DEACTIVATED');
-      }
+      await expect(service.login(loginDto)).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.USER_DEACTIVATED,
+          }),
+        }),
+      );
     });
   });
 
@@ -420,7 +477,6 @@ describe('AuthService', () => {
 
       expect(result).toEqual({
         available: true,
-        message: '사용 가능한 이메일입니다.',
         messageCode: MessageCode.AUTH_EMAIL_AVAILABLE,
       });
     });
@@ -432,8 +488,7 @@ describe('AuthService', () => {
 
       expect(result).toEqual({
         available: false,
-        message: '이미 사용 중인 이메일입니다.',
-        errorCode: 'AUTH_EMAIL_IN_USE',
+        errorCode: ErrorCode.AUTH_EMAIL_IN_USE,
       });
     });
 
@@ -446,8 +501,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         available: false,
         canReRegister: true,
-        message: '기존에 탈퇴 이력이 있습니다. 재가입하시겠습니까?',
-        errorCode: 'AUTH_WITHDRAWAL_HISTORY_CONFIRM',
+        errorCode: ErrorCode.AUTH_WITHDRAWAL_HISTORY_CONFIRM,
       });
     });
   });
@@ -478,7 +532,13 @@ describe('AuthService', () => {
 
       await expect(
         service.sendResetPasswordCode('social@example.com'),
-      ).rejects.toThrow('소셜 로그인으로 가입한 계정입니다.');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when non-existent email requests password reset', async () => {
@@ -486,7 +546,13 @@ describe('AuthService', () => {
 
       await expect(
         service.sendResetPasswordCode('nonexistent@example.com'),
-      ).rejects.toThrow('등록되지 않은 이메일입니다.');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+          }),
+        }),
+      );
     });
   });
 
@@ -524,7 +590,11 @@ describe('AuthService', () => {
       emailVerificationService.isEmailVerified.mockResolvedValue(false);
 
       await expect(service.resetPassword(resetDto)).rejects.toThrow(
-        '이메일 인증이 완료되지 않았습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+          }),
+        }),
       );
     });
   });
@@ -546,15 +616,7 @@ describe('AuthService', () => {
 
       const result = await service.reRegister(reRegisterDto);
 
-      expect(userRepository.update).toHaveBeenCalledWith(
-        { email: reRegisterDto.email },
-        expect.objectContaining({
-          deletedAt: null,
-          reRegisterEmailVerified: true,
-        }),
-      );
       expect(result).toEqual({
-        message: '재가입이 완료되었습니다. 로그인해주세요.',
         messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
       });
     });
@@ -569,7 +631,11 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue(mockUser);
 
       await expect(service.reRegister(reRegisterDto)).rejects.toThrow(
-        '재가입할 수 있는 계정이 없습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_RE_REGISTER_NOT_AVAILABLE,
+          }),
+        }),
       );
     });
   });
@@ -579,6 +645,7 @@ describe('AuthService', () => {
       const email = 'test@example.com';
       userService.getAuthenticatedEntity.mockResolvedValue(mockUser);
       userService.getEntityDefaultAddress.mockResolvedValue(null);
+      cacheService.getUserProfile.mockResolvedValue(null);
 
       const result = await service.getUserProfile(email);
 
@@ -627,7 +694,11 @@ describe('AuthService', () => {
       emailVerificationService.isEmailVerified.mockResolvedValue(false);
 
       await expect(service.register(registerDto)).rejects.toThrow(
-        '이메일 인증이 완료되지 않았습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+          }),
+        }),
       );
 
       expect(userService.createUser).not.toHaveBeenCalled();
@@ -644,7 +715,11 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue(deletedUser);
 
       await expect(service.register(registerDto)).rejects.toThrow(
-        '기존에 탈퇴 이력이 있습니다. 재가입을 진행해주세요.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_WITHDRAWAL_HISTORY_REREGISTER,
+          }),
+        }),
       );
     });
   });
@@ -774,7 +849,7 @@ describe('AuthService', () => {
   });
 
   describe('validateUser - all conditional branches', () => {
-    it('should return null when social login user has no password', async () => {
+    it('should return null user when social login user has no password', async () => {
       const socialUser = { ...mockUser, password: null };
       userRepository.findOne.mockResolvedValue(socialUser);
 
@@ -783,10 +858,11 @@ describe('AuthService', () => {
         'password123',
       );
 
-      expect(result).toBeNull();
+      expect(result.user).toBeNull();
+      expect(result.reason).toBe('no_password');
     });
 
-    it('should return null when user is deactivated', async () => {
+    it('should return null user when user is deactivated', async () => {
       const deactivatedUser = {
         ...mockUser,
         isDeactivated: true,
@@ -799,7 +875,8 @@ describe('AuthService', () => {
         'password123',
       );
 
-      expect(result).toBeNull();
+      expect(result.user).toBeNull();
+      expect(result.reason).toBe('deactivated');
     });
   });
 
@@ -816,6 +893,7 @@ describe('AuthService', () => {
       userService.getEntityDefaultAddress.mockResolvedValue(
         addressWithStringCoords,
       );
+      cacheService.getUserProfile.mockResolvedValue(null);
 
       const result = await service.getUserProfile('test@example.com');
 
@@ -837,6 +915,7 @@ describe('AuthService', () => {
       userService.getEntityDefaultAddress.mockResolvedValue(
         addressWithNumericCoords,
       );
+      cacheService.getUserProfile.mockResolvedValue(null);
 
       const result = await service.getUserProfile('test@example.com');
 
@@ -900,7 +979,11 @@ describe('AuthService', () => {
       };
 
       await expect(service.resetPassword(resetDto)).rejects.toThrow(
-        '비밀번호는 하루에 한 번만 변경할 수 있습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_PASSWORD_CHANGE_LIMIT,
+          }),
+        }),
       );
       expect(userService.updatePassword).not.toHaveBeenCalled();
     });
@@ -921,7 +1004,11 @@ describe('AuthService', () => {
       emailVerificationService.isEmailVerified.mockResolvedValue(true);
 
       await expect(service.reRegister(reRegisterDto)).rejects.toThrow(
-        '재가입 처리 중 오류가 발생했습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_RE_REGISTER_ERROR,
+          }),
+        }),
       );
     });
 
@@ -937,7 +1024,11 @@ describe('AuthService', () => {
       emailVerificationService.isEmailVerified.mockResolvedValue(false);
 
       await expect(service.reRegister(reRegisterDto)).rejects.toThrow(
-        '이메일 인증이 완료되지 않았습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+          }),
+        }),
       );
     });
 
@@ -951,7 +1042,11 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue(null);
 
       await expect(service.reRegister(reRegisterDto)).rejects.toThrow(
-        '재가입할 수 있는 계정이 없습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_RE_REGISTER_NOT_AVAILABLE,
+          }),
+        }),
       );
     });
   });
@@ -961,7 +1056,7 @@ describe('AuthService', () => {
       const email = 'test@example.com';
       const code = '123456';
       userService.findByEmail.mockResolvedValue(mockUser);
-      emailVerificationService.verifyCode.mockResolvedValue(true);
+      emailVerificationService.verifyCode.mockResolvedValue(undefined);
 
       await service.verifyResetPasswordCode(email, code);
 
@@ -978,7 +1073,13 @@ describe('AuthService', () => {
 
       await expect(
         service.verifyResetPasswordCode('nonexistent@example.com', '123456'),
-      ).rejects.toThrow('등록되지 않은 이메일입니다.');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED,
+          }),
+        }),
+      );
     });
 
     it('should throw BadRequestException when social login account tries to verify reset code', async () => {
@@ -987,7 +1088,13 @@ describe('AuthService', () => {
 
       await expect(
         service.verifyResetPasswordCode('social@example.com', '123456'),
-      ).rejects.toThrow('소셜 로그인으로 가입한 계정입니다.');
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.AUTH_SOCIAL_LOGIN_ACCOUNT,
+          }),
+        }),
+      );
     });
   });
 
@@ -998,7 +1105,6 @@ describe('AuthService', () => {
         socialType: 'kakao' as const,
       };
       const expectedResult = {
-        message: '재가입이 완료되었습니다. 로그인해주세요.',
         messageCode: MessageCode.AUTH_RE_REGISTRATION_COMPLETED,
       };
 

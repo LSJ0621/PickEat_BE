@@ -5,9 +5,6 @@ import { GooglePlacesClient } from '../google/clients/google-places.client';
 import { GoogleSearchClient } from '../google/clients/google-search.client';
 import { GoogleOAuthClient } from '../google/clients/google-oauth.client';
 import { KakaoOAuthClient } from '../kakao/clients/kakao-oauth.client';
-import { KakaoLocalClient } from '../kakao/clients/kakao-local.client';
-import { NaverSearchClient } from '../naver/clients/naver-search.client';
-import { NaverMapClient } from '../naver/clients/naver-map.client';
 import { S3Client } from '../aws/clients/s3.client';
 import { DiscordWebhookClient } from '../discord/clients/discord-webhook.client';
 import { GeminiClient } from '../gemini/clients/gemini.client';
@@ -15,19 +12,14 @@ import { GeminiClient } from '../gemini/clients/gemini.client';
 // Service imports (for E2E mock)
 import { TwoStageMenuService } from '@/menu/services/two-stage-menu.service';
 import { OpenAiPlacesService } from '@/menu/services/openai-places.service';
-import { LocationService } from '../naver/services/location.service';
 
 // Mock implementations
 import { MockGooglePlacesClient } from './mock-google-places.client';
 import { MockGoogleSearchClient } from './mock-google-search.client';
-import { MockKakaoLocalClient } from './mock-kakao-local.client';
-import { MockNaverSearchClient } from './mock-naver-search.client';
-import { MockNaverMapClient } from './mock-naver-map.client';
 import { MockS3Client } from './mock-s3.client';
 import { MockDiscordWebhookClient } from './mock-discord-webhook.client';
 import { MockTwoStageMenuService } from './mock-two-stage-menu.service';
 import { MockOpenAiPlacesService } from './mock-openai-places.service';
-import { MockLocationService } from './mock-location.service';
 import { MockGeminiClient } from './mock-gemini.client';
 
 const logger = new Logger('MockExternalModule');
@@ -110,21 +102,6 @@ const logger = new Logger('MockExternalModule');
         };
       },
     },
-    // Kakao Local - mock 사용
-    {
-      provide: KakaoLocalClient,
-      useClass: MockKakaoLocalClient,
-    },
-    // Naver Search - mock 사용
-    {
-      provide: NaverSearchClient,
-      useClass: MockNaverSearchClient,
-    },
-    // Naver Map - mock 사용
-    {
-      provide: NaverMapClient,
-      useClass: MockNaverMapClient,
-    },
     // S3 - mock 사용
     {
       provide: S3Client,
@@ -145,11 +122,6 @@ const logger = new Logger('MockExternalModule');
       provide: OpenAiPlacesService,
       useClass: MockOpenAiPlacesService,
     },
-    // Location Service - mock 사용
-    {
-      provide: LocationService,
-      useClass: MockLocationService,
-    },
     // Gemini Client - mock 사용
     {
       provide: GeminiClient,
@@ -161,14 +133,10 @@ const logger = new Logger('MockExternalModule');
     GoogleSearchClient,
     GoogleOAuthClient,
     KakaoOAuthClient,
-    KakaoLocalClient,
-    NaverSearchClient,
-    NaverMapClient,
     S3Client,
     DiscordWebhookClient,
     TwoStageMenuService,
     OpenAiPlacesService,
-    LocationService,
     GeminiClient,
   ],
 })

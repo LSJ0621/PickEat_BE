@@ -2,9 +2,9 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { SEARCH_DEFAULTS } from '../../../common/constants/business.constants';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
+import { SEARCH_DEFAULTS } from '@/common/constants/business.constants';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
+import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
 import { NAVER_SEARCH_CONFIG } from '../naver.constants';
 import { NaverLocalSearchItem, NaverLocalSearchResponse } from '../naver.types';
 
@@ -61,7 +61,7 @@ export class NaverSearchClient {
       );
 
       const items = response.data?.items ?? [];
-      this.logger.log(`✅ [Naver 로컬 검색 완료] count=${items.length}`);
+      this.logger.log(`[Naver 로컬 검색 완료] count=${items.length}`);
       return items;
     } catch (error: unknown) {
       // unknown → Error 변환

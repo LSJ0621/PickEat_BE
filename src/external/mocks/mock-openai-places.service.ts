@@ -34,6 +34,7 @@ export class MockOpenAiPlacesService {
           placeId: mockPlace.id,
           name: mockPlace.displayName.text,
           reason: '리뷰가 좋고 위치가 편리합니다.',
+          reasonTags: [],
         },
       ],
     };

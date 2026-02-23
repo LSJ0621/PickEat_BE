@@ -1,16 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { mockGoogleCseResponses } from './fixtures';
-
-/**
- * 블로그 검색 결과 (실제 클라이언트와 동일한 타입)
- */
-export interface BlogSearchResult {
-  title: string | null;
-  url: string | null;
-  snippet: string | null;
-  thumbnailUrl: string | null;
-  source: string | null;
-}
+import type { BlogSearchResult } from '@/external/google/google.types';
 
 /**
  * Google CSE (Custom Search Engine) Mock 클라이언트

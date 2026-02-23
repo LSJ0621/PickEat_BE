@@ -723,26 +723,28 @@ describe('User (e2e)', () => {
   });
 
   describe('GET /user/address/search', () => {
-    it('should search address using Kakao Local API', async () => {
-      // Mock Kakao Local API response - KakaoLocalClient returns this format
-      const mockResponse = {
-        meta: {
-          total_count: 1,
-          pageable_count: 1,
-          is_end: true,
-        },
-        addresses: [
-          {
-            address: '서울특별시 강남구 역삼동',
-            roadAddress: TEST_COORDINATES.GANGNAM.ROAD_ADDRESS,
-            postalCode: TEST_COORDINATES.GANGNAM.POSTAL_CODE,
-            latitude: String(TEST_COORDINATES.GANGNAM.LATITUDE),
-            longitude: String(TEST_COORDINATES.GANGNAM.LONGITUDE),
+    it('should search address using Google Places API', async () => {
+      // Mock Google Places API response
+      const mockSuggestions = [
+        {
+          placePrediction: {
+            placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+            text: { text: '서울특별시 강남구 역삼동' },
           },
-        ],
+        },
+      ];
+      const mockDetails = {
+        formattedAddress: TEST_COORDINATES.GANGNAM.ROAD_ADDRESS,
+        location: {
+          latitude: TEST_COORDINATES.GANGNAM.LATITUDE,
+          longitude: TEST_COORDINATES.GANGNAM.LONGITUDE,
+        },
       };
 
-      mocks.mockKakaoLocalClient.searchAddress.mockResolvedValue(mockResponse);
+      mocks.mockGooglePlacesClient.autocomplete.mockResolvedValue(
+        mockSuggestions,
+      );
+      mocks.mockGooglePlacesClient.getDetails.mockResolvedValue(mockDetails);
 
       const response = await request(app.getHttpServer())
         .get('/user/address/search')
@@ -754,14 +756,13 @@ describe('User (e2e)', () => {
       expect(response.body).toHaveProperty('addresses');
       expect(response.body.addresses).toHaveLength(1);
       expect(response.body.addresses[0]).toMatchObject({
-        address: '서울특별시 강남구 역삼동',
+        address: TEST_COORDINATES.GANGNAM.ROAD_ADDRESS,
         roadAddress: TEST_COORDINATES.GANGNAM.ROAD_ADDRESS,
       });
 
       // Verify mock was called
-      expect(mocks.mockKakaoLocalClient.searchAddress).toHaveBeenCalledWith(
-        '서울특별시 강남구 역삼동',
-      );
+      expect(mocks.mockGooglePlacesClient.autocomplete).toHaveBeenCalled();
+      expect(mocks.mockGooglePlacesClient.getDetails).toHaveBeenCalled();
     });
 
     it('should fail with missing query parameter', async () => {

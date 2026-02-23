@@ -35,7 +35,19 @@ describe('BugReportService', () => {
     userService = createMockService<UserService>(['getAuthenticatedEntity']);
     s3Client = createMockS3Client();
     dataSource = {
-      transaction: jest.fn(),
+      transaction: jest.fn().mockImplementation(async (runInTransaction) => {
+        const manager = {
+          findOne: jest.fn((EntityClass, options) => {
+            // Forward to repository mock
+            return bugReportRepository.findOne(options);
+          }),
+          save: jest.fn((EntityClass, entity) => {
+            // Forward to repository mock
+            return bugReportRepository.save(entity);
+          }),
+        };
+        return runInTransaction(manager as any);
+      }),
     } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -395,57 +407,6 @@ describe('BugReportService', () => {
       await expect(service.findOne(999)).rejects.toThrow(
         '버그 제보를 찾을 수 없습니다. (ID: 999)',
       );
-    });
-  });
-
-  describe('updateStatus', () => {
-    it('should update bug report status', async () => {
-      const bugReport = BugReportFactory.create({
-        id: 1,
-        status: BugReportStatus.UNCONFIRMED,
-      });
-      const updatedBugReport = {
-        ...bugReport,
-        status: BugReportStatus.CONFIRMED,
-      };
-
-      bugReportRepository.findOne.mockResolvedValue(bugReport);
-      bugReportRepository.save.mockResolvedValue(updatedBugReport);
-
-      const result = await service.updateStatus(1, BugReportStatus.CONFIRMED);
-
-      expect(bugReportRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 1 },
-        relations: ['user'],
-      });
-      expect(bugReportRepository.save).toHaveBeenCalledWith(bugReport);
-      expect(result.status).toBe(BugReportStatus.CONFIRMED);
-    });
-
-    it('should throw NotFoundException if bug report not found', async () => {
-      bugReportRepository.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.updateStatus(999, BugReportStatus.CONFIRMED),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should update status from UNCONFIRMED to CONFIRMED', async () => {
-      const bugReport = BugReportFactory.create({
-        id: 1,
-        status: BugReportStatus.UNCONFIRMED,
-      });
-      const updatedBugReport = {
-        ...bugReport,
-        status: BugReportStatus.CONFIRMED,
-      };
-
-      bugReportRepository.findOne.mockResolvedValue(bugReport);
-      bugReportRepository.save.mockResolvedValue(updatedBugReport);
-
-      const result = await service.updateStatus(1, BugReportStatus.CONFIRMED);
-
-      expect(result.status).toBe(BugReportStatus.CONFIRMED);
     });
   });
 });

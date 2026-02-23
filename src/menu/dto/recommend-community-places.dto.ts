@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class RecommendCommunityPlacesDto {
   @IsNumber()
@@ -15,6 +23,7 @@ export class RecommendCommunityPlacesDto {
   longitude: number;
 
   @IsString()
+  @MaxLength(255)
   menuName: string;
 
   @IsNumber()
@@ -22,6 +31,6 @@ export class RecommendCommunityPlacesDto {
   menuRecommendationId: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['ko', 'en'])
   language?: string;
 }

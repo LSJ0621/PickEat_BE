@@ -1,9 +1,8 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
-import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
+import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
 import {
   buildCommunityPlacesUserPrompt,
   getCommunityPlacesRecommendationsJsonSchema,
@@ -13,30 +12,13 @@ import {
   CommunityPlaceCandidate,
   CommunityPlacesRecommendationResponse,
 } from '../interface/community-places.interface';
+import { logOpenAiTokenUsage } from '@/common/utils/openai-token-logger.util';
+import { BaseOpenAiService } from './base-openai.service';
 
 @Injectable()
-export class OpenAiCommunityPlacesService implements OnModuleInit {
-  private readonly logger = new Logger(OpenAiCommunityPlacesService.name);
-  private openai: OpenAI | null = null;
-  private readonly model: string;
-
-  constructor(private readonly config: ConfigService) {
-    this.model =
-      this.config.get<string>('OPENAI_PLACES_MODEL') ||
-      this.config.get<string>('OPENAI_MODEL') ||
-      OPENAI_CONFIG.DEFAULT_MODEL;
-  }
-
-  onModuleInit() {
-    const apiKey = this.config.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      this.logger.error('OPENAI_API_KEY is not configured');
-      return;
-    }
-
-    this.openai = new OpenAI({
-      apiKey,
-    });
+export class OpenAiCommunityPlacesService extends BaseOpenAiService {
+  constructor(config: ConfigService) {
+    super(config, OpenAiCommunityPlacesService.name);
   }
 
   async recommendFromCommunityPlaces(
@@ -69,48 +51,33 @@ export class OpenAiCommunityPlacesService implements OnModuleInit {
     );
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'community_places_recommendations',
-            schema: jsonSchema,
-            strict: true,
-          },
+      const response = await retryWithExponentialBackoff(
+        () =>
+          this.openai!.chat.completions.create({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'community_places_recommendations',
+                schema: jsonSchema,
+                strict: true,
+              },
+            },
+            max_completion_tokens: 800,
+          }),
+        {
+          maxRetries: 1,
+          initialDelayMs: 1000,
         },
-        max_completion_tokens: 800,
-      });
+        this.logger,
+      );
 
       // Log token usage
-      const usage = (
-        response as {
-          usage?: {
-            prompt_tokens?: number;
-            input_tokens?: number;
-            completion_tokens?: number;
-            output_tokens?: number;
-            total_tokens?: number;
-          };
-        }
-      ).usage;
-
-      if (usage) {
-        const promptTokens =
-          usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
-        const completionTokens =
-          usage.completion_tokens ?? usage.output_tokens ?? 0;
-        const totalTokensRaw =
-          usage.total_tokens ?? promptTokens + completionTokens;
-
-        this.logger.log(
-          `🧮 [OpenAI 토큰 사용량] prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
-        );
-      }
+      logOpenAiTokenUsage(this.logger, this.model, response.usage);
 
       const choice = response.choices[0];
       const content = choice?.message?.content;

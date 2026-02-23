@@ -25,6 +25,8 @@ export class OpenAiMenuService {
     analysis?: string,
     language: 'ko' | 'en' = 'ko',
     userAddress?: string,
+    userBirthYear?: number,
+    userGender?: 'male' | 'female' | 'other' | null,
     compactSummary?: string,
     structuredAnalysis?: StructuredAnalysis,
   ): Promise<MenuRecommendationsResponse> {
@@ -35,8 +37,8 @@ export class OpenAiMenuService {
       analysis,
       language,
       userAddress,
-      undefined, // userBirthYear
-      undefined, // userGender
+      userBirthYear,
+      userGender ?? undefined, // null을 undefined로 변환
       compactSummary,
       structuredAnalysis,
     );

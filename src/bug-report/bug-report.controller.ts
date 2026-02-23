@@ -6,12 +6,14 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   AuthUserPayload,
   CurrentUser,
 } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guard/jwt.guard';
+import { MULTER_OPTIONS } from '../common/config/multer.config';
 import { ImageValidationPipe } from '../common/pipes/file-validation.pipe';
 import { BugReportService } from './bug-report.service';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
@@ -22,7 +24,8 @@ export class BugReportController {
   constructor(private readonly bugReportService: BugReportService) {}
 
   @Post()
-  @UseInterceptors(FilesInterceptor('images', 5))
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @UseInterceptors(FilesInterceptor('images', 5, MULTER_OPTIONS))
   async createBugReport(
     @Body() dto: CreateBugReportDto,
     @UploadedFiles(new ImageValidationPipe()) files: Express.Multer.File[],

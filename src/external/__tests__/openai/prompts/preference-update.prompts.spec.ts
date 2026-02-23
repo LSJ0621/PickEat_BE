@@ -426,7 +426,7 @@ describe('preference-update.prompts', () => {
       const analysis = properties.analysis as Record<string, unknown>;
 
       expect(analysis.type).toBe('string');
-      expect(analysis.description).toContain('300자 이내');
+      expect(analysis.description).toContain('200-400자');
     });
 
     it('should require analysis and structured analysis fields', () => {
@@ -437,6 +437,8 @@ describe('preference-update.prompts', () => {
       const required = schema.required as string[];
 
       expect(required).toContain('analysis');
+      expect(required).toContain('compactSummary');
+      expect(required).toContain('analysisParagraphs');
       expect(required).toContain('stablePatterns');
       expect(required).toContain('recentSignals');
       expect(required).toContain('diversityHints');
@@ -471,7 +473,7 @@ describe('preference-update.prompts', () => {
 
       it('should contain Korean-specific instructions', () => {
         expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('존댓말');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('300자');
+        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('200-400자');
         expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('한국어');
       });
     });
@@ -497,7 +499,7 @@ describe('preference-update.prompts', () => {
 
       it('should contain English-specific instructions', () => {
         expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('polite language');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('300 characters');
+        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('200-400 characters');
         expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('Korean response');
         expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('English response');
       });
@@ -621,7 +623,7 @@ describe('preference-update.prompts', () => {
         const analysis = properties.analysis as Record<string, unknown>;
 
         expect(analysis.description).toBe(
-          '사용자에게 보여줄 300자 이내 분석 텍스트',
+          '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
         );
       });
 
@@ -632,7 +634,7 @@ describe('preference-update.prompts', () => {
         const analysis = properties.analysis as Record<string, unknown>;
 
         expect(analysis.description).toBe(
-          'Analysis text for user display (max 300 characters)',
+          'Analysis text for user display (200-400 characters, backward compatible)',
         );
       });
 
@@ -643,7 +645,7 @@ describe('preference-update.prompts', () => {
         const analysis = properties.analysis as Record<string, unknown>;
 
         expect(analysis.description).toBe(
-          '사용자에게 보여줄 300자 이내 분석 텍스트',
+          '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
         );
       });
 
@@ -670,6 +672,8 @@ describe('preference-update.prompts', () => {
         const required = schema.required as string[];
 
         expect(required).toContain('analysis');
+        expect(required).toContain('compactSummary');
+        expect(required).toContain('analysisParagraphs');
         expect(required).toContain('stablePatterns');
         expect(required).toContain('recentSignals');
         expect(required).toContain('diversityHints');

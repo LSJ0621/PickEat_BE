@@ -1,15 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { DataSource } from 'typeorm';
 import { NotificationSchedulerService } from '../services/notification-scheduler.service';
 import { NotificationService } from '../notification.service';
 
 describe('NotificationSchedulerService', () => {
   let service: NotificationSchedulerService;
   let notificationService: jest.Mocked<NotificationService>;
+  let dataSource: jest.Mocked<DataSource>;
 
   beforeEach(async () => {
     const mockNotificationService: jest.Mocked<Partial<NotificationService>> = {
       publishScheduledNotifications: jest.fn(),
     };
+
+    const mockQueryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      release: jest.fn().mockResolvedValue(undefined),
+    };
+
+    dataSource = {
+      createQueryRunner: jest.fn(() => mockQueryRunner),
+    } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -17,6 +29,10 @@ describe('NotificationSchedulerService', () => {
         {
           provide: NotificationService,
           useValue: mockNotificationService,
+        },
+        {
+          provide: DataSource,
+          useValue: dataSource,
         },
       ],
     }).compile();

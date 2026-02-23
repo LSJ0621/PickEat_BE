@@ -18,6 +18,7 @@ interface ErrorResponse {
   timestamp: string;
   path: string;
   provider?: string;
+  metadata?: Record<string, unknown>;
 }
 
 @Catch()
@@ -75,12 +76,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       // Extract errorCode if exists
-      const errorCode =
+      let errorCode =
         typeof exceptionResponse === 'object' && exceptionResponse !== null
           ? ((exceptionResponse as Record<string, unknown>).errorCode as
               | string
               | undefined)
           : undefined;
+
+      // Fallback: If errorCode is undefined, map from HTTP status
+      if (!errorCode) {
+        errorCode = this.getErrorCodeFallback(status);
+      }
 
       // If errorCode exists, return errorCode as message
       if (errorCode) {
@@ -125,6 +131,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // 예상치 못한 에러 (500)
     const status = HttpStatus.INTERNAL_SERVER_ERROR;
+    const isProduction = process.env.NODE_ENV === 'production';
 
     return {
       status,
@@ -132,7 +139,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         statusCode: status,
         errorCode: ErrorCode.INTERNAL_SERVER_ERROR,
         error: 'Internal Server Error',
-        message: ErrorCode.INTERNAL_SERVER_ERROR,
+        message: isProduction
+          ? 'Internal Server Error'
+          : exception instanceof Error
+            ? exception.message
+            : String(exception),
         timestamp,
         path,
       },
@@ -183,5 +194,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
       503: 'Service Unavailable',
     };
     return errorNames[status] || 'Error';
+  }
+
+  private getErrorCodeFallback(status: number): string {
+    const errorCodeMap: Record<number, string> = {
+      400: ErrorCode.VALIDATION_ERROR,
+      401: ErrorCode.UNAUTHORIZED,
+      403: ErrorCode.FORBIDDEN,
+    };
+    return errorCodeMap[status] || ErrorCode.INTERNAL_SERVER_ERROR;
   }
 }

@@ -11,6 +11,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { IsS3PhotoUrl } from '@/common/validators/s3-url.validator';
 
 export class CreateUserPlaceDto {
   @IsString()
@@ -42,6 +43,7 @@ export class CreateUserPlaceDto {
   @IsArray()
   @ArrayMaxSize(5, { message: '사진은 최대 5장까지 업로드 가능합니다' })
   @IsUrl({}, { each: true, message: '유효한 URL 형식이어야 합니다' })
+  @IsS3PhotoUrl({ each: true })
   photos?: string[];
 
   @IsOptional()

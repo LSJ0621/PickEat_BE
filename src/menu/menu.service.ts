@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '../common/constants/error-codes';
 import { parseLanguage } from '../common/utils/language.util';
+import { RedisCacheService } from '../common/cache/cache.service';
 import { User } from '../user/entities/user.entity';
 import { RecommendPlacesV2Dto } from './dto/recommend-places-v2.dto';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
@@ -29,6 +31,7 @@ export class MenuService {
     private readonly menuSelectionService: MenuSelectionService,
     private readonly placeService: PlaceService,
     private readonly geminiPlacesService: GeminiPlacesService,
+    private readonly cacheService: RedisCacheService,
   ) {}
 
   // ========== 통합 메서드 (신규) ==========
@@ -84,20 +87,10 @@ export class MenuService {
       id,
       user,
     );
-    return this.placeService.buildRecommendationDetailResponse(recommendation);
-  }
-
-  async recommendRestaurantsWithGooglePlacesAndLlm(
-    user: User,
-    textQuery: string,
-    menuName: string,
-    menuRecommendationId?: number,
-  ) {
-    return this.recommendRestaurants(
-      user,
-      textQuery,
-      menuName,
-      menuRecommendationId!,
+    const language = parseLanguage(user.preferredLanguage);
+    return this.placeService.buildRecommendationDetailResponse(
+      recommendation,
+      language,
     );
   }
 
@@ -129,27 +122,45 @@ export class MenuService {
     );
 
     if (validRecommendations.length === 0) {
-      this.logger.warn('⚠️ [Gemini V2] placeId가 있는 추천 결과 없음');
+      this.logger.warn('[Gemini V2] placeId가 있는 추천 결과 없음');
     }
 
-    // 5. Save each recommendation to PlaceRecommendation entity with source: GEMINI
+    // 5. Save each recommendation to PlaceRecommendation entity with source: GEMINI (PickEat 자체 데이터만)
     const recommendationEntities = validRecommendations.map((rec) =>
       this.placeRecommendationRepository.create({
         menuRecommendation,
         placeId: normalizePlaceId(rec.placeId!), // Non-null guaranteed by filter
         reason: rec.reason,
+        reasonTags: Array.isArray(rec.reasonTags) ? rec.reasonTags : [],
         menuName: dto.menuName,
         source: PlaceRecommendationSource.GEMINI,
+        // NEW: 다국어 저장
+        nameKo: rec.nameKo,
+        nameEn: rec.nameEn,
+        nameLocal: rec.nameLocal ?? null,
+        addressKo: rec.addressKo ?? null,
+        addressEn: rec.addressEn ?? null,
+        addressLocal: rec.addressLocal ?? null,
+        placeLatitude: rec.location?.latitude ?? null,
+        placeLongitude: rec.location?.longitude ?? null,
       }),
     );
 
-    await this.placeRecommendationRepository.save(recommendationEntities);
+    try {
+      await this.placeRecommendationRepository.save(recommendationEntities);
+      this.logger.log(
+        `✅ [Gemini V2 추천 저장 완료] menuRecommendationId=${dto.menuRecommendationId}, menuName="${dto.menuName}", total=${geminiResponse.recommendations.length}, saved=${recommendationEntities.length}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ [Gemini V2 추천 저장 실패] menuRecommendationId=${dto.menuRecommendationId}, menuName="${dto.menuName}", count=${recommendationEntities.length}, error=${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.PLACE_RECOMMENDATION_SAVE_FAILED,
+      });
+    }
 
-    this.logger.log(
-      `✅ [Gemini V2 추천 저장 완료] menuRecommendationId=${dto.menuRecommendationId}, total=${geminiResponse.recommendations.length}, saved=${recommendationEntities.length}`,
-    );
-
-    // 5. Return the response
+    // 6. Return the response
     return geminiResponse;
   }
 
@@ -169,8 +180,8 @@ export class MenuService {
     );
   }
 
-  async getPlaceDetail(placeId: string) {
-    return this.placeService.getPlaceDetail(placeId);
+  async getPlaceDetail(placeId: string, language: 'ko' | 'en' = 'ko') {
+    return this.placeService.getPlaceDetail(placeId, language);
   }
 
   async searchRestaurantBlogs(

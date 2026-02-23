@@ -1,20 +1,29 @@
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class UpdateUserAddressDto {
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   roadAddress?: string; // 도로명 주소
 
-  @IsNumber()
+  @IsLatitude()
   @IsOptional()
   latitude?: number;
 
-  @IsNumber()
+  @IsLongitude()
   @IsOptional()
   longitude?: number;
 
   @IsString()
   @IsOptional()
+  @MaxLength(100)
   alias?: string;
 
   @IsBoolean()

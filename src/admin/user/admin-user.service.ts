@@ -306,7 +306,7 @@ export class AdminUserService {
       email: user.email,
       name: user.name,
       socialType: user.socialType,
-      createdAt: user.createdAt,
+      createdAt: user.createdAt.toISOString(),
       status,
     };
   }
@@ -328,8 +328,9 @@ export class AdminUserService {
       name: user.name,
       socialType: user.socialType,
       emailVerified: user.emailVerified,
-      createdAt: user.createdAt,
-      deletedAt: user.deletedAt,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+      deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
       isDeactivated: user.isDeactivated,
       preferences: user.preferences
         ? {
@@ -350,14 +351,14 @@ export class AdminUserService {
           id: rec.id,
           recommendations: rec.recommendations,
           requestAddress: rec.requestAddress,
-          createdAt: rec.createdAt,
+          createdAt: rec.createdAt.toISOString(),
         })),
         bugReports: recentBugReports.map((bug) => ({
           id: bug.id,
           title: bug.title,
           category: bug.category,
           status: bug.status,
-          createdAt: bug.createdAt,
+          createdAt: bug.createdAt.toISOString(),
         })),
       },
     };

@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { MenuRecommendationService } from '../../services/menu-recommendation.service';
 import { OpenAiMenuService } from '../../services/openai-menu.service';
 import { UserAddressService } from '@/user/services/user-address.service';
+import { UserTasteAnalysisService } from '@/user/services/user-taste-analysis.service';
 import { MenuRecommendation } from '../../entities/menu-recommendation.entity';
 import {
   createMockRepository,
@@ -20,6 +22,7 @@ describe('MenuRecommendationService', () => {
   let mockRecommendationRepository: jest.Mocked<any>;
   let mockOpenAiMenuService: jest.Mocked<OpenAiMenuService>;
   let mockUserAddressService: jest.Mocked<UserAddressService>;
+  let mockUserTasteAnalysisService: jest.Mocked<any>;
 
   beforeEach(async () => {
     mockRecommendationRepository = createMockRepository<MenuRecommendation>();
@@ -29,6 +32,9 @@ describe('MenuRecommendationService', () => {
     mockUserAddressService = {
       getDefaultAddress: jest.fn(),
     } as unknown as jest.Mocked<UserAddressService>;
+    mockUserTasteAnalysisService = {
+      getByUserId: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +50,10 @@ describe('MenuRecommendationService', () => {
         {
           provide: UserAddressService,
           useValue: mockUserAddressService,
+        },
+        {
+          provide: UserTasteAnalysisService,
+          useValue: mockUserTasteAnalysisService,
         },
       ],
     }).compile();
@@ -70,8 +80,13 @@ describe('MenuRecommendationService', () => {
       const defaultAddress = UserAddressFactory.createDefault(user);
 
       const aiResponse = {
-        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
-        reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+        intro: '오늘은 한식이 생각나는 날씨네요',
+        recommendations: [
+          { condition: '든든하게 먹고 싶다면', menu: '김치찌개' },
+          { condition: '가볍게 먹고 싶다면', menu: '된장찌개' },
+          { condition: '매콤하게 먹고 싶다면', menu: '순두부찌개' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
@@ -84,8 +99,9 @@ describe('MenuRecommendationService', () => {
       const savedRecommendation = MenuRecommendationFactory.create({
         id: 1,
         user,
-        recommendations: aiResponse.recommendations,
-        reason: aiResponse.reason,
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
         prompt,
         requestAddress: defaultAddress.roadAddress,
       });
@@ -102,6 +118,12 @@ describe('MenuRecommendationService', () => {
         ['한식', '중식'],
         ['양식'],
         '매운 음식을 좋아함',
+        'ko',
+        defaultAddress.roadAddress,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
       );
       expect(mockUserAddressService.getDefaultAddress).toHaveBeenCalledWith(
         user,
@@ -109,16 +131,19 @@ describe('MenuRecommendationService', () => {
       expect(mockRecommendationRepository.create).toHaveBeenCalledWith({
         user,
         prompt,
-        recommendations: aiResponse.recommendations,
-        reason: aiResponse.reason,
+        recommendations: ['김치찌개', '된장찌개', '순두부찌개'],
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
         recommendedAt: expect.any(Date),
         requestAddress: defaultAddress.roadAddress,
       });
       expect(mockRecommendationRepository.save).toHaveBeenCalled();
       expect(result).toEqual({
         id: 1,
+        intro: aiResponse.intro,
         recommendations: aiResponse.recommendations,
-        reason: aiResponse.reason,
+        closing: aiResponse.closing,
         recommendedAt: expect.any(Date),
         requestAddress: defaultAddress.roadAddress,
       });
@@ -134,8 +159,13 @@ describe('MenuRecommendationService', () => {
       const defaultAddress = UserAddressFactory.createDefault(user);
 
       const aiResponse = {
-        recommendations: ['비빔밥', '불고기', '떡볶이'],
-        reason: '인기 메뉴로 추천드립니다.',
+        intro: '인기 있는 메뉴를 추천해드릴게요',
+        recommendations: [
+          { condition: '든든하게 먹고 싶다면', menu: '비빔밥' },
+          { condition: '고기가 먹고 싶다면', menu: '불고기' },
+          { condition: '간식이 먹고 싶다면', menu: '떡볶이' },
+        ],
+        closing: '맛있게 드세요!',
       };
 
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
@@ -147,8 +177,9 @@ describe('MenuRecommendationService', () => {
 
       const savedRecommendation = MenuRecommendationFactory.create({
         user,
-        recommendations: aiResponse.recommendations,
-        reason: aiResponse.reason,
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
       });
 
       mockRecommendationRepository.create.mockReturnValue(savedRecommendation);
@@ -158,7 +189,18 @@ describe('MenuRecommendationService', () => {
 
       expect(
         mockOpenAiMenuService.generateMenuRecommendations,
-      ).toHaveBeenCalledWith(prompt, [], [], undefined);
+      ).toHaveBeenCalledWith(
+        prompt,
+        [],
+        [],
+        undefined,
+        'ko',
+        defaultAddress.roadAddress,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('should throw BadRequestException when no default address exists', async () => {
@@ -166,16 +208,18 @@ describe('MenuRecommendationService', () => {
       const prompt = '오늘 점심 추천해줘';
 
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue({
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '오늘의 추천',
+        recommendations: [{ condition: '든든하게', menu: '김치찌개' }],
+        closing: '맛있게 드세요',
       });
       mockUserAddressService.getDefaultAddress.mockResolvedValue(null);
 
       await expect(service.recommend(user, prompt)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.recommend(user, prompt)).rejects.toThrow(
-        '기본 주소를 설정해주세요.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.MENU_DEFAULT_ADDRESS_REQUIRED,
+          }),
+        }),
       );
     });
 
@@ -186,15 +230,20 @@ describe('MenuRecommendationService', () => {
       addressWithoutRoad.roadAddress = '';
 
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue({
-        recommendations: ['김치찌개'],
-        reason: '추천 이유',
+        intro: '오늘의 추천',
+        recommendations: [{ condition: '든든하게', menu: '김치찌개' }],
+        closing: '맛있게 드세요',
       });
       mockUserAddressService.getDefaultAddress.mockResolvedValue(
         addressWithoutRoad,
       );
 
       await expect(service.recommend(user, prompt)).rejects.toThrow(
-        BadRequestException,
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.MENU_DEFAULT_ADDRESS_REQUIRED,
+          }),
+        }),
       );
     });
   });
@@ -219,6 +268,7 @@ describe('MenuRecommendationService', () => {
       expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'recommendation.placeRecommendations',
         'placeRecommendation',
+        'placeRecommendation.deletedAt IS NULL',
       );
       expect(mockQueryBuilder.where).toHaveBeenCalledWith(
         'recommendation.user.id = :id',
@@ -276,7 +326,7 @@ describe('MenuRecommendationService', () => {
       ).rejects.toThrow(BadRequestException);
       await expect(
         service.getHistory(user, 1, 10, invalidDate),
-      ).rejects.toThrow('Invalid date parameter');
+      ).rejects.toThrow(ErrorCode.INVALID_DATE_PARAMETER);
     });
 
     it('should indicate hasNext when more items exist', async () => {
@@ -332,36 +382,70 @@ describe('MenuRecommendationService', () => {
       const user = UserFactory.create({ id: 1 });
       const recommendation = MenuRecommendationFactory.create({ id: 1, user });
 
-      mockRecommendationRepository.findOne.mockResolvedValue(recommendation);
+      const mockQueryBuilder = createMockQueryBuilder<MenuRecommendation>();
+      mockQueryBuilder.getOne.mockResolvedValue(recommendation);
+
+      mockRecommendationRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder,
+      );
 
       const result = await service.findById(1, user);
 
-      expect(mockRecommendationRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 1, user: { id: 1 } },
-        relations: ['placeRecommendations', 'user'],
-      });
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'recommendation.user',
+        'user',
+      );
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'recommendation.placeRecommendations',
+        'placeRecommendation',
+        'placeRecommendation.deletedAt IS NULL',
+      );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'recommendation.id = :id',
+        { id: 1 },
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'user.id = :userId',
+        { userId: 1 },
+      );
       expect(result).toEqual(recommendation);
     });
 
     it('should throw BadRequestException when recommendation not found', async () => {
       const user = UserFactory.create({ id: 1 });
 
-      mockRecommendationRepository.findOne.mockResolvedValue(null);
+      const mockQueryBuilder = createMockQueryBuilder<MenuRecommendation>();
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      mockRecommendationRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder,
+      );
 
       await expect(service.findById(999, user)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.findById(999, user)).rejects.toThrow(
-        '추천 이력을 찾을 수 없습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.MENU_HISTORY_NOT_FOUND,
+          }),
+        }),
       );
     });
 
     it('should not return recommendation from different user', async () => {
       const user = UserFactory.create({ id: 1 });
-      mockRecommendationRepository.findOne.mockResolvedValue(null);
+
+      const mockQueryBuilder = createMockQueryBuilder<MenuRecommendation>();
+      mockQueryBuilder.getOne.mockResolvedValue(null);
+
+      mockRecommendationRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder,
+      );
 
       await expect(service.findById(1, user)).rejects.toThrow(
-        BadRequestException,
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.MENU_HISTORY_NOT_FOUND,
+          }),
+        }),
       );
     });
   });
@@ -388,10 +472,11 @@ describe('MenuRecommendationService', () => {
       mockRecommendationRepository.findOne.mockResolvedValue(null);
 
       await expect(service.findOwnedRecommendation(1, user)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.findOwnedRecommendation(1, user)).rejects.toThrow(
-        '본인 추천 이력에만 선택을 연결할 수 있습니다.',
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.MENU_HISTORY_OWNERSHIP_REQUIRED,
+          }),
+        }),
       );
     });
   });

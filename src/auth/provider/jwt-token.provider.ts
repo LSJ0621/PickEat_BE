@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { AUTH_TIMING } from '@/common/constants/business.constants';
 
 @Injectable()
 export class JwtTokenProvider {
@@ -25,8 +26,8 @@ export class JwtTokenProvider {
     const jti = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
     const payload = { email, role, type: 'refresh', jti };
     return this.jwtService.sign(payload, {
-      expiresIn: '7d',
+      expiresIn: AUTH_TIMING.REFRESH_TOKEN_EXPIRES,
       secret: this.refreshTokenSecret,
-    }); // refresh token은 7일 유효
+    });
   }
 }

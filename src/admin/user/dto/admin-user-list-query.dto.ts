@@ -1,4 +1,13 @@
-import { IsOptional, IsString, IsEnum, IsInt, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsInt,
+  Min,
+  Max,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AdminUserListQueryDto {
@@ -17,6 +26,7 @@ export class AdminUserListQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   search?: string;
 
   @IsOptional()
@@ -40,10 +50,16 @@ export class AdminUserListQueryDto {
   role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
 
   @IsOptional()
-  @IsString()
+  @MaxLength(10)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'VALIDATION_DATE_FORMAT:startDate',
+  })
   startDate?: string;
 
   @IsOptional()
-  @IsString()
+  @MaxLength(10)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'VALIDATION_DATE_FORMAT:endDate',
+  })
   endDate?: string;
 }

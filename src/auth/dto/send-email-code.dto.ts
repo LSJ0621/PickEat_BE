@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, MaxLength } from 'class-validator';
 
 export enum EmailPurpose {
   SIGNUP = 'SIGNUP',
@@ -8,6 +8,7 @@ export enum EmailPurpose {
 
 export class SendEmailCodeDto {
   @IsEmail()
+  @MaxLength(255)
   email: string;
 
   @IsOptional()

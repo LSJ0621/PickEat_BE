@@ -78,8 +78,9 @@ describe('HttpExceptionFilter', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.BAD_GATEWAY,
+          errorCode: 'EXTERNAL_API_ERROR',
           error: 'External API Error',
-          message: 'Kakao API Error',
+          message: 'EXTERNAL_API_ERROR',
           provider: 'Kakao',
           path: '/test',
           timestamp: expect.any(String),
@@ -102,8 +103,9 @@ describe('HttpExceptionFilter', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.BAD_REQUEST,
+          errorCode: 'VALIDATION_ERROR',
           error: 'Bad Request',
-          message: 'Bad Request',
+          message: 'VALIDATION_ERROR',
           path: '/test',
           timestamp: expect.any(String),
         }),
@@ -127,7 +129,9 @@ describe('HttpExceptionFilter', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-          message: 'Validation failed',
+          errorCode: 'INTERNAL_SERVER_ERROR',
+          error: 'Unprocessable Entity',
+          message: 'INTERNAL_SERVER_ERROR',
         }),
       );
     });
@@ -145,7 +149,8 @@ describe('HttpExceptionFilter', () => {
       // Assert
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Error 1, Error 2',
+          errorCode: 'VALIDATION_ERROR',
+          message: 'VALIDATION_ERROR',
         }),
       );
     });
@@ -164,8 +169,9 @@ describe('HttpExceptionFilter', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          errorCode: 'INTERNAL_SERVER_ERROR',
           error: 'Internal Server Error',
-          message: '서버 내부 오류가 발생했습니다.',
+          message: 'Unknown error',
           path: '/test',
           timestamp: expect.any(String),
         }),
@@ -186,8 +192,9 @@ describe('HttpExceptionFilter', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          errorCode: 'INTERNAL_SERVER_ERROR',
           error: 'Internal Server Error',
-          message: '서버 내부 오류가 발생했습니다.',
+          message: 'String exception',
         }),
       );
     });

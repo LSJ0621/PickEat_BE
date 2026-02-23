@@ -1,5 +1,5 @@
 /**
- * Naver 검색 API 설정
+ * Naver Search API 설정
  */
 export const NAVER_SEARCH_CONFIG = {
   BASE_URL: 'https://openapi.naver.com',
@@ -9,7 +9,7 @@ export const NAVER_SEARCH_CONFIG = {
 } as const;
 
 /**
- * Naver 지도 API 설정
+ * Naver Map API 설정
  */
 export const NAVER_MAP_CONFIG = {
   BASE_URL: 'https://maps.apigw.ntruss.com',

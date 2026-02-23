@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { User } from '@/user/entities/user.entity';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
 import { UserPlaceStatus } from '@/user-place/enum/user-place-status.enum';
@@ -10,11 +11,12 @@ import { PlaceRecommendationSource } from '../enum/place-recommendation-source.e
 import { CommunityPlaceCandidate } from '../interface/community-places.interface';
 import { OpenAiCommunityPlacesService } from './openai-community-places.service';
 
+const SEARCH_RADIUS_METERS = 2000; // 2km
+const MAX_CANDIDATES = 20;
+
 @Injectable()
 export class CommunityPlaceService {
   private readonly logger = new Logger(CommunityPlaceService.name);
-  private readonly SEARCH_RADIUS_METERS = 2000; // 2km
-  private readonly MAX_CANDIDATES = 20;
 
   constructor(
     @InjectRepository(PlaceRecommendation)
@@ -48,7 +50,7 @@ export class CommunityPlaceService {
     }
 
     this.logger.log(
-      `📍 [주변 장소 발견] count=${nearbyUserPlaces.length}, radius=${this.SEARCH_RADIUS_METERS}m`,
+      `📍 [주변 장소 발견] count=${nearbyUserPlaces.length}, radius=${SEARCH_RADIUS_METERS}m`,
     );
 
     // 2. Convert to CommunityPlaceCandidate[]
@@ -94,6 +96,9 @@ export class CommunityPlaceService {
           menuRecommendation,
           placeId: `user_place_${userPlace.id}`,
           reason: rec.matchReason,
+          reasonTags: Array.isArray(rec.matchReasonTags)
+            ? rec.matchReasonTags
+            : [],
           menuName,
           source: PlaceRecommendationSource.USER,
           userPlace,
@@ -102,19 +107,27 @@ export class CommunityPlaceService {
       .filter((entity): entity is PlaceRecommendation => entity !== null);
 
     if (recommendationEntities.length === 0) {
-      this.logger.warn('⚠️ [추천 엔티티 없음] 유효한 추천 결과가 없습니다.');
+      this.logger.warn('[추천 엔티티 없음] 유효한 추천 결과가 없습니다.');
       return [];
     }
 
     // 6. Save and return
-    const savedRecommendations = await this.placeRecommendationRepository.save(
-      recommendationEntities,
-    );
-
-    this.logger.log(
-      `✅ [커뮤니티 장소 추천 완료] saved=${savedRecommendations.length}`,
-    );
-
+    let savedRecommendations: PlaceRecommendation[];
+    try {
+      savedRecommendations = await this.placeRecommendationRepository.save(
+        recommendationEntities,
+      );
+      this.logger.log(
+        `✅ [커뮤니티 장소 추천 완료] menuRecommendationId=${menuRecommendation.id}, menuName="${menuName}", saved=${savedRecommendations.length}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ [커뮤니티 장소 추천 저장 실패] menuRecommendationId=${menuRecommendation.id}, menuName="${menuName}", count=${recommendationEntities.length}, error=${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.PLACE_RECOMMENDATION_SAVE_FAILED,
+      });
+    }
     return savedRecommendations;
   }
 
@@ -144,10 +157,10 @@ export class CommunityPlaceService {
       .setParameters({
         latitude,
         longitude,
-        radiusMeters: this.SEARCH_RADIUS_METERS,
+        radiusMeters: SEARCH_RADIUS_METERS,
       })
       .orderBy('distance', 'ASC')
-      .limit(this.MAX_CANDIDATES)
+      .limit(MAX_CANDIDATES)
       .getRawAndEntities();
 
     return result.entities.map((entity, index) => {

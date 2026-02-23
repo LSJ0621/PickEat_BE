@@ -26,7 +26,7 @@ export class UserFactory {
     user.socialId = overrides?.socialId ?? null;
     user.socialType = overrides?.socialType ?? null;
     user.name = overrides?.name ?? 'Test User';
-    user.birthYear = overrides?.birthYear ?? null;
+    user.birthDate = overrides?.birthDate ?? null;
     user.gender = overrides?.gender ?? null;
     user.role = overrides?.role ?? 'USER';
     user.preferredLanguage = overrides?.preferredLanguage ?? 'ko';
@@ -184,6 +184,34 @@ export class PlaceRecommendationFactory {
     place.placeId = overrides?.placeId ?? 'ChIJN1t_tDeuEmsRUsoyG83frY4';
     place.reason = overrides?.reason ?? '가까운 거리에 있고 평점이 높습니다.';
     place.menuName = overrides?.menuName ?? '김치찌개';
+    place.reasonTags = overrides?.reasonTags ?? [];
+    if (overrides?.source !== undefined) {
+      place.source = overrides.source;
+    }
+    if (overrides?.nameKo !== undefined) {
+      place.nameKo = overrides.nameKo;
+    }
+    if (overrides?.nameEn !== undefined) {
+      place.nameEn = overrides.nameEn;
+    }
+    if (overrides?.nameLocal !== undefined) {
+      place.nameLocal = overrides.nameLocal;
+    }
+    if (overrides?.addressKo !== undefined) {
+      place.addressKo = overrides.addressKo;
+    }
+    if (overrides?.addressEn !== undefined) {
+      place.addressEn = overrides.addressEn;
+    }
+    if (overrides?.addressLocal !== undefined) {
+      place.addressLocal = overrides.addressLocal;
+    }
+    if (overrides?.placeLatitude !== undefined) {
+      place.placeLatitude = overrides.placeLatitude;
+    }
+    if (overrides?.placeLongitude !== undefined) {
+      place.placeLongitude = overrides.placeLongitude;
+    }
     return place;
   }
 }

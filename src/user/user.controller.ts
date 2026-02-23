@@ -88,7 +88,7 @@ export class UserController {
     const updated = await this.userService.updateProfile(entity.id, updateDto);
     return {
       name: updated.name,
-      birthYear: updated.birthYear,
+      birthDate: updated.birthDate,
       gender: updated.gender,
     };
   }
@@ -106,10 +106,7 @@ export class UserController {
     @Body() dto: UpdateLanguageDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {
-    const entity = await this.userService.getAuthenticatedEntity(
-      authUser.email,
-    );
-    await this.userService.updateEntityLanguage(entity, dto.language);
+    await this.userService.updateEntityLanguage(authUser.email, dto.language);
     return {
       messageCode: MessageCode.USER_LANGUAGE_CHANGED,
     };
@@ -132,7 +129,9 @@ export class UserController {
       authUser.email,
     );
     const addresses = await this.userService.getEntityAddresses(entity);
-    return addresses.map((addr) => this.toAddressResponseDto(addr));
+    return {
+      addresses: addresses.map((addr) => this.toAddressResponseDto(addr)),
+    };
   }
 
   @Post('addresses')

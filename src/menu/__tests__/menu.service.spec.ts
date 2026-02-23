@@ -1,9 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { MenuService } from '../menu.service';
 import { MenuRecommendationService } from '../services/menu-recommendation.service';
 import { MenuSelectionService } from '../services/menu-selection.service';
 import { PlaceService } from '../services/place.service';
+import { GeminiPlacesService } from '../services/gemini-places.service';
+import { PlaceRecommendation } from '../entities/place-recommendation.entity';
 import { PlaceRecommendationSource } from '../enum/place-recommendation-source.enum';
+import { RedisCacheService } from '@/common/cache/cache.service';
+import { createMockRepository } from '../../../test/mocks/repository.mock';
+import { createMockService } from '../../../test/utils/test-helpers';
 import {
   UserFactory,
   MenuRecommendationFactory,
@@ -42,6 +48,10 @@ describe('MenuService (Facade)', () => {
       providers: [
         MenuService,
         {
+          provide: getRepositoryToken(PlaceRecommendation),
+          useValue: createMockRepository(),
+        },
+        {
           provide: MenuRecommendationService,
           useValue: mockMenuRecommendationService,
         },
@@ -52,6 +62,14 @@ describe('MenuService (Facade)', () => {
         {
           provide: PlaceService,
           useValue: mockPlaceService,
+        },
+        {
+          provide: GeminiPlacesService,
+          useValue: { recommendRestaurants: jest.fn() },
+        },
+        {
+          provide: RedisCacheService,
+          useValue: createMockService<RedisCacheService>([]),
         },
       ],
     }).compile();
@@ -69,8 +87,12 @@ describe('MenuService (Facade)', () => {
       const prompt = '오늘 점심 추천해줘';
       const expectedResult = {
         id: 1,
-        recommendations: ['김치찌개', '된장찌개'],
-        reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+        intro: '오늘은 따뜻한 찌개 요리가 어떠신가요?',
+        recommendations: [
+          { condition: '간단한 식사를 원하신다면', menu: '김치찌개' },
+          { condition: '건강한 식사를 원하신다면', menu: '된장찌개' },
+        ],
+        closing: '맛있게 드세요!',
         recommendedAt: new Date(),
         requestAddress: '서울시 강남구',
       };
@@ -271,8 +293,12 @@ describe('MenuService (Facade)', () => {
         recommendations: [
           {
             placeId: 'place-1',
-            name: '맛있는 식당',
+            nameKo: '맛있는 식당',
+            nameEn: 'Delicious Restaurant',
+            nameLocal: null,
             reason: '평점이 높습니다',
+            reasonTags: ['맛집', '인기'],
+            source: 'GEMINI' as const,
           },
         ],
       };
@@ -306,7 +332,11 @@ describe('MenuService (Facade)', () => {
         history: {
           id: 1,
           prompt: '오늘 점심 추천해줘',
-          reason: '한식을 좋아하시는 것 같아 추천드립니다.',
+          intro: '오늘은 따뜻한 찌개 요리가 어떠신가요?',
+          recommendations: [
+            { condition: '간단한 식사를 원하신다면', menu: '김치찌개' },
+          ],
+          closing: '맛있게 드세요!',
           recommendedAt: new Date(),
           requestAddress: '서울시 강남구',
           hasPlaceRecommendations: true,
@@ -315,9 +345,12 @@ describe('MenuService (Facade)', () => {
           {
             placeId: 'place-1',
             reason: '평점이 높습니다',
+            reasonTags: [],
             menuName: '김치찌개',
             name: '맛있는 식당',
+            localizedName: null,
             address: '서울시 강남구',
+            localizedAddress: null,
             rating: 4.5,
             userRatingCount: 100,
             priceLevel: 'PRICE_LEVEL_MODERATE',
@@ -339,7 +372,7 @@ describe('MenuService (Facade)', () => {
 
       mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
       mockPlaceService.buildRecommendationDetailResponse.mockResolvedValue(
-        expectedDetail,
+        expectedDetail as any,
       );
 
       const result = await service.getRecommendationDetail(
@@ -353,44 +386,8 @@ describe('MenuService (Facade)', () => {
       );
       expect(
         mockPlaceService.buildRecommendationDetailResponse,
-      ).toHaveBeenCalledWith(recommendation);
+      ).toHaveBeenCalledWith(recommendation, 'ko');
       expect(result).toEqual(expectedDetail);
-    });
-  });
-
-  describe('recommendRestaurantsWithGooglePlacesAndLlm', () => {
-    it('should delegate to recommendRestaurants method', async () => {
-      const user = UserFactory.create({ id: 1 });
-      const textQuery = '강남역 김치찌개';
-      const menuName = '김치찌개';
-      const menuRecommendationId = 1;
-
-      const expectedResult = {
-        recommendations: [
-          {
-            placeId: 'place-1',
-            name: '맛있는 식당',
-            reason: '평점이 높습니다',
-          },
-        ],
-      };
-
-      mockPlaceService.recommendRestaurants.mockResolvedValue(expectedResult);
-
-      const result = await service.recommendRestaurantsWithGooglePlacesAndLlm(
-        user,
-        textQuery,
-        menuName,
-        menuRecommendationId,
-      );
-
-      expect(mockPlaceService.recommendRestaurants).toHaveBeenCalledWith(
-        user,
-        textQuery,
-        menuName,
-        menuRecommendationId,
-      );
-      expect(result).toEqual(expectedResult);
     });
   });
 
@@ -430,7 +427,9 @@ describe('MenuService (Facade)', () => {
         place: {
           id: placeId,
           name: '맛있는 식당',
+          localizedName: null,
           address: '서울시 강남구',
+          localizedAddress: null,
           location: { latitude: 37.5, longitude: 127.0 },
           rating: 4.5,
           userRatingCount: 100,
@@ -447,7 +446,10 @@ describe('MenuService (Facade)', () => {
 
       const result = await service.getPlaceDetail(placeId);
 
-      expect(mockPlaceService.getPlaceDetail).toHaveBeenCalledWith(placeId);
+      expect(mockPlaceService.getPlaceDetail).toHaveBeenCalledWith(
+        placeId,
+        'ko',
+      );
       expect(result).toEqual(expectedDetail);
     });
   });
@@ -475,6 +477,9 @@ describe('MenuService (Facade)', () => {
       expect(mockPlaceService.searchRestaurantBlogs).toHaveBeenCalledWith(
         query,
         restaurantName,
+        undefined,
+        undefined,
+        undefined,
       );
       expect(result).toEqual(expectedBlogs);
     });

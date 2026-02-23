@@ -2,35 +2,14 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { ExternalApiException } from '../../../common/exceptions/external-api.exception';
-import { ConfigMissingException } from '../../../common/exceptions/config-missing.exception';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { ExternalApiException } from '@/common/exceptions/external-api.exception';
+import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
+import { logOAuthError } from '@/common/utils/external-api-error.util';
 import { GOOGLE_OAUTH_CONFIG } from '../google.constants';
-import { TEST_MODE } from '../../../common/constants/test-mode.constants';
-import { isTestMode } from '../../../common/utils/test-mode.util';
-
-/**
- * Google OAuth 토큰 응답
- */
-export interface GoogleOAuthTokenResponse {
-  access_token: string;
-  expires_in?: number;
-  token_type?: string;
-  scope?: string;
-  id_token?: string;
-}
-
-/**
- * Google 사용자 프로필
- */
-export interface GoogleUserProfile {
-  sub: string;
-  email?: string;
-  email_verified?: boolean;
-  name?: string;
-  picture?: string;
-  given_name?: string;
-  family_name?: string;
-}
+import { GoogleOAuthTokenResponse, GoogleUserProfile } from '../google.types';
+import { TEST_MODE } from '@/common/constants/test-mode.constants';
+import { isTestMode } from '@/common/utils/test-mode.util';
 
 @Injectable()
 export class GoogleOAuthClient {
@@ -87,17 +66,19 @@ export class GoogleOAuthClient {
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
             },
+            timeout: 10000,
           },
         ),
       );
 
       return response.data;
     } catch (error: unknown) {
-      this.logOAuthError('토큰 발급', error);
+      logOAuthError(this.logger, 'Google', error, '토큰 발급');
       throw new ExternalApiException(
         'Google OAuth',
         error,
         'Google 토큰 발급에 실패했습니다.',
+        ErrorCode.EXTERNAL_API_ERROR,
       );
     }
   }
@@ -122,17 +103,19 @@ export class GoogleOAuthClient {
             headers: {
               Authorization: `Bearer ${accessToken}`,
             },
+            timeout: 10000,
           },
         ),
       );
 
       return response.data;
     } catch (error: unknown) {
-      this.logOAuthError('프로필 조회', error);
+      logOAuthError(this.logger, 'Google', error, '프로필 조회');
       throw new ExternalApiException(
         'Google OAuth',
         error,
         'Google 프로필 조회에 실패했습니다.',
+        ErrorCode.EXTERNAL_API_ERROR,
       );
     }
   }
@@ -197,30 +180,6 @@ export class GoogleOAuthClient {
         };
       default:
         return null;
-    }
-  }
-
-  private logOAuthError(operation: string, error: unknown): void {
-    this.logger.error(`=== Google OAuth ${operation} 에러 ===`);
-
-    if (error instanceof Error) {
-      this.logger.error(`에러 타입: ${error.name}`);
-      this.logger.error(`에러 메시지: ${error.message}`);
-    } else {
-      this.logger.error(`에러 메시지: ${String(error)}`);
-    }
-
-    // Check if error has response property (axios error)
-    if (typeof error === 'object' && error !== null && 'response' in error) {
-      const axiosError = error as {
-        response?: { status?: number; data?: unknown };
-      };
-      if (axiosError.response) {
-        this.logger.error(`응답 상태 코드: ${axiosError.response.status}`);
-        this.logger.error(
-          `응답 데이터: ${JSON.stringify(axiosError.response.data)}`,
-        );
-      }
     }
   }
 }

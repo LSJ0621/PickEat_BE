@@ -377,12 +377,12 @@ describe('UserPlaceController', () => {
       userService.getAuthenticatedEntity.mockResolvedValue(user);
       userPlaceService.update.mockResolvedValue(updatedPlace);
 
-      const result = await controller.update(1, dto, authUser);
+      const result = await controller.update(1, dto, [], authUser);
 
       expect(userService.getAuthenticatedEntity).toHaveBeenCalledWith(
         authUser.email,
       );
-      expect(userPlaceService.update).toHaveBeenCalledWith(user.id, 1, dto);
+      expect(userPlaceService.update).toHaveBeenCalledWith(user.id, 1, dto, []);
       expect(result).toMatchObject({
         ...updatedPlace,
         messageCode: MessageCode.USER_PLACE_UPDATED,

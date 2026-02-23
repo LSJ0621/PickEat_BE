@@ -6,6 +6,7 @@ import {
   IsEnum,
   Matches,
   IsString,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { BugReportStatus } from '../enum/bug-report-status.enum';
@@ -31,6 +32,7 @@ export class BugReportListQueryDto {
   status?: BugReportStatus;
 
   @IsOptional()
+  @MaxLength(10)
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'VALIDATION_DATE_FORMAT:date',
   })
@@ -38,9 +40,11 @@ export class BugReportListQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50, { message: 'VALIDATION_MAX_LENGTH:category:50' })
   category?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'VALIDATION_MAX_LENGTH:search:100' })
   search?: string;
 }

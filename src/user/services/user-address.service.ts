@@ -5,8 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
+import { RedisCacheService } from '@/common/cache/cache.service';
+import { CachedUserAddresses } from '@/common/cache/cache.interface';
 import { USER_LIMITS } from '../../common/constants/business.constants';
 import { CreateUserAddressDto } from '../dto/create-user-address.dto';
 import { UpdateUserAddressDto } from '../dto/update-user-address.dto';
@@ -21,13 +23,67 @@ export class UserAddressService {
   constructor(
     @InjectRepository(UserAddress)
     private readonly userAddressRepository: Repository<UserAddress>,
+    private readonly cacheService: RedisCacheService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getAddresses(entity: User): Promise<UserAddress[]> {
-    return this.userAddressRepository.find({
+    // 1. 캐시 조회
+    const cached = await this.cacheService.getUserAddresses(entity.id);
+    if (cached) {
+      this.logger.debug(`[주소 캐시 HIT] userId=${entity.id}`);
+      // Transform cached data to UserAddress-like objects
+      // Note: These are plain objects, not TypeORM entities
+      return cached.addresses.map((addr) => {
+        const address = new UserAddress();
+        address.id = addr.id;
+        address.roadAddress = addr.roadAddress;
+        address.postalCode = addr.postalCode;
+        address.latitude = addr.latitude;
+        address.longitude = addr.longitude;
+        address.isDefault = addr.isDefault;
+        address.isSearchAddress = addr.isSearchAddress;
+        address.alias = addr.alias;
+        address.createdAt = new Date(addr.createdAt);
+        address.updatedAt = new Date(addr.updatedAt);
+        return address;
+      });
+    }
+
+    this.logger.debug(`[주소 캐시 MISS] userId=${entity.id}`);
+
+    // 2. DB 조회
+    const addresses = await this.userAddressRepository.find({
       where: { user: { id: entity.id }, deletedAt: IsNull() },
       order: { createdAt: 'DESC' },
     });
+
+    // 3. 캐시 저장 (비동기, 에러 무시)
+    this.cacheService
+      .setUserAddresses(entity.id, this.serializeAddresses(addresses))
+      .catch((err) => this.logger.warn(`주소 캐시 저장 실패: ${err.message}`));
+
+    return addresses;
+  }
+
+  /**
+   * UserAddress 엔티티를 캐시 가능한 형태로 직렬화
+   */
+  private serializeAddresses(
+    addresses: UserAddress[],
+  ): CachedUserAddresses['addresses'] {
+    return addresses.map((addr) => ({
+      id: addr.id,
+      roadAddress: addr.roadAddress,
+      postalCode: addr.postalCode,
+      latitude: addr.latitude,
+      longitude: addr.longitude,
+      isDefault: addr.isDefault,
+      isSearchAddress: addr.isSearchAddress,
+      alias: addr.alias,
+      createdAt: addr.createdAt.toISOString(),
+      updatedAt: addr.updatedAt.toISOString(),
+    }));
   }
 
   async createAddress(
@@ -51,32 +107,46 @@ export class UserAddressService {
     const shouldSetSearchAddress =
       activeCount === 0 || isSearchAddress === true;
 
-    if (shouldSetDefault) {
-      await this.userAddressRepository.update(
-        { ...whereCondition, isDefault: true },
-        { isDefault: false },
-      );
-    }
+    const saved = await this.dataSource.transaction(async (manager) => {
+      if (shouldSetDefault) {
+        await manager.update(
+          UserAddress,
+          { ...whereCondition, isDefault: true },
+          { isDefault: false },
+        );
+      }
 
-    if (shouldSetSearchAddress) {
-      await this.userAddressRepository.update(
-        { ...whereCondition, isSearchAddress: true },
-        { isSearchAddress: false },
-      );
-    }
+      if (shouldSetSearchAddress) {
+        await manager.update(
+          UserAddress,
+          { ...whereCondition, isSearchAddress: true },
+          { isSearchAddress: false },
+        );
+      }
 
-    const address = this.userAddressRepository.create({
-      user: entity,
-      roadAddress: selectedAddress.roadAddress || selectedAddress.address,
-      postalCode: selectedAddress.postalCode,
-      latitude: parseFloat(selectedAddress.latitude),
-      longitude: parseFloat(selectedAddress.longitude),
-      alias: alias || null,
-      isDefault: shouldSetDefault,
-      isSearchAddress: shouldSetSearchAddress,
+      const address = manager.create(UserAddress, {
+        user: entity,
+        roadAddress: selectedAddress.roadAddress || selectedAddress.address,
+        postalCode: selectedAddress.postalCode,
+        latitude: parseFloat(selectedAddress.latitude),
+        longitude: parseFloat(selectedAddress.longitude),
+        alias: alias || null,
+        isDefault: shouldSetDefault,
+        isSearchAddress: shouldSetSearchAddress,
+      });
+
+      return manager.save(address);
     });
 
-    return this.userAddressRepository.save(address);
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
+
+    return saved;
   }
 
   async updateAddress(
@@ -96,29 +166,43 @@ export class UserAddressService {
 
     const whereCondition = { user: { id: entity.id }, deletedAt: IsNull() };
 
-    if (dto.isDefault === true && !address.isDefault) {
-      await this.userAddressRepository.update(
-        { ...whereCondition, isDefault: true },
-        { isDefault: false },
-      );
-    }
+    const saved = await this.dataSource.transaction(async (manager) => {
+      if (dto.isDefault === true && !address.isDefault) {
+        await manager.update(
+          UserAddress,
+          { ...whereCondition, isDefault: true },
+          { isDefault: false },
+        );
+      }
 
-    if (dto.isSearchAddress === true && !address.isSearchAddress) {
-      await this.userAddressRepository.update(
-        { ...whereCondition, isSearchAddress: true },
-        { isSearchAddress: false },
-      );
-    }
+      if (dto.isSearchAddress === true && !address.isSearchAddress) {
+        await manager.update(
+          UserAddress,
+          { ...whereCondition, isSearchAddress: true },
+          { isSearchAddress: false },
+        );
+      }
 
-    if (dto.roadAddress !== undefined) address.roadAddress = dto.roadAddress;
-    if (dto.latitude !== undefined) address.latitude = dto.latitude;
-    if (dto.longitude !== undefined) address.longitude = dto.longitude;
-    if (dto.alias !== undefined) address.alias = dto.alias;
-    if (dto.isDefault !== undefined) address.isDefault = dto.isDefault;
-    if (dto.isSearchAddress !== undefined)
-      address.isSearchAddress = dto.isSearchAddress;
+      if (dto.roadAddress !== undefined) address.roadAddress = dto.roadAddress;
+      if (dto.latitude !== undefined) address.latitude = dto.latitude;
+      if (dto.longitude !== undefined) address.longitude = dto.longitude;
+      if (dto.alias !== undefined) address.alias = dto.alias;
+      if (dto.isDefault !== undefined) address.isDefault = dto.isDefault;
+      if (dto.isSearchAddress !== undefined)
+        address.isSearchAddress = dto.isSearchAddress;
 
-    return this.userAddressRepository.save(address);
+      return manager.save(address);
+    });
+
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
+
+    return saved;
   }
 
   async deleteAddress(entity: User, addressId: number): Promise<void> {
@@ -138,27 +222,32 @@ export class UserAddressService {
       deletedAt: IsNull(),
     };
 
-    if (address.isDefault) {
-      const otherAddress = await this.userAddressRepository.findOne({
-        where: whereCondition,
-      });
-      if (otherAddress) {
-        otherAddress.isDefault = true;
-        await this.userAddressRepository.save(otherAddress);
+    await this.dataSource.transaction(async (manager) => {
+      if (address.isDefault || address.isSearchAddress) {
+        const otherAddress = await manager.findOne(UserAddress, {
+          where: whereCondition,
+        });
+        if (otherAddress) {
+          if (address.isDefault) {
+            otherAddress.isDefault = true;
+          }
+          if (address.isSearchAddress) {
+            otherAddress.isSearchAddress = true;
+          }
+          await manager.save(otherAddress);
+        }
       }
-    }
 
-    if (address.isSearchAddress) {
-      const otherAddress = await this.userAddressRepository.findOne({
-        where: whereCondition,
-      });
-      if (otherAddress) {
-        otherAddress.isSearchAddress = true;
-        await this.userAddressRepository.save(otherAddress);
-      }
-    }
+      await manager.softRemove(address);
+    });
 
-    await this.userAddressRepository.softRemove(address);
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
   }
 
   async deleteAddresses(entity: User, addressIds: number[]): Promise<void> {
@@ -195,23 +284,33 @@ export class UserAddressService {
       (addr) => addr.isSearchAddress,
     );
 
-    for (const address of addresses) {
-      await this.userAddressRepository.softRemove(address);
-    }
-
-    if (deletedSearchAddresses.length > 0) {
-      const remainingAddress = await this.userAddressRepository.findOne({
-        where: {
-          user: { id: entity.id },
-          id: Not(In(addressIds)),
-          deletedAt: IsNull(),
-        },
-      });
-      if (remainingAddress) {
-        remainingAddress.isSearchAddress = true;
-        await this.userAddressRepository.save(remainingAddress);
+    await this.dataSource.transaction(async (manager) => {
+      for (const address of addresses) {
+        await manager.softRemove(address);
       }
-    }
+
+      if (deletedSearchAddresses.length > 0) {
+        const remainingAddress = await manager.findOne(UserAddress, {
+          where: {
+            user: { id: entity.id },
+            id: Not(In(addressIds)),
+            deletedAt: IsNull(),
+          },
+        });
+        if (remainingAddress) {
+          remainingAddress.isSearchAddress = true;
+          await manager.save(remainingAddress);
+        }
+      }
+    });
+
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
   }
 
   async setDefaultAddress(
@@ -228,13 +327,26 @@ export class UserAddressService {
       });
     }
 
-    await this.userAddressRepository.update(
-      { user: { id: entity.id }, isDefault: true, deletedAt: IsNull() },
-      { isDefault: false },
-    );
+    const saved = await this.dataSource.transaction(async (manager) => {
+      await manager.update(
+        UserAddress,
+        { user: { id: entity.id }, isDefault: true, deletedAt: IsNull() },
+        { isDefault: false },
+      );
 
-    address.isDefault = true;
-    return this.userAddressRepository.save(address);
+      address.isDefault = true;
+      return manager.save(address);
+    });
+
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
+
+    return saved;
   }
 
   async setSearchAddress(
@@ -251,13 +363,26 @@ export class UserAddressService {
       });
     }
 
-    await this.userAddressRepository.update(
-      { user: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() },
-      { isSearchAddress: false },
-    );
+    const saved = await this.dataSource.transaction(async (manager) => {
+      await manager.update(
+        UserAddress,
+        { user: { id: entity.id }, isSearchAddress: true, deletedAt: IsNull() },
+        { isSearchAddress: false },
+      );
 
-    address.isSearchAddress = true;
-    return this.userAddressRepository.save(address);
+      address.isSearchAddress = true;
+      return manager.save(address);
+    });
+
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
+    });
+
+    return saved;
   }
 
   async getDefaultAddress(entity: User): Promise<UserAddress | null> {
@@ -300,6 +425,8 @@ export class UserAddressService {
       where: { user: { id: entity.id }, deletedAt: IsNull() },
     });
 
+    let saved: UserAddress;
+
     if (existingAddresses === 0) {
       const newAddress = this.userAddressRepository.create({
         user: entity,
@@ -311,34 +438,44 @@ export class UserAddressService {
         isSearchAddress: true,
         alias: null,
       });
-      return this.userAddressRepository.save(newAddress);
+      saved = await this.userAddressRepository.save(newAddress);
+    } else {
+      const searchAddress = await this.getSearchAddress(entity);
+      if (searchAddress) {
+        searchAddress.roadAddress = address;
+        searchAddress.postalCode = selectedAddress.postalCode || null;
+        searchAddress.latitude = latitude;
+        searchAddress.longitude = longitude;
+        saved = await this.userAddressRepository.save(searchAddress);
+      } else {
+        const firstAddress = await this.userAddressRepository.findOne({
+          where: { user: { id: entity.id }, deletedAt: IsNull() },
+          order: { createdAt: 'ASC' },
+        });
+
+        if (!firstAddress) {
+          throw new BadRequestException({
+            errorCode: ErrorCode.ADDRESS_UPDATE_FAILED,
+          });
+        }
+
+        firstAddress.roadAddress = address;
+        firstAddress.postalCode = selectedAddress.postalCode || null;
+        firstAddress.latitude = latitude;
+        firstAddress.longitude = longitude;
+        firstAddress.isSearchAddress = true;
+        saved = await this.userAddressRepository.save(firstAddress);
+      }
     }
 
-    const searchAddress = await this.getSearchAddress(entity);
-    if (searchAddress) {
-      searchAddress.roadAddress = address;
-      searchAddress.postalCode = selectedAddress.postalCode || null;
-      searchAddress.latitude = latitude;
-      searchAddress.longitude = longitude;
-      return this.userAddressRepository.save(searchAddress);
-    }
-
-    const firstAddress = await this.userAddressRepository.findOne({
-      where: { user: { id: entity.id }, deletedAt: IsNull() },
-      order: { createdAt: 'ASC' },
+    // 캐시 무효화 (주소 + 프로필)
+    this.cacheService.invalidateUserAddresses(entity.id).catch((err) => {
+      this.logger.warn(`주소 캐시 무효화 실패: ${err.message}`);
+    });
+    this.cacheService.invalidateUserProfile(entity.id).catch((err) => {
+      this.logger.warn(`프로필 캐시 무효화 실패: ${err.message}`);
     });
 
-    if (firstAddress) {
-      firstAddress.roadAddress = address;
-      firstAddress.postalCode = selectedAddress.postalCode || null;
-      firstAddress.latitude = latitude;
-      firstAddress.longitude = longitude;
-      firstAddress.isSearchAddress = true;
-      return this.userAddressRepository.save(firstAddress);
-    }
-
-    throw new BadRequestException({
-      errorCode: ErrorCode.ADDRESS_UPDATE_FAILED,
-    });
+    return saved;
   }
 }

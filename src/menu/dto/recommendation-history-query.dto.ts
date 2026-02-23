@@ -1,4 +1,11 @@
-import { IsOptional, Matches, IsInt, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  Matches,
+  IsInt,
+  Min,
+  Max,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class RecommendationHistoryQueryDto {
@@ -16,6 +23,7 @@ export class RecommendationHistoryQueryDto {
   limit?: number = 10;
 
   @IsOptional()
+  @MaxLength(10)
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'date must be in YYYY-MM-DD format',
   })

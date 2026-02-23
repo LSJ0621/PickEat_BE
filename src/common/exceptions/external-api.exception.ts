@@ -8,7 +8,7 @@ export class ExternalApiException extends HttpException {
     public readonly provider: string,
     error?: unknown,
     message?: string,
-    public readonly errorCode?: ErrorCode,
+    public readonly errorCode: ErrorCode = ErrorCode.EXTERNAL_API_ERROR,
   ) {
     // Convert unknown error to Error if possible
     const errorObj = error instanceof Error ? error : undefined;

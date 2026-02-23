@@ -1,14 +1,16 @@
 // NOTE: main.ts는 NestJS 컨텍스트 외부이므로 process.env 직접 사용 허용
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import * as compression from 'compression';
 import * as cookieParser from 'cookie-parser';
-import { Logger } from 'nestjs-pino';
+import helmet from 'helmet';
+import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useLogger(app.get(Logger));
+  app.useLogger(app.get(PinoLogger));
   app.useGlobalFilters(app.get(HttpExceptionFilter));
   app.useGlobalPipes(
     new ValidationPipe({
@@ -17,13 +19,51 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (req.headers['accept']?.includes('text/event-stream')) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    }),
+  );
   app.use(cookieParser());
+  const corsOrigin = process.env.CORS_ORIGIN;
+  if (!corsOrigin) {
+    throw new Error('CORS_ORIGIN environment variable is required');
+  }
+  const origins = corsOrigin
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+    origin: origins.length === 1 ? origins[0] : origins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,
   });
   await app.listen(process.env.PORT ?? 3000);
 }
+const processLogger = new Logger('Process');
+
+process.on('unhandledRejection', (reason: unknown) => {
+  processLogger.error(
+    'Unhandled promise rejection',
+    reason instanceof Error ? reason.stack : String(reason),
+  );
+});
+
+process.on('uncaughtException', (error: Error) => {
+  processLogger.error('Uncaught exception — shutting down', error.stack);
+  process.exit(1);
+});
+
 void bootstrap();

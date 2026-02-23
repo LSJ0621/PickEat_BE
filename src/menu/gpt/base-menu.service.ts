@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
 import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
 import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 import { ValidationContext } from '../interfaces/menu-validation.interface';
@@ -17,6 +18,7 @@ import {
   OpenAIResponse,
 } from '@/external/openai/openai.types';
 import { normalizeMenuNames } from '@/common/utils/ai-response.util';
+import { logOpenAiTokenUsage } from '@/common/utils/openai-token-logger.util';
 
 /**
  * 공통 메뉴 추천 서비스 베이스 클래스
@@ -93,22 +95,19 @@ export abstract class BaseMenuService implements OnModuleInit {
         jsonSchema,
       );
 
-      const response = await this.openai.chat.completions.create(requestParams);
+      // Retry OpenAI API call with exponential backoff (max 3 retries)
+      const response = await retryWithExponentialBackoff(
+        () => this.openai.chat.completions.create(requestParams),
+        {
+          maxRetries: 3,
+          initialDelayMs: 1000,
+          maxDelayMs: 10000,
+        },
+        this.logger,
+      );
 
       const openAIResponse = response as unknown as OpenAIResponse;
-      const usage = openAIResponse.usage;
-
-      if (usage) {
-        const promptTokens =
-          usage.prompt_tokens ?? usage.input_tokens ?? usage.total_tokens ?? 0;
-        const completionTokens =
-          usage.completion_tokens ?? usage.output_tokens ?? 0;
-        const totalTokensRaw =
-          usage.total_tokens ?? promptTokens + completionTokens;
-        this.logger.log(
-          `[Menu recommendation LLM token usage] model=${this.getModel()}, prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokensRaw}`,
-        );
-      }
+      logOpenAiTokenUsage(this.logger, this.getModel(), openAIResponse.usage);
 
       const choice = response.choices[0];
       if (!choice) {

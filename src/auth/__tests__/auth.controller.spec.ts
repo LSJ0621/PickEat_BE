@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response, Request } from 'express';
 import { Repository } from 'typeorm';
 import { MessageCode } from '@/common/constants/message-codes';
@@ -28,6 +29,9 @@ describe('AuthController', () => {
     latitude: null,
     longitude: null,
     preferences: null,
+    birthDate: null,
+    gender: null,
+    preferredLanguage: 'ko' as const,
   };
 
   const mockUser: User = {
@@ -35,6 +39,8 @@ describe('AuthController', () => {
     email: 'test@example.com',
     password: '$2b$10$hashedpassword',
     name: 'Test User',
+    birthDate: null,
+    gender: null,
     role: 'USER',
     emailVerified: true,
     reRegisterEmailVerified: false,
@@ -55,6 +61,7 @@ describe('AuthController', () => {
     addresses: [],
     recommendations: [],
     menuSelections: [],
+    tasteAnalysis: null,
   } as User;
 
   beforeEach(async () => {
@@ -75,6 +82,7 @@ describe('AuthController', () => {
       logout: jest.fn(),
       reRegister: jest.fn(),
       reRegisterSocial: jest.fn(),
+      findDeletedUserByEmail: jest.fn(),
     };
 
     const mockEmailVerificationService = {
@@ -111,6 +119,13 @@ describe('AuthController', () => {
         {
           provide: UserService,
           useValue: mockUserService,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+            getOrThrow: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(User),
@@ -330,7 +345,7 @@ describe('AuthController', () => {
         purpose: EmailPurpose.SIGNUP,
       };
 
-      emailVerificationService.verifyCode.mockResolvedValue(true);
+      emailVerificationService.verifyCode.mockResolvedValue(undefined);
       userService.findByEmail.mockResolvedValue(mockUser);
 
       const result = await controller.verifyEmailCode(verifyEmailCodeDto);
@@ -354,15 +369,14 @@ describe('AuthController', () => {
         purpose: EmailPurpose.RE_REGISTER,
       };
 
-      userRepository.findOne.mockResolvedValue(deletedUser);
-      emailVerificationService.verifyCode.mockResolvedValue(true);
+      authService.findDeletedUserByEmail.mockResolvedValue(deletedUser);
+      emailVerificationService.verifyCode.mockResolvedValue(undefined);
 
       const result = await controller.verifyEmailCode(verifyEmailCodeDto);
 
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { email: verifyEmailCodeDto.email },
-        withDeleted: true,
-      });
+      expect(authService.findDeletedUserByEmail).toHaveBeenCalledWith(
+        verifyEmailCodeDto.email,
+      );
       expect(result.success).toBe(true);
     });
 
@@ -373,7 +387,7 @@ describe('AuthController', () => {
         purpose: EmailPurpose.RE_REGISTER,
       };
 
-      userRepository.findOne.mockResolvedValue(mockUser);
+      authService.findDeletedUserByEmail.mockResolvedValue(mockUser);
 
       await expect(
         controller.verifyEmailCode(verifyEmailCodeDto),
@@ -462,6 +476,9 @@ describe('AuthController', () => {
         address: null,
         latitude: null,
         longitude: null,
+        birthDate: null,
+        gender: null,
+        preferredLanguage: 'ko' as const,
       };
 
       authService.getUserProfile.mockResolvedValue(expectedProfile);

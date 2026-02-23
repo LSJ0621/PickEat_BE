@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { BugReportSchedulerService } from '../../services/bug-report-scheduler.service';
 import { BugReportNotificationService } from '../../services/bug-report-notification.service';
 import { DiscordMessageBuilderService } from '../../services/discord-message-builder.service';
@@ -18,6 +19,7 @@ describe('BugReportSchedulerService', () => {
   let discordWebhookClient: ReturnType<typeof createMockDiscordWebhookClient>;
   let notificationService: jest.Mocked<BugReportNotificationService>;
   let messageBuilder: jest.Mocked<DiscordMessageBuilderService>;
+  let dataSource: jest.Mocked<DataSource>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -30,6 +32,16 @@ describe('BugReportSchedulerService', () => {
     messageBuilder = createMockService<DiscordMessageBuilderService>([
       'buildThresholdAlertEmbed',
     ]);
+
+    const mockQueryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      release: jest.fn().mockResolvedValue(undefined),
+    };
+
+    dataSource = {
+      createQueryRunner: jest.fn(() => mockQueryRunner),
+    } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -49,6 +61,10 @@ describe('BugReportSchedulerService', () => {
         {
           provide: DiscordMessageBuilderService,
           useValue: messageBuilder,
+        },
+        {
+          provide: DataSource,
+          useValue: dataSource,
         },
       ],
     }).compile();

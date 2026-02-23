@@ -1,8 +1,6 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModuleAsyncOptions } from '@nestjs/typeorm';
-import { truncateSync } from 'fs';
-import { truncate } from 'fs/promises';
-
+import { DATABASE_POOL } from '../constants/business.constants';
 export const databaseConfig: TypeOrmModuleAsyncOptions = {
   imports: [ConfigModule],
   inject: [ConfigService],
@@ -15,6 +13,13 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     database: config.getOrThrow<string>('POSTGRES_DB'),
     autoLoadEntities: true,
     synchronize: config.getOrThrow<string>('POSTGRES_SYNCHRONIZE') === 'true',
-    dropSchema: true,
+    dropSchema: false,
+    extra: {
+      max: DATABASE_POOL.MAX,
+      connectionTimeoutMillis: DATABASE_POOL.CONNECTION_TIMEOUT_MS,
+      idleTimeoutMillis: DATABASE_POOL.IDLE_TIMEOUT_MS,
+    },
+    retryAttempts: DATABASE_POOL.RETRY_ATTEMPTS,
+    retryDelay: DATABASE_POOL.RETRY_DELAY_MS,
   }),
 };

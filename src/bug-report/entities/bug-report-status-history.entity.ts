@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
@@ -24,10 +25,13 @@ export class BugReportStatusHistory {
   @Column({ type: 'varchar', length: 20 })
   status: string;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'changed_by_id' })
-  changedBy: User;
+  changedBy: User | null;
 
   @CreateDateColumn({ name: 'changed_at' })
   changedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }
