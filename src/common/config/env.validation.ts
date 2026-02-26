@@ -153,15 +153,6 @@ class EnvironmentVariables {
   @IsNotEmpty()
   OAUTH_GOOGLE_REDIRECT_URI: string;
 
-  // Docker Compose / Monitoring
-  @IsString()
-  @IsNotEmpty()
-  GRAFANA_ADMIN_USER: string;
-
-  @IsString()
-  @IsNotEmpty()
-  GRAFANA_ADMIN_PASSWORD: string;
-
   // Admin User (optional, for initial seeding)
   @IsString()
   @IsNotEmpty()

@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pickeat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      CORS_ORIGIN: http://localhost:8080
+      APP_URL: http://localhost:3000
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pickeat_test
+      POSTGRES_SYNCHRONIZE: true
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      JWT_SECRET: test-jwt-secret
+      JWT_REFRESH_SECRET: test-jwt-refresh-secret
+      EMAIL_HOST: smtp.test.com
+      EMAIL_PORT: 587
+      EMAIL_SECURE: false
+      EMAIL_ADDRESS: test@test.com
+      EMAIL_PASSWORD: test-password
+      OPENAI_API_KEY: sk-test
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_MENU_MODEL: gpt-4o-mini
+      OPENAI_PREFERENCE_MODEL: gpt-4o-mini
+      OPENAI_PLACES_MODEL: gpt-4o-mini
+      OPENAI_VALIDATION_MODEL: gpt-4o-mini
+      OAUTH_KAKAO_CLIENT_ID: test-kakao-id
+      OAUTH_KAKAO_REDIRECT_URI: http://localhost:8080/oauth/kakao
+      GOOGLE_API_KEY: test-google-key
+      GOOGLE_CSE_CX: test-cse-cx
+      OAUTH_GOOGLE_CLIENT_ID: test-google-id
+      OAUTH_GOOGLE_CLIENT_SECRET: test-google-secret
+      OAUTH_GOOGLE_REDIRECT_URI: http://localhost:8080/oauth/google
+      ADMIN_NAME: admin
+      ADMIN_EMAIL: admin@test.com
+      ADMIN_PASSWORD: admin-password
+      ADMIN_ROLE: admin
+      AWS_S3_ACCESS_KEY_ID: test-s3-key
+      AWS_S3_SECRET_ACCESS_KEY: test-s3-secret
+      AWS_S3_BUCKET: test-bucket
+      AWS_S3_REGION: ap-northeast-2
+      AWS_S3_BUCKET_PUBLIC: false
+      DISCORD_BUG_REPORT_WEBHOOK_URL: https://discord.com/api/webhooks/test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Test
+        run: pnpm run test

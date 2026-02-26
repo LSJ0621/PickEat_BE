@@ -16,7 +16,7 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
       config.get<string>('NODE_ENV') === 'production'
         ? false
         : config.getOrThrow<string>('POSTGRES_SYNCHRONIZE') === 'true',
-    dropSchema: true,
+    dropSchema: config.get<string>('NODE_ENV') === 'test',
     ssl:
       config.get<string>('NODE_ENV') === 'production'
         ? { rejectUnauthorized: true }
