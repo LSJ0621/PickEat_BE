@@ -1,4 +1,4 @@
-import { PlaceCandidate } from '../../../menu/interfaces/openai-places.interface';
+import { PlaceCandidate } from '@/menu/interfaces/openai-places.interface';
 
 /**
  * Google Places based restaurant recommendation prompts
@@ -71,12 +71,6 @@ export function getGooglePlacesSystemPrompt(
     ? GOOGLE_PLACES_SYSTEM_PROMPT_EN
     : GOOGLE_PLACES_SYSTEM_PROMPT_KO;
 }
-
-/**
- * @deprecated Use getGooglePlacesSystemPrompt() instead
- * Maintained for backward compatibility
- */
-export const GOOGLE_PLACES_SYSTEM_PROMPT = GOOGLE_PLACES_SYSTEM_PROMPT_KO;
 
 /**
  * Generate user prompt
@@ -185,10 +179,3 @@ export function getGooglePlacesRecommendationsJsonSchema(
     additionalProperties: false,
   } as const;
 }
-
-/**
- * @deprecated Use getGooglePlacesRecommendationsJsonSchema() instead
- * Maintained for backward compatibility
- */
-export const GOOGLE_PLACES_RECOMMENDATIONS_JSON_SCHEMA =
-  getGooglePlacesRecommendationsJsonSchema('en');

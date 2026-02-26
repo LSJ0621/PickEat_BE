@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { Gpt51MenuService } from '../../services/gpt51-menu.service';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
-import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts';
+import { MENU_RECOMMENDATIONS_JSON_SCHEMA } from '@/external/openai/prompts/menu-recommendation.prompts';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 
 describe('Gpt51MenuService', () => {

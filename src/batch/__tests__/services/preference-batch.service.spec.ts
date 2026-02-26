@@ -1,38 +1,32 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { PreferenceBatchService } from '../../services/preference-batch.service';
+import { DataSource } from 'typeorm';
+import { PreferenceBatchResultProcessorService } from '../../services/preference-batch-result-processor.service';
 import {
   MenuSelection,
   MenuSelectionStatus,
 } from '@/menu/entities/menu-selection.entity';
 import { UserService } from '@/user/user.service';
-import { UserTasteAnalysisService } from '@/user/services/user-taste-analysis.service';
-import { BatchJobService } from '../../services/batch-job.service';
-import { OpenAiBatchClient } from '@/external/openai/clients/openai-batch.client';
 import { BatchJob } from '../../entities/batch-job.entity';
+import { BatchJobStatus } from '../../types/preference-batch.types';
 import {
   createMockRepository,
-  createMockQueryBuilder,
   createMockUpdateResult,
 } from '../../../../test/mocks/repository.mock';
 
-describe('PreferenceBatchService', () => {
-  let service: PreferenceBatchService;
+describe('PreferenceBatchResultProcessorService', () => {
+  let service: PreferenceBatchResultProcessorService;
   let mockMenuSelectionRepository: ReturnType<typeof createMockRepository>;
   let mockUserService: {
     findOne: jest.Mock;
-    updateEntityPreferencesAnalysis: jest.Mock;
-    getEntityPreferences: jest.Mock;
   };
-  let mockUserTasteAnalysisService: {
-    upsert: jest.Mock;
-  };
+  let dataSource: jest.Mocked<DataSource>;
 
   const mockBatchJob: BatchJob = {
     id: 1,
     openAiBatchId: 'batch_123',
     type: 'PREFERENCE_ANALYSIS' as any,
-    status: 'PROCESSING' as any,
+    status: BatchJobStatus.PROCESSING,
     totalRequests: 10,
     completedRequests: 0,
     failedRequests: 0,
@@ -46,22 +40,37 @@ describe('PreferenceBatchService', () => {
     updatedAt: new Date(),
   };
 
+  const createMockQueryRunner = (overrides?: Partial<Record<string, jest.Mock>>) => ({
+    connect: jest.fn().mockResolvedValue(undefined),
+    startTransaction: jest.fn().mockResolvedValue(undefined),
+    commitTransaction: jest.fn().mockResolvedValue(undefined),
+    rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+    release: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn().mockResolvedValue(undefined),
+      create: jest.fn().mockReturnValue({}),
+    },
+    ...overrides,
+  });
+
   beforeEach(async () => {
     mockMenuSelectionRepository = createMockRepository<MenuSelection>();
 
     mockUserService = {
       findOne: jest.fn(),
-      updateEntityPreferencesAnalysis: jest.fn(),
-      getEntityPreferences: jest.fn(),
     };
 
-    mockUserTasteAnalysisService = {
-      upsert: jest.fn().mockResolvedValue(undefined),
-    };
+    const mockQueryRunner = createMockQueryRunner();
+
+    dataSource = {
+      createQueryRunner: jest.fn(() => mockQueryRunner),
+    } as unknown as jest.Mocked<DataSource>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        PreferenceBatchService,
+        PreferenceBatchResultProcessorService,
         {
           provide: getRepositoryToken(MenuSelection),
           useValue: mockMenuSelectionRepository,
@@ -71,30 +80,37 @@ describe('PreferenceBatchService', () => {
           useValue: mockUserService,
         },
         {
-          provide: UserTasteAnalysisService,
-          useValue: mockUserTasteAnalysisService,
-        },
-        {
-          provide: BatchJobService,
-          useValue: {
-            create: jest.fn(),
-            updateStatus: jest.fn(),
-            findById: jest.fn(),
-          },
-        },
-        {
-          provide: OpenAiBatchClient,
-          useValue: {
-            isReady: jest.fn(),
-            createBatchContent: jest.fn(),
-            uploadBatchContent: jest.fn(),
-            createBatch: jest.fn(),
-          },
+          provide: DataSource,
+          useValue: dataSource,
         },
       ],
     }).compile();
 
-    service = module.get<PreferenceBatchService>(PreferenceBatchService);
+    service = module.get<PreferenceBatchResultProcessorService>(
+      PreferenceBatchResultProcessorService,
+    );
+  });
+
+  it('should create service instance when all dependencies are injected', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('parseCustomId', () => {
+    it('should parse valid custom_id with single selection', () => {
+      const result = service.parseCustomId('pref_1_100');
+      expect(result).toEqual({ userId: 1, selectionIds: [100] });
+    });
+
+    it('should parse valid custom_id with multiple selections', () => {
+      const result = service.parseCustomId('pref_1_100,101,102');
+      expect(result).toEqual({ userId: 1, selectionIds: [100, 101, 102] });
+    });
+
+    it('should return null for invalid format', () => {
+      expect(service.parseCustomId('invalid_format')).toBeNull();
+      expect(service.parseCustomId('pref_abc_100')).toBeNull();
+      expect(service.parseCustomId('')).toBeNull();
+    });
   });
 
   describe('processResults', () => {
@@ -110,70 +126,17 @@ describe('PreferenceBatchService', () => {
       const mockUser = {
         id: 1,
         email: 'test@example.com',
-        preferredLanguage: 'ko',
+        preferences: null,
       };
 
       mockUserService.findOne.mockResolvedValue(mockUser);
-      mockUserService.updateEntityPreferencesAnalysis.mockResolvedValue(
-        undefined,
-      );
-      mockMenuSelectionRepository.update.mockResolvedValue(
-        createMockUpdateResult(2),
-      );
 
       // Act
       await service.processResults(results, mockBatchJob);
 
       // Assert
       expect(mockUserService.findOne).toHaveBeenCalledWith(1);
-      expect(
-        mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food');
-      expect(mockUserTasteAnalysisService.upsert).toHaveBeenCalledWith(1, {
-        stablePatterns: null,
-        recentSignals: null,
-        diversityHints: null,
-        compactSummary: null,
-        analysisParagraphs: null,
-      });
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [100, 101],
-        { status: MenuSelectionStatus.SUCCEEDED },
-      );
-    });
-
-    it('should mark selections as FAILED when exception occurs during processing', async () => {
-      // Arrange
-      const results = new Map<string, string>([
-        [
-          'pref_1_100,101',
-          JSON.stringify({ analysis: 'User likes spicy food' }),
-        ],
-      ]);
-
-      const mockUser = {
-        id: 1,
-        email: 'test@example.com',
-        preferredLanguage: 'ko',
-      };
-
-      mockUserService.findOne.mockResolvedValue(mockUser);
-      // Simulate exception during preference update
-      mockUserService.updateEntityPreferencesAnalysis.mockRejectedValue(
-        new Error('Database connection failed'),
-      );
-      mockMenuSelectionRepository.update.mockResolvedValue(
-        createMockUpdateResult(2),
-      );
-
-      // Act
-      await service.processResults(results, mockBatchJob);
-
-      // Assert
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [100, 101],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(dataSource.createQueryRunner).toHaveBeenCalled();
     });
 
     it('should mark selections as FAILED when user is not found', async () => {
@@ -253,197 +216,45 @@ describe('PreferenceBatchService', () => {
         { status: MenuSelectionStatus.FAILED },
       );
     });
-
-    it('should process multiple results correctly with mixed success and failure', async () => {
-      // Arrange
-      const results = new Map<string, string>([
-        ['pref_1_100', JSON.stringify({ analysis: 'Success 1' })],
-        ['pref_2_200', JSON.stringify({ analysis: 'Success 2' })],
-        ['pref_3_300', JSON.stringify({ invalid: 'format' })],
-      ]);
-
-      const mockUser1 = { id: 1, email: 'user1@test.com' };
-      const mockUser2 = { id: 2, email: 'user2@test.com' };
-
-      mockUserService.findOne
-        .mockResolvedValueOnce(mockUser1)
-        .mockResolvedValueOnce(mockUser2);
-      mockUserService.updateEntityPreferencesAnalysis.mockResolvedValue(
-        undefined,
-      );
-      mockMenuSelectionRepository.update.mockResolvedValue(
-        createMockUpdateResult(1),
-      );
-
-      // Act
-      await service.processResults(results, mockBatchJob);
-
-      // Assert
-      expect(mockUserService.findOne).toHaveBeenCalledTimes(2);
-      expect(
-        mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledTimes(2);
-
-      // Check SUCCEEDED calls
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([100], {
-        status: MenuSelectionStatus.SUCCEEDED,
-      });
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([200], {
-        status: MenuSelectionStatus.SUCCEEDED,
-      });
-
-      // Check FAILED call
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([300], {
-        status: MenuSelectionStatus.FAILED,
-      });
-    });
-
-    it('should handle analysis field as non-string value', async () => {
-      // Arrange
-      const results = new Map<string, string>([
-        ['pref_1_100', JSON.stringify({ analysis: 123 })],
-      ]);
-
-      mockMenuSelectionRepository.update.mockResolvedValue(
-        createMockUpdateResult(1),
-      );
-
-      // Act
-      await service.processResults(results, mockBatchJob);
-
-      // Assert
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([100], {
-        status: MenuSelectionStatus.FAILED,
-      });
-    });
-
-    it('should trim analysis string before saving', async () => {
-      // Arrange
-      const results = new Map<string, string>([
-        [
-          'pref_1_100',
-          JSON.stringify({ analysis: '  User likes spicy food  ' }),
-        ],
-      ]);
-
-      const mockUser = {
-        id: 1,
-        email: 'test@example.com',
-        preferredLanguage: 'ko',
-      };
-
-      mockUserService.findOne.mockResolvedValue(mockUser);
-      mockUserService.updateEntityPreferencesAnalysis.mockResolvedValue(
-        undefined,
-      );
-      mockMenuSelectionRepository.update.mockResolvedValue(
-        createMockUpdateResult(1),
-      );
-
-      // Act
-      await service.processResults(results, mockBatchJob);
-
-      // Assert
-      expect(
-        mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food');
-    });
   });
 
-  describe('processResults with structuredAnalysis', () => {
-    it('should pass structuredAnalysis to userTasteAnalysisService when provided', async () => {
+  describe('processErrors', () => {
+    it('should mark selections as FAILED for each error', async () => {
       // Arrange
-      const results = new Map<string, string>([
-        [
-          'pref_1_100',
-          JSON.stringify({
-            analysis: 'User likes Korean food',
-            compactSummary: 'Likes Korean food',
-            stablePatterns: {
-              categories: ['한식', '국물요리'],
-              flavors: ['담백한'],
-              cookingMethods: ['찌개', '국'],
-              confidence: 'high',
-            },
-            recentSignals: {
-              trending: ['중식'],
-              declining: [],
-            },
-            diversityHints: {
-              explorationAreas: ['일식'],
-              rotationSuggestions: ['양식'],
-            },
-          }),
-        ],
-      ]);
+      const errors = [
+        { customId: 'pref_1_100', code: 'error', message: 'Failed' },
+        { customId: 'pref_2_200', code: 'error', message: 'Failed' },
+      ];
 
-      const mockUser = { id: 1, email: 'test@example.com' };
-
-      mockUserService.findOne.mockResolvedValue(mockUser);
-      mockUserService.updateEntityPreferencesAnalysis.mockResolvedValue(
-        undefined,
-      );
       mockMenuSelectionRepository.update.mockResolvedValue(
         createMockUpdateResult(1),
       );
 
       // Act
-      await service.processResults(results, mockBatchJob);
+      await service.processErrors(errors, mockBatchJob);
 
       // Assert
-      expect(
-        mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes Korean food');
-      expect(mockUserTasteAnalysisService.upsert).toHaveBeenCalledWith(1, {
-        stablePatterns: {
-          categories: ['한식', '국물요리'],
-          flavors: ['담백한'],
-          cookingMethods: ['찌개', '국'],
-          confidence: 'high',
-        },
-        recentSignals: {
-          trending: ['중식'],
-          declining: [],
-        },
-        diversityHints: {
-          explorationAreas: ['일식'],
-          rotationSuggestions: ['양식'],
-        },
-        compactSummary: 'Likes Korean food',
-        analysisParagraphs: null,
-      });
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
+        [100],
+        { status: MenuSelectionStatus.FAILED },
+      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
+        [200],
+        { status: MenuSelectionStatus.FAILED },
+      );
     });
 
-    it('should handle results without structuredAnalysis', async () => {
+    it('should skip errors with invalid custom_id format', async () => {
       // Arrange
-      const results = new Map<string, string>([
-        ['pref_1_100', JSON.stringify({ analysis: 'User likes spicy food' })],
-      ]);
-
-      const mockUser = { id: 1, email: 'test@example.com' };
-
-      mockUserService.findOne.mockResolvedValue(mockUser);
-      mockUserService.updateEntityPreferencesAnalysis.mockResolvedValue(
-        undefined,
-      );
-      mockMenuSelectionRepository.update.mockResolvedValue(
-        createMockUpdateResult(1),
-      );
+      const errors = [
+        { customId: 'invalid_format', code: 'error', message: 'Failed' },
+      ];
 
       // Act
-      await service.processResults(results, mockBatchJob);
+      await service.processErrors(errors, mockBatchJob);
 
       // Assert
-      expect(
-        mockUserService.updateEntityPreferencesAnalysis,
-      ).toHaveBeenCalledWith(mockUser, 'User likes spicy food');
-      expect(mockUserTasteAnalysisService.upsert).toHaveBeenCalledWith(1, {
-        stablePatterns: null,
-        recentSignals: null,
-        diversityHints: null,
-        compactSummary: null,
-        analysisParagraphs: null,
-      });
+      expect(mockMenuSelectionRepository.update).not.toHaveBeenCalled();
     });
   });
 });

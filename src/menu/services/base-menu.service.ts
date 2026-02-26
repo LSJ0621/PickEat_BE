@@ -3,16 +3,16 @@ import { ExternalApiException } from '@/common/exceptions/external-api.exception
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
-import { OpenAIResponseException } from '../../common/exceptions/openai-response.exception';
+import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
 import { MenuRecommendationsResponse } from '../interfaces/menu-recommendation.interface';
 import { ValidationContext } from '../interfaces/menu-validation.interface';
 import {
   buildUserPrompt,
   buildUserPromptWithValidation,
   getMenuRecommendationsJsonSchema,
-  getSystemPrompt,
-  type StructuredAnalysis,
-} from '@/external/openai/prompts';
+} from '@/external/openai/prompts/menu-recommendation.prompts';
+import { getSystemPrompt } from '@/external/openai/prompts/menu-recommendation-system.prompts';
+import type { StructuredAnalysis } from '@/user/interfaces/user-taste-analysis.interface';
 import {
   OpenAIChatCompletionParams,
   OpenAIResponse,

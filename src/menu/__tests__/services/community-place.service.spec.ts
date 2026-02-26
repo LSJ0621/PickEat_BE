@@ -890,6 +890,216 @@ describe('CommunityPlaceService', () => {
       expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('999'));
     });
 
+    it('should throw BadRequestException when save operation fails', async () => {
+      const nearbyUserPlaces = [
+        UserPlaceFactory.create({
+          id: 1,
+          name: '식당1',
+          address: '서울시',
+          menuTypes: ['한식'],
+          category: '음식점',
+          status: UserPlaceStatus.APPROVED,
+        }),
+      ];
+
+      const mockQueryBuilder = createMockQueryBuilder<UserPlace>();
+      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
+        entities: nearbyUserPlaces,
+        raw: [{ distance: '500' }],
+      });
+
+      mockUserPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder,
+      );
+
+      const aiResponse = {
+        recommendations: [
+          {
+            userPlaceId: 1,
+            name: '식당1',
+            address: '서울시',
+            matchReason: '추천 이유',
+            matchReasonTags: [],
+            matchScore: 90,
+          },
+        ],
+      };
+
+      mockOpenAiCommunityPlacesService.recommendFromCommunityPlaces.mockResolvedValue(
+        aiResponse,
+      );
+
+      const savedRecommendation = {
+        id: 1,
+        menuRecommendation,
+        placeId: 'user_place_1',
+        reason: '추천 이유',
+        menuName,
+        source: PlaceRecommendationSource.USER,
+        userPlace: nearbyUserPlaces[0],
+      } as PlaceRecommendation;
+
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        savedRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockRejectedValue(
+        new Error('DB save failed'),
+      );
+
+      const { BadRequestException } = await import('@nestjs/common');
+      await expect(
+        service.recommendCommunityPlaces(
+          user,
+          latitude,
+          longitude,
+          menuName,
+          menuRecommendation,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should default reasonTags to empty array when matchReasonTags is not an array (line 99 branch)', async () => {
+      const nearbyUserPlaces = [
+        UserPlaceFactory.create({
+          id: 1,
+          name: '식당1',
+          address: '서울시',
+          menuTypes: ['한식'],
+          category: '음식점',
+          status: UserPlaceStatus.APPROVED,
+        }),
+      ];
+
+      const mockQueryBuilder = createMockQueryBuilder<UserPlace>();
+      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
+        entities: nearbyUserPlaces,
+        raw: [{ distance: '500' }],
+      });
+
+      mockUserPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder,
+      );
+
+      const aiResponse = {
+        recommendations: [
+          {
+            userPlaceId: 1,
+            name: '식당1',
+            address: '서울시',
+            matchReason: '추천 이유',
+            matchReasonTags: null as unknown as string[], // non-array → should default to []
+            matchScore: 90,
+          },
+        ],
+      };
+
+      mockOpenAiCommunityPlacesService.recommendFromCommunityPlaces.mockResolvedValue(
+        aiResponse,
+      );
+
+      const savedRecommendation = {
+        id: 1,
+        menuRecommendation,
+        placeId: 'user_place_1',
+        reason: '추천 이유',
+        reasonTags: [],
+        menuName,
+        source: PlaceRecommendationSource.USER,
+        userPlace: nearbyUserPlaces[0],
+      } as unknown as PlaceRecommendation;
+
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        savedRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue([
+        savedRecommendation,
+      ] as PlaceRecommendation[] & PlaceRecommendation);
+
+      await service.recommendCommunityPlaces(
+        user,
+        latitude,
+        longitude,
+        menuName,
+        menuRecommendation,
+      );
+
+      // Verify create was called with reasonTags: [] (the non-array fallback)
+      expect(mockPlaceRecommendationRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reasonTags: [],
+        }),
+      );
+    });
+
+    it('should throw BadRequestException with non-Error save failure (line 186 branch)', async () => {
+      const nearbyUserPlaces = [
+        UserPlaceFactory.create({
+          id: 1,
+          name: '식당1',
+          address: '서울시',
+          menuTypes: ['한식'],
+          category: '음식점',
+          status: UserPlaceStatus.APPROVED,
+        }),
+      ];
+
+      const mockQueryBuilder = createMockQueryBuilder<UserPlace>();
+      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
+        entities: nearbyUserPlaces,
+        raw: [{ distance: '500' }],
+      });
+
+      mockUserPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder,
+      );
+
+      const aiResponse = {
+        recommendations: [
+          {
+            userPlaceId: 1,
+            name: '식당1',
+            address: '서울시',
+            matchReason: '추천 이유',
+            matchReasonTags: [],
+            matchScore: 90,
+          },
+        ],
+      };
+
+      mockOpenAiCommunityPlacesService.recommendFromCommunityPlaces.mockResolvedValue(
+        aiResponse,
+      );
+
+      const savedRecommendation = {
+        id: 1,
+        menuRecommendation,
+        placeId: 'user_place_1',
+        reason: '추천 이유',
+        menuName,
+        source: PlaceRecommendationSource.USER,
+        userPlace: nearbyUserPlaces[0],
+      } as PlaceRecommendation;
+
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        savedRecommendation,
+      );
+      // Reject with a non-Error object to hit the String(error) branch (line 186)
+      mockPlaceRecommendationRepository.save.mockRejectedValue(
+        { code: 'DB_CONSTRAINT_ERROR', errno: 1062 },
+      );
+
+      const { BadRequestException: BadRequestExc } = await import('@nestjs/common');
+      await expect(
+        service.recommendCommunityPlaces(
+          user,
+          latitude,
+          longitude,
+          menuName,
+          menuRecommendation,
+        ),
+      ).rejects.toThrow(BadRequestExc);
+    });
+
     it('should log warning when no valid recommendation entities are created', async () => {
       const nearbyUserPlaces = [
         UserPlaceFactory.create({

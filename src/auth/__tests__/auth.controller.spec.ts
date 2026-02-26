@@ -5,8 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { Response, Request } from 'express';
 import { Repository } from 'typeorm';
 import { MessageCode } from '@/common/constants/message-codes';
-import { User } from '../../user/entities/user.entity';
-import { UserService } from '../../user/user.service';
+import { User } from '@/user/entities/user.entity';
+import { UserService } from '@/user/user.service';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
 import { EmailPurpose } from '../dto/send-email-code.dto';
@@ -273,9 +273,11 @@ describe('AuthController', () => {
         cookie: jest.fn(),
       } as unknown as Response;
 
+      const mockRequest = { user: mockUser } as unknown as Request;
+
       authService.buildAuthResult.mockResolvedValue(mockAuthResult);
 
-      const result = await controller.login(mockUser, mockResponse);
+      const result = await controller.login(mockRequest, mockResponse);
 
       expect(authService.buildAuthResult).toHaveBeenCalledWith(mockUser);
       expect(mockResponse.cookie).toHaveBeenCalledWith(
@@ -467,6 +469,7 @@ describe('AuthController', () => {
   describe('getProfile', () => {
     it('should return user profile when authenticated user requests it', async () => {
       const authUserPayload: AuthUserPayload = {
+        sub: 1,
         email: 'test@example.com',
         role: 'USER' as const,
       };
@@ -526,7 +529,7 @@ describe('AuthController', () => {
 
       await expect(
         controller.refreshToken(mockRequest, mockResponse),
-      ).rejects.toThrow('Refresh token cookie is missing.');
+      ).rejects.toThrow('AUTH_REFRESH_TOKEN_COOKIE_MISSING');
     });
   });
 
@@ -596,6 +599,154 @@ describe('AuthController', () => {
         reRegisterSocialDto,
       );
       expect(result).toEqual(expectedResult);
+    });
+  });
+
+  describe('login - branch coverage', () => {
+    it('should throw UnauthorizedException when user object has no id', async () => {
+      // Arrange - user exists but has no id (branch: !user?.id is true)
+      const mockResponse = {
+        cookie: jest.fn(),
+      } as unknown as Response;
+      const userWithoutId = { ...mockUser, id: undefined as unknown as number };
+      const mockRequest = {
+        user: userWithoutId,
+      } as unknown as Request;
+
+      // Act & Assert
+      await expect(
+        controller.login(mockRequest, mockResponse),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('extractLanguage - branch coverage', () => {
+    it('should return undefined when accept-language header is missing', async () => {
+      const mockResponse = { cookie: jest.fn() } as unknown as Response;
+      const mockRequest = {
+        headers: {},
+      } as Request;
+
+      authService.kakaoLogin.mockResolvedValue(mockAuthResult);
+
+      await controller.kakaoLogin({ code: 'test' }, mockResponse, mockRequest);
+
+      expect(authService.kakaoLogin).toHaveBeenCalledWith('test', undefined);
+    });
+
+    it('should return undefined when accept-language header exceeds 100 characters', async () => {
+      const mockResponse = { cookie: jest.fn() } as unknown as Response;
+      const longHeader = 'ko-KR,ko;q=0.9,'.repeat(10) + 'extra';
+      const mockRequest = {
+        headers: {
+          'accept-language': longHeader,
+        },
+      } as Request;
+
+      authService.kakaoLogin.mockResolvedValue(mockAuthResult);
+
+      await controller.kakaoLogin({ code: 'test' }, mockResponse, mockRequest);
+
+      expect(authService.kakaoLogin).toHaveBeenCalledWith('test', undefined);
+    });
+
+    it('should return undefined for unsupported language like "ja"', async () => {
+      const mockResponse = { cookie: jest.fn() } as unknown as Response;
+      const mockRequest = {
+        headers: {
+          'accept-language': 'ja-JP,ja;q=0.9',
+        },
+      } as Request;
+
+      authService.kakaoLogin.mockResolvedValue(mockAuthResult);
+
+      await controller.kakaoLogin({ code: 'test' }, mockResponse, mockRequest);
+
+      expect(authService.kakaoLogin).toHaveBeenCalledWith('test', undefined);
+    });
+
+    it('should return "en" when accept-language is "en-US"', async () => {
+      const mockResponse = { cookie: jest.fn() } as unknown as Response;
+      const mockRequest = {
+        headers: {
+          'accept-language': 'en-US,en;q=0.9',
+        },
+      } as Request;
+
+      authService.kakaoLogin.mockResolvedValue(mockAuthResult);
+
+      await controller.kakaoLogin({ code: 'test' }, mockResponse, mockRequest);
+
+      expect(authService.kakaoLogin).toHaveBeenCalledWith('test', 'en');
+    });
+  });
+
+  describe('verifyEmailCode - additional branch coverage', () => {
+    it('should not call markEmailVerified when purpose is SIGNUP but user does not exist', async () => {
+      const verifyEmailCodeDto = {
+        email: 'nonexistent@example.com',
+        code: '123456',
+        purpose: EmailPurpose.SIGNUP,
+      };
+
+      emailVerificationService.verifyCode.mockResolvedValue(undefined);
+      userService.findByEmail.mockResolvedValue(null);
+
+      const result = await controller.verifyEmailCode(verifyEmailCodeDto);
+
+      expect(userService.markEmailVerified).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
+
+    it('should not call findDeletedUserByEmail when purpose is SIGNUP', async () => {
+      const verifyEmailCodeDto = {
+        email: 'test@example.com',
+        code: '654321',
+        purpose: EmailPurpose.SIGNUP,
+      };
+
+      emailVerificationService.verifyCode.mockResolvedValue(undefined);
+      userService.findByEmail.mockResolvedValue(mockUser);
+
+      await controller.verifyEmailCode(verifyEmailCodeDto);
+
+      expect(authService.findDeletedUserByEmail).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when re-register and deleted user has no deletedAt', async () => {
+      // Arrange - deleted user found but deletedAt is null (already restored or invalid)
+      const userWithoutDeletedAt = { ...mockUser, deletedAt: null };
+      const verifyEmailCodeDto = {
+        email: 'partial@example.com',
+        code: '123456',
+        purpose: EmailPurpose.RE_REGISTER,
+      };
+
+      authService.findDeletedUserByEmail.mockResolvedValue(
+        userWithoutDeletedAt,
+      );
+
+      // Act & Assert
+      await expect(
+        controller.verifyEmailCode(verifyEmailCodeDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('logout - branch coverage', () => {
+    it('should call logout with undefined when refresh token cookie is absent', async () => {
+      const mockRequest = {
+        cookies: {},
+      } as unknown as Request;
+      const mockResponse = {
+        clearCookie: jest.fn(),
+      } as unknown as Response;
+
+      authService.logout.mockResolvedValue(undefined);
+
+      await controller.logout(mockRequest, mockResponse);
+
+      expect(authService.logout).toHaveBeenCalledWith(undefined);
     });
   });
 });

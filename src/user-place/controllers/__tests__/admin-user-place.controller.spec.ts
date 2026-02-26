@@ -49,6 +49,7 @@ describe('AdminUserPlaceController', () => {
   let userService: jest.Mocked<UserService>;
 
   const adminUser: AuthUserPayload = {
+    sub: 1,
     email: 'admin@example.com',
     role: 'SUPER_ADMIN',
   };
@@ -195,7 +196,7 @@ describe('AdminUserPlaceController', () => {
       ).rejects.toThrow(NotFoundException);
       await expect(
         controller.update(placeId, dto, [], adminUser, mockRequest),
-      ).rejects.toThrow('Admin user not found');
+      ).rejects.toThrow('ADMIN_USER_NOT_FOUND');
       expect(userPlaceService.updatePlaceByAdmin).not.toHaveBeenCalled();
     });
 

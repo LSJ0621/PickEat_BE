@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { StructuredAnalysis } from '@/external/openai/prompts';
+import type { StructuredAnalysis } from '@/user/interfaces/user-taste-analysis.interface';
 import { MenuRecommendationsResponse } from '../interfaces/menu-recommendation.interface';
 import { TwoStageMenuService } from './two-stage-menu.service';
 

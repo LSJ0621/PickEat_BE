@@ -1,40 +1,111 @@
 import {
-  PREFERENCE_SYSTEM_PROMPT,
   PREFERENCE_SYSTEM_PROMPT_KO,
   PREFERENCE_SYSTEM_PROMPT_EN,
   getPreferenceSystemPrompt,
   buildPreferenceUserPrompt,
-  PREFERENCE_RESPONSE_SCHEMA,
   getPreferenceResponseSchema,
 } from '../../../openai/prompts/preference-update.prompts';
 
+const PREFERENCE_SYSTEM_PROMPT = getPreferenceSystemPrompt('ko');
+const PREFERENCE_RESPONSE_SCHEMA = getPreferenceResponseSchema('ko');
+
 describe('preference-update.prompts', () => {
-  describe('PREFERENCE_SYSTEM_PROMPT', () => {
-    it('should be a non-empty string containing system instructions', () => {
-      expect(PREFERENCE_SYSTEM_PROMPT).toBeDefined();
-      expect(typeof PREFERENCE_SYSTEM_PROMPT).toBe('string');
-      expect(PREFERENCE_SYSTEM_PROMPT.length).toBeGreaterThan(0);
-      expect(PREFERENCE_SYSTEM_PROMPT).toContain('음식 컨설턴트');
-      expect(PREFERENCE_SYSTEM_PROMPT).toContain('출력 형식: JSON');
+  // ============================================================================
+  // System Prompts
+  // ============================================================================
+
+  describe('PREFERENCE_SYSTEM_PROMPT (backward compatibility)', () => {
+    it('should equal PREFERENCE_SYSTEM_PROMPT_KO for backward compatibility', () => {
+      expect(PREFERENCE_SYSTEM_PROMPT).toBe(PREFERENCE_SYSTEM_PROMPT_KO);
     });
   });
 
+  describe('PREFERENCE_SYSTEM_PROMPT_KO / PREFERENCE_SYSTEM_PROMPT_EN structure', () => {
+    const SHARED_TAGS = [
+      '<role>',
+      '<analysis_perspectives>',
+      '<writing_guidelines>',
+      '<language_rule>',
+    ];
+
+    test.each([
+      [
+        'ko',
+        PREFERENCE_SYSTEM_PROMPT_KO,
+        '음식 선호도를 분석',
+        '컨설턴트',
+        '존댓말',
+        '200-400자',
+        '한국어',
+      ],
+      [
+        'en',
+        PREFERENCE_SYSTEM_PROMPT_EN,
+        'analyzes user food preferences',
+        'food consultant',
+        'polite language',
+        '200-400 characters',
+        'Korean response',
+      ],
+    ])(
+      'PREFERENCE_SYSTEM_PROMPT_%s should be non-empty, contain shared tags and language-specific content',
+      (_lang, prompt, phrase1, phrase2, phrase3, phrase4, phrase5) => {
+        expect(typeof prompt).toBe('string');
+        expect(prompt.length).toBeGreaterThan(0);
+        for (const tag of SHARED_TAGS) {
+          expect(prompt).toContain(tag);
+        }
+        expect(prompt).toContain(phrase1);
+        expect(prompt).toContain(phrase2);
+        expect(prompt).toContain(phrase3);
+        expect(prompt).toContain(phrase4);
+        expect(prompt).toContain(phrase5);
+      },
+    );
+  });
+
+  describe('getPreferenceSystemPrompt', () => {
+    test.each([
+      ['ko' as const, PREFERENCE_SYSTEM_PROMPT_KO, '컨설턴트'],
+      ['en' as const, PREFERENCE_SYSTEM_PROMPT_EN, 'food consultant'],
+    ])(
+      'should return %s prompt and contain expected phrase',
+      (lang, expectedPrompt, expectedPhrase) => {
+        const result = getPreferenceSystemPrompt(lang);
+        expect(result).toBe(expectedPrompt);
+        expect(result).toContain(expectedPhrase);
+      },
+    );
+
+    it('should default to Korean when no language parameter or undefined is passed', () => {
+      expect(getPreferenceSystemPrompt()).toBe(PREFERENCE_SYSTEM_PROMPT_KO);
+      expect(getPreferenceSystemPrompt(undefined)).toBe(
+        PREFERENCE_SYSTEM_PROMPT_KO,
+      );
+    });
+  });
+
+  // ============================================================================
+  // buildPreferenceUserPrompt
+  // ============================================================================
+
   describe('buildPreferenceUserPrompt', () => {
+    const baseSlotMenus = {
+      breakfast: ['김치찌개'],
+      lunch: ['된장찌개', '삼겹살'],
+      dinner: ['비빔밥'],
+      etc: ['떡볶이'],
+    };
+
     describe('with complete data', () => {
       it('should build prompt with all fields populated', () => {
-        const params = {
+        const result = buildPreferenceUserPrompt({
           currentLikes: ['한식', '국물요리', '매운음식'],
           currentDislikes: ['회', '날것'],
           currentAnalysis: '한식을 선호하시는 경향이 있습니다.',
-          slotMenus: {
-            breakfast: ['김치찌개'],
-            lunch: ['된장찌개', '삼겹살'],
-            dinner: ['비빔밥'],
-            etc: ['떡볶이'],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
+          slotMenus: baseSlotMenus,
+          language: 'ko',
+        });
 
         expect(result).toContain('[User registered preferences]');
         expect(result).toContain('Likes: 한식, 국물요리, 매운음식');
@@ -52,327 +123,182 @@ describe('preference-update.prompts', () => {
       });
     });
 
-    describe('with empty arrays - branch coverage for lines 50-51, 63-64', () => {
-      it('should handle empty likes array', () => {
-        const params = {
-          currentLikes: [],
-          currentDislikes: ['회'],
-          slotMenus: {
-            breakfast: ['김치찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
+    describe('likes and dislikes - empty / null / undefined branches', () => {
+      test.each([
+        [[], ['회'], 'Likes: None', 'Dislikes: 회'],
+        [['한식'], [], 'Likes: 한식', 'Dislikes: None'],
+        [[], [], 'Likes: None', 'Dislikes: None'],
+        [undefined as any, ['회'], 'Likes: None', 'Dislikes: 회'],
+        [['한식'], undefined as any, 'Likes: 한식', 'Dislikes: None'],
+      ])(
+        'should render likes=%j dislikes=%j as "%s" and "%s"',
+        (likes, dislikes, expectedLikes, expectedDislikes) => {
+          const result = buildPreferenceUserPrompt({
+            currentLikes: likes,
+            currentDislikes: dislikes,
+            slotMenus: { breakfast: [], lunch: [], dinner: [], etc: [] },
+            language: 'ko',
+          });
+          expect(result).toContain(expectedLikes);
+          expect(result).toContain(expectedDislikes);
+        },
+      );
 
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: 회');
-      });
-
-      it('should handle empty dislikes array', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: 한식');
-        expect(result).toContain('Dislikes: None');
-      });
-
-      it('should handle both likes and dislikes as empty arrays', () => {
-        const params = {
-          currentLikes: [],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: None');
-      });
-    });
-
-    describe('with undefined/null values - branch coverage for lines 50-51', () => {
-      it('should handle undefined currentLikes', () => {
-        const params = {
-          currentLikes: undefined as any,
-          currentDislikes: ['회'],
-          slotMenus: {
-            breakfast: ['김치찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: 회');
-      });
-
-      it('should handle undefined currentDislikes', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: undefined as any,
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: 한식');
-        expect(result).toContain('Dislikes: None');
-      });
-
-      it('should handle arrays with null/empty string elements', () => {
-        const params = {
+      it('should filter out null and empty string elements from likes/dislikes', () => {
+        const result = buildPreferenceUserPrompt({
           currentLikes: ['한식', '', null, '중식'] as any,
           currentDislikes: ['', null, '회'] as any,
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        // filter(Boolean) should remove empty strings and null
+          slotMenus: { breakfast: [], lunch: [], dinner: [], etc: [] },
+          language: 'ko',
+        });
         expect(result).toContain('Likes: 한식, 중식');
         expect(result).toContain('Dislikes: 회');
       });
     });
 
-    describe('with missing currentAnalysis', () => {
-      it('should show "None (first analysis)" when currentAnalysis is undefined', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: ['회'],
-          currentAnalysis: undefined,
-          slotMenus: {
-            breakfast: ['김치찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('[Analysis until yesterday]');
-        expect(result).toContain('None (first analysis)');
-      });
-
-      it('should show "None (first analysis)" when currentAnalysis is empty string', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: ['회'],
-          currentAnalysis: '',
-          slotMenus: {
-            breakfast: ['김치찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('None (first analysis)');
-      });
-
-      it('should show "None (first analysis)" when currentAnalysis is whitespace only', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: ['회'],
-          currentAnalysis: '   ',
-          slotMenus: {
-            breakfast: ['김치찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('None (first analysis)');
-      });
+    describe('currentAnalysis - empty / undefined branch', () => {
+      test.each([
+        [undefined, 'None (first analysis)'],
+        ['', 'None (first analysis)'],
+        ['   ', 'None (first analysis)'],
+      ])(
+        'should show "None (first analysis)" when currentAnalysis is %j',
+        (analysis, expected) => {
+          const result = buildPreferenceUserPrompt({
+            currentLikes: ['한식'],
+            currentDislikes: [],
+            currentAnalysis: analysis,
+            slotMenus: { breakfast: [], lunch: [], dinner: [], etc: [] },
+            language: 'ko',
+          });
+          expect(result).toContain('[Analysis until yesterday]');
+          expect(result).toContain(expected);
+        },
+      );
     });
 
-    describe('slot menus - branch coverage for lines 56-59', () => {
-      it('should include only breakfast when other slots are empty', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: ['김치찌개', '된장찌개'],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
+    describe('slot menus - per-slot branch coverage', () => {
+      test.each([
+        [
+          'breakfast',
+          { breakfast: ['김치찌개', '된장찌개'], lunch: [], dinner: [], etc: [] },
+          ['Breakfast: 김치찌개, 된장찌개'],
+          ['Lunch:', 'Dinner:', 'Other:'],
+        ],
+        [
+          'lunch',
+          { breakfast: [], lunch: ['삼겹살', '된장찌개'], dinner: [], etc: [] },
+          ['Lunch: 삼겹살, 된장찌개'],
+          ['Breakfast:', 'Dinner:', 'Other:'],
+        ],
+        [
+          'dinner',
+          { breakfast: [], lunch: [], dinner: ['비빔밥', '불고기'], etc: [] },
+          ['Dinner: 비빔밥, 불고기'],
+          ['Breakfast:', 'Lunch:', 'Other:'],
+        ],
+        [
+          'etc',
+          { breakfast: [], lunch: [], dinner: [], etc: ['떡볶이', '김밥'] },
+          ['Other: 떡볶이, 김밥'],
+          ['Breakfast:', 'Lunch:', 'Dinner:'],
+        ],
+      ])(
+        'should include only "%s" slot when others are empty',
+        (_slot, slotMenus, expectedContains, expectedNotContains) => {
+          const result = buildPreferenceUserPrompt({
+            currentLikes: ['한식'],
+            currentDislikes: [],
+            slotMenus,
+            language: 'ko',
+          });
+          for (const text of expectedContains) {
+            expect(result).toContain(text);
+          }
+          for (const text of expectedNotContains) {
+            expect(result).not.toContain(text);
+          }
+        },
+      );
 
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Breakfast: 김치찌개, 된장찌개');
-        expect(result).not.toContain('Lunch:');
-        expect(result).not.toContain('Dinner:');
-        expect(result).not.toContain('Other:');
-      });
-
-      it('should include only lunch when other slots are empty', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: [],
-            lunch: ['삼겹살', '된장찌개'],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).not.toContain('Breakfast:');
-        expect(result).toContain('Lunch: 삼겹살, 된장찌개');
-        expect(result).not.toContain('Dinner:');
-        expect(result).not.toContain('Other:');
-      });
-
-      it('should include only dinner when other slots are empty', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: ['비빔밥', '불고기'],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).not.toContain('Breakfast:');
-        expect(result).not.toContain('Lunch:');
-        expect(result).toContain('Dinner: 비빔밥, 불고기');
-        expect(result).not.toContain('Other:');
-      });
-
-      it('should include only etc when other slots are empty', () => {
-        const params = {
-          currentLikes: ['분식'],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: ['떡볶이', '김밥'],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).not.toContain('Breakfast:');
-        expect(result).not.toContain('Lunch:');
-        expect(result).not.toContain('Dinner:');
-        expect(result).toContain('Other: 떡볶이, 김밥');
-      });
-
-      it('should show "None" when all slot menus are empty', () => {
-        const params = {
-          currentLikes: ['한식'],
-          currentDislikes: [],
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain("[Today's selected menus]");
-        expect(result).toContain('None');
-      });
-    });
-
-    describe('combined edge cases', () => {
-      it('should handle all empty/undefined values gracefully', () => {
-        const params = {
+      it('should show "None" when all slots are empty', () => {
+        const result = buildPreferenceUserPrompt({
           currentLikes: [],
           currentDislikes: [],
-          currentAnalysis: undefined,
-          slotMenus: {
-            breakfast: [],
-            lunch: [],
-            dinner: [],
-            etc: [],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: None');
-        expect(result).toContain('None (first analysis)');
+          slotMenus: { breakfast: [], lunch: [], dinner: [], etc: [] },
+          language: 'ko',
+        });
         expect(result).toContain("[Today's selected menus]");
         expect(result).toContain('None');
       });
-
-      it('should correctly format multiple items in each slot', () => {
-        const params = {
-          currentLikes: ['한식', '중식', '일식'],
-          currentDislikes: ['회', '날것', '비린음식'],
-          currentAnalysis: '다양한 음식을 좋아하시네요.',
-          slotMenus: {
-            breakfast: ['김치찌개', '된장찌개', '순두부'],
-            lunch: ['삼겹살', '불고기', '된장찌개'],
-            dinner: ['비빔밥', '냉면', '칼국수'],
-            etc: ['떡볶이', '김밥', '라면'],
-          },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-
-        expect(result).toContain('Likes: 한식, 중식, 일식');
-        expect(result).toContain('Dislikes: 회, 날것, 비린음식');
-        expect(result).toContain('다양한 음식을 좋아하시네요.');
-        expect(result).toContain('Breakfast: 김치찌개, 된장찌개, 순두부');
-        expect(result).toContain('Lunch: 삼겹살, 불고기, 된장찌개');
-        expect(result).toContain('Dinner: 비빔밥, 냉면, 칼국수');
-        expect(result).toContain('Other: 떡볶이, 김밥, 라면');
-      });
     });
 
-    describe('output format', () => {
-      it('should include all required sections in correct order', () => {
-        const params = {
+    describe('RESPONSE_LANGUAGE - language parameter branch', () => {
+      test.each([
+        ['ko' as const, 'RESPONSE_LANGUAGE: Korean'],
+        ['en' as const, 'RESPONSE_LANGUAGE: English'],
+      ])(
+        'should include RESPONSE_LANGUAGE header for language "%s"',
+        (lang, expectedHeader) => {
+          const result = buildPreferenceUserPrompt({
+            currentLikes: ['한식'],
+            currentDislikes: [],
+            slotMenus: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+            language: lang,
+          });
+          expect(result).toContain(expectedHeader);
+        },
+      );
+
+      it('should not include RESPONSE_LANGUAGE when language is omitted', () => {
+        const result = buildPreferenceUserPrompt({
+          currentLikes: ['한식'],
+          currentDislikes: [],
+          slotMenus: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+        });
+        expect(result).not.toContain('RESPONSE_LANGUAGE:');
+      });
+
+      it('should place RESPONSE_LANGUAGE at the beginning when provided', () => {
+        const result = buildPreferenceUserPrompt({
+          currentLikes: ['한식'],
+          currentDislikes: [],
+          slotMenus: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+          language: 'ko',
+        });
+        const lines = result.split('\n');
+        expect(lines[0]).toBe('RESPONSE_LANGUAGE: Korean');
+        expect(lines[1]).toBe('');
+      });
+
+      test.each([
+        ['ko' as const, '[User registered preferences]'],
+        ['en' as const, '[User registered preferences]'],
+      ])(
+        'should maintain prompt structure with language "%s"',
+        (lang, expectedSection) => {
+          const result = buildPreferenceUserPrompt({
+            currentLikes: ['한식', '일식'],
+            currentDislikes: ['양식'],
+            currentAnalysis: '한식을 선호하시는 경향',
+            slotMenus: {
+              breakfast: ['김치찌개'],
+              lunch: ['된장찌개'],
+              dinner: ['비빔밥'],
+              etc: [],
+            },
+            language: lang,
+          });
+          expect(result).toContain(expectedSection);
+          expect(result).toContain('[Analysis until yesterday]');
+          expect(result).toContain("[Today's selected menus]");
+        },
+      );
+    });
+
+    describe('output format - required sections', () => {
+      it('should include all required sections and analysis instructions', () => {
+        const result = buildPreferenceUserPrompt({
           currentLikes: ['한식'],
           currentDislikes: ['회'],
           currentAnalysis: '한식 선호',
@@ -382,10 +308,8 @@ describe('preference-update.prompts', () => {
             dinner: [],
             etc: [],
           },
-        };
-
-        const result = buildPreferenceUserPrompt({ ...params, language: 'ko' });
-        const sections = result.split('\n\n');
+          language: 'ko',
+        });
 
         expect(result).toContain('[User registered preferences]');
         expect(result).toContain('[Analysis until yesterday]');
@@ -400,304 +324,101 @@ describe('preference-update.prompts', () => {
         expect(result).toContain(
           '2. RECENT: New patterns or changes in the last week',
         );
-        expect(result).toContain(
-          'Do NOT optimize analysis for recommendations.',
-        );
+        expect(result).toContain('Do NOT optimize analysis for recommendations.');
       });
     });
   });
 
-  describe('PREFERENCE_RESPONSE_SCHEMA', () => {
-    it('should be a ResponseFormatJSONSchema type', () => {
+  // ============================================================================
+  // PREFERENCE_RESPONSE_SCHEMA (backward compatibility)
+  // ============================================================================
+
+  describe('PREFERENCE_RESPONSE_SCHEMA (backward compatibility)', () => {
+    it('should equal Korean schema for backward compatibility', () => {
+      const koSchema = getPreferenceResponseSchema('ko');
+      expect(PREFERENCE_RESPONSE_SCHEMA).toEqual(koSchema);
+    });
+
+    it('should be a valid ResponseFormatJSONSchema with required fields', () => {
       expect(PREFERENCE_RESPONSE_SCHEMA.type).toBe('json_schema');
       expect(PREFERENCE_RESPONSE_SCHEMA.json_schema).toBeDefined();
       expect(PREFERENCE_RESPONSE_SCHEMA.json_schema.name).toBe(
         'preference_analysis',
       );
       expect(PREFERENCE_RESPONSE_SCHEMA.json_schema.strict).toBe(true);
-    });
 
-    it('should have analysis property in schema', () => {
-      const schema = PREFERENCE_RESPONSE_SCHEMA.json_schema.schema as Record<
-        string,
-        unknown
-      >;
-      const properties = schema.properties as Record<string, unknown>;
-      const analysis = properties.analysis as Record<string, unknown>;
-
-      expect(analysis.type).toBe('string');
-      expect(analysis.description).toContain('200-400자');
-    });
-
-    it('should require analysis and structured analysis fields', () => {
       const schema = PREFERENCE_RESPONSE_SCHEMA.json_schema.schema as Record<
         string,
         unknown
       >;
       const required = schema.required as string[];
-
       expect(required).toContain('analysis');
       expect(required).toContain('compactSummary');
       expect(required).toContain('analysisParagraphs');
       expect(required).toContain('stablePatterns');
       expect(required).toContain('recentSignals');
       expect(required).toContain('diversityHints');
-    });
-
-    it('should not allow additional properties', () => {
-      const schema = PREFERENCE_RESPONSE_SCHEMA.json_schema.schema as Record<
-        string,
-        unknown
-      >;
       expect(schema.additionalProperties).toBe(false);
+
+      const properties = schema.properties as Record<string, unknown>;
+      const analysis = properties.analysis as Record<string, unknown>;
+      expect(analysis.type).toBe('string');
+      expect(analysis.description).toContain('200-400자');
     });
   });
 
-  describe('Phase 2: Internationalization (i18n)', () => {
-    describe('PREFERENCE_SYSTEM_PROMPT_KO', () => {
-      it('should be a non-empty Korean string', () => {
-        expect(typeof PREFERENCE_SYSTEM_PROMPT_KO).toBe('string');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO.length).toBeGreaterThan(0);
-      });
+  // ============================================================================
+  // getPreferenceResponseSchema
+  // ============================================================================
 
-      it('should contain Korean language content', () => {
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('음식 선호도를 분석');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('컨설턴트');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('<role>');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain(
-          '<analysis_perspectives>',
-        );
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('<writing_guidelines>');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('<language_rule>');
-      });
-
-      it('should contain Korean-specific instructions', () => {
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('존댓말');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('200-400자');
-        expect(PREFERENCE_SYSTEM_PROMPT_KO).toContain('한국어');
-      });
-    });
-
-    describe('PREFERENCE_SYSTEM_PROMPT_EN', () => {
-      it('should be a non-empty English string', () => {
-        expect(typeof PREFERENCE_SYSTEM_PROMPT_EN).toBe('string');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN.length).toBeGreaterThan(0);
-      });
-
-      it('should contain English language content', () => {
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain(
-          'analyzes user food preferences',
-        );
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('food consultant');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('<role>');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain(
-          '<analysis_perspectives>',
-        );
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('<writing_guidelines>');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('<language_rule>');
-      });
-
-      it('should contain English-specific instructions', () => {
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('polite language');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('200-400 characters');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('Korean response');
-        expect(PREFERENCE_SYSTEM_PROMPT_EN).toContain('English response');
-      });
-    });
-
-    describe('PREFERENCE_SYSTEM_PROMPT constant (backward compatibility)', () => {
-      it('should equal PREFERENCE_SYSTEM_PROMPT_KO for backward compatibility', () => {
-        expect(PREFERENCE_SYSTEM_PROMPT).toBe(PREFERENCE_SYSTEM_PROMPT_KO);
-      });
-    });
-
-    describe('getPreferenceSystemPrompt', () => {
-      it('should return Korean prompt when language is "ko"', () => {
-        const result = getPreferenceSystemPrompt('ko');
-        expect(result).toBe(PREFERENCE_SYSTEM_PROMPT_KO);
-        expect(result).toContain('컨설턴트');
-      });
-
-      it('should return English prompt when language is "en"', () => {
-        const result = getPreferenceSystemPrompt('en');
-        expect(result).toBe(PREFERENCE_SYSTEM_PROMPT_EN);
-        expect(result).toContain('food consultant');
-      });
-
-      it('should default to Korean when no language parameter is provided', () => {
-        const result = getPreferenceSystemPrompt();
-        expect(result).toBe(PREFERENCE_SYSTEM_PROMPT_KO);
-      });
-
-      it('should default to Korean when undefined is passed', () => {
-        const result = getPreferenceSystemPrompt(undefined);
-        expect(result).toBe(PREFERENCE_SYSTEM_PROMPT_KO);
-      });
-    });
-
-    describe('buildPreferenceUserPrompt with language parameter', () => {
-      const baseParams = {
-        currentLikes: ['한식', '일식'],
-        currentDislikes: ['양식'],
-        currentAnalysis: '한식을 선호하시는 경향',
-        slotMenus: {
-          breakfast: ['김치찌개'],
-          lunch: ['된장찌개'],
-          dinner: ['비빔밥'],
-          etc: [],
-        },
-      };
-
-      it('should include RESPONSE_LANGUAGE: Korean when language is "ko"', () => {
-        const result = buildPreferenceUserPrompt({
-          ...baseParams,
-          language: 'ko',
-        });
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should include RESPONSE_LANGUAGE: English when language is "en"', () => {
-        const result = buildPreferenceUserPrompt({
-          ...baseParams,
-          language: 'en',
-        });
-
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-      });
-
-      it('should not include RESPONSE_LANGUAGE when language is not provided', () => {
-        const result = buildPreferenceUserPrompt(baseParams);
-
-        expect(result).not.toContain('RESPONSE_LANGUAGE:');
-      });
-
-      it('should maintain prompt structure with Korean language', () => {
-        const result = buildPreferenceUserPrompt({
-          ...baseParams,
-          language: 'ko',
-        });
-
-        expect(result).toContain('[User registered preferences]');
-        expect(result).toContain('[Analysis until yesterday]');
-        expect(result).toContain("[Today's selected menus]");
-      });
-
-      it('should maintain prompt structure with English language', () => {
-        const result = buildPreferenceUserPrompt({
-          ...baseParams,
-          language: 'en',
-        });
-
-        expect(result).toContain('[User registered preferences]');
-        expect(result).toContain('[Analysis until yesterday]');
-        expect(result).toContain("[Today's selected menus]");
-      });
-
-      it('should place RESPONSE_LANGUAGE at the beginning', () => {
-        const result = buildPreferenceUserPrompt({
-          ...baseParams,
-          language: 'ko',
-        });
-
-        const lines = result.split('\n');
-        expect(lines[0]).toBe('RESPONSE_LANGUAGE: Korean');
-        expect(lines[1]).toBe('');
-      });
-    });
-
-    describe('getPreferenceResponseSchema', () => {
-      it('should return ResponseFormatJSONSchema type', () => {
-        const result = getPreferenceResponseSchema('ko');
-
-        expect(result.type).toBe('json_schema');
-        expect(result.json_schema).toBeDefined();
-        expect(result.json_schema.name).toBe('preference_analysis');
-        expect(result.json_schema.strict).toBe(true);
-      });
-
-      it('should return Korean schema when language is "ko"', () => {
-        const result = getPreferenceResponseSchema('ko');
+  describe('getPreferenceResponseSchema', () => {
+    test.each([
+      [
+        'ko' as const,
+        '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
+      ],
+      [
+        'en' as const,
+        'Analysis text for user display (200-400 characters, backward compatible)',
+      ],
+    ])(
+      'should return correct analysis description for language "%s"',
+      (lang, expectedDescription) => {
+        const result = getPreferenceResponseSchema(lang);
         const schema = result.json_schema.schema as Record<string, unknown>;
         const properties = schema.properties as Record<string, unknown>;
         const analysis = properties.analysis as Record<string, unknown>;
+        expect(analysis.description).toBe(expectedDescription);
+      },
+    );
 
-        expect(analysis.description).toBe(
-          '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
-        );
-      });
-
-      it('should return English schema when language is "en"', () => {
-        const result = getPreferenceResponseSchema('en');
-        const schema = result.json_schema.schema as Record<string, unknown>;
-        const properties = schema.properties as Record<string, unknown>;
-        const analysis = properties.analysis as Record<string, unknown>;
-
-        expect(analysis.description).toBe(
-          'Analysis text for user display (200-400 characters, backward compatible)',
-        );
-      });
-
-      it('should default to Korean when no language parameter is provided', () => {
-        const result = getPreferenceResponseSchema();
-        const schema = result.json_schema.schema as Record<string, unknown>;
-        const properties = schema.properties as Record<string, unknown>;
-        const analysis = properties.analysis as Record<string, unknown>;
-
-        expect(analysis.description).toBe(
-          '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
-        );
-      });
-
-      it('should have same structure for both languages', () => {
-        const koResult = getPreferenceResponseSchema('ko');
-        const enResult = getPreferenceResponseSchema('en');
-        const koSchema = koResult.json_schema.schema as Record<string, unknown>;
-        const enSchema = enResult.json_schema.schema as Record<string, unknown>;
-
-        expect(koSchema.type).toBe(enSchema.type);
-        expect(koSchema.required).toEqual(enSchema.required);
-
-        const koProps = koSchema.properties as Record<string, unknown>;
-        const enProps = enSchema.properties as Record<string, unknown>;
-        const koAnalysis = koProps.analysis as Record<string, unknown>;
-        const enAnalysis = enProps.analysis as Record<string, unknown>;
-
-        expect(koAnalysis.type).toBe(enAnalysis.type);
-      });
-
-      it('should have required fields including structured analysis', () => {
-        const result = getPreferenceResponseSchema('ko');
-        const schema = result.json_schema.schema as Record<string, unknown>;
-        const required = schema.required as string[];
-
-        expect(required).toContain('analysis');
-        expect(required).toContain('compactSummary');
-        expect(required).toContain('analysisParagraphs');
-        expect(required).toContain('stablePatterns');
-        expect(required).toContain('recentSignals');
-        expect(required).toContain('diversityHints');
-      });
-
-      it('should only differ in description field', () => {
-        const koResult = getPreferenceResponseSchema('ko');
-        const enResult = getPreferenceResponseSchema('en');
-        const koSchema = koResult.json_schema.schema as Record<string, unknown>;
-        const enSchema = enResult.json_schema.schema as Record<string, unknown>;
-        const koProps = koSchema.properties as Record<string, unknown>;
-        const enProps = enSchema.properties as Record<string, unknown>;
-        const koAnalysis = koProps.analysis as Record<string, unknown>;
-        const enAnalysis = enProps.analysis as Record<string, unknown>;
-
-        expect(koAnalysis.description).not.toBe(enAnalysis.description);
-      });
+    it('should default to Korean when no language parameter is provided', () => {
+      const result = getPreferenceResponseSchema();
+      const schema = result.json_schema.schema as Record<string, unknown>;
+      const properties = schema.properties as Record<string, unknown>;
+      const analysis = properties.analysis as Record<string, unknown>;
+      expect(analysis.description).toBe(
+        '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
+      );
     });
 
-    describe('PREFERENCE_RESPONSE_SCHEMA constant (backward compatibility)', () => {
-      it('should equal Korean schema for backward compatibility', () => {
-        const koSchema = getPreferenceResponseSchema('ko');
-        expect(PREFERENCE_RESPONSE_SCHEMA).toEqual(koSchema);
-      });
+    it('should have identical structure for both languages, differing only in descriptions', () => {
+      const koResult = getPreferenceResponseSchema('ko');
+      const enResult = getPreferenceResponseSchema('en');
+      const koSchema = koResult.json_schema.schema as Record<string, unknown>;
+      const enSchema = enResult.json_schema.schema as Record<string, unknown>;
+
+      expect(koSchema.type).toBe(enSchema.type);
+      expect(koSchema.required).toEqual(enSchema.required);
+      expect(koSchema.additionalProperties).toBe(enSchema.additionalProperties);
+
+      const koProps = koSchema.properties as Record<string, unknown>;
+      const enProps = enSchema.properties as Record<string, unknown>;
+      const koAnalysis = koProps.analysis as Record<string, unknown>;
+      const enAnalysis = enProps.analysis as Record<string, unknown>;
+
+      expect(koAnalysis.type).toBe(enAnalysis.type);
+      expect(koAnalysis.description).not.toBe(enAnalysis.description);
     });
   });
 });

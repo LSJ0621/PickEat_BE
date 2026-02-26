@@ -49,6 +49,7 @@ describe('UserPlaceController', () => {
   let userService: jest.Mocked<UserService>;
 
   const authUser: AuthUserPayload = {
+    sub: 1,
     email: 'test@example.com',
     role: 'USER',
   };

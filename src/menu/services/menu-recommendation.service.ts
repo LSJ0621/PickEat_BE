@@ -3,10 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { parseLanguage } from '@/common/utils/language.util';
-import { PageInfo } from '../../common/interfaces/pagination.interface';
-import { User } from '../../user/entities/user.entity';
-import { UserAddressService } from '../../user/services/user-address.service';
-import { UserTasteAnalysisService } from '../../user/services/user-taste-analysis.service';
+import { PageInfo } from '@/common/interfaces/pagination.interface';
+import { User } from '@/user/entities/user.entity';
+import { UserAddressService } from '@/user/services/user-address.service';
+import { UserTasteAnalysisService } from '@/user/services/user-taste-analysis.service';
 import { MenuRecommendation } from '../entities/menu-recommendation.entity';
 import { OpenAiMenuService } from './openai-menu.service';
 

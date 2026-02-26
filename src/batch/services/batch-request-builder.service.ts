@@ -11,7 +11,7 @@ import {
   getPreferenceSystemPrompt,
   getPreferenceResponseSchema,
   SelectionStatistics,
-} from '@/external/openai/prompts';
+} from '@/external/openai/prompts/preference-update.prompts';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { BATCH_CONFIG } from '@/common/constants/business.constants';
 import { normalizeMenuPayload } from '@/menu/utils/menu-payload.util';

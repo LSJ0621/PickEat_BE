@@ -10,9 +10,9 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { DataSource } from 'typeorm';
-import { ErrorCode } from '../../common/constants/error-codes';
-import { User } from '../../user/entities/user.entity';
-import { UserService } from '../../user/user.service';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { User } from '@/user/entities/user.entity';
+import { UserService } from '@/user/user.service';
 import { AuthEntity } from '../interfaces/auth.interface';
 import { JwtTokenProvider } from '../provider/jwt-token.provider';
 
@@ -45,6 +45,7 @@ export class AuthTokenService {
     entity: AuthEntity,
   ): Promise<{ token: string; refreshToken: string }> {
     const token = this.jwtTokenProvider.createToken(
+      entity.id,
       entity.email,
       entity.role.toString(),
     );
@@ -129,6 +130,7 @@ export class AuthTokenService {
       }
 
       const newAccessToken = this.jwtTokenProvider.createToken(
+        user.id,
         user.email,
         user.role.toString(),
       );

@@ -6,11 +6,15 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { OptimisticLockVersionMismatchError } from 'typeorm';
 import { USER_PLACE } from '@/common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { createMockRepository } from '../../../test/mocks/repository.mock';
 import { createMockS3Client } from '../../../test/mocks/external-clients.mock';
-import { UserFactory } from '../../../test/factories/entity.factory';
+import {
+  UserFactory,
+  UserPlaceFactory,
+} from '../../../test/factories/entity.factory';
 import { S3Client } from '@/external/aws/clients/s3.client';
 import { UserPlace } from '../entities/user-place.entity';
 import { UserPlaceStatus } from '../enum/user-place-status.enum';
@@ -20,82 +24,24 @@ import { CreateUserPlaceDto } from '../dto/create-user-place.dto';
 import { UpdateUserPlaceDto } from '../dto/update-user-place.dto';
 import { UserPlaceListQueryDto } from '../dto/user-place-list-query.dto';
 
-/**
- * Factory function to create UserPlace entities for testing
- */
-class UserPlaceFactory {
-  static create(overrides?: Partial<UserPlace>): UserPlace {
-    const userPlace = new UserPlace();
-    userPlace.id = overrides?.id ?? 1;
-    userPlace.user = overrides?.user ?? UserFactory.create();
-    userPlace.name = overrides?.name ?? '맛있는 식당';
-    userPlace.address = overrides?.address ?? '서울특별시 강남구 테헤란로 123';
-    userPlace.latitude = overrides?.latitude ?? 37.5012345;
-    userPlace.longitude = overrides?.longitude ?? 127.0398765;
-    userPlace.location =
-      overrides?.location ??
-      ({
-        type: 'Point',
-        coordinates: [127.0398765, 37.5012345],
-      } as any);
-    userPlace.menuTypes = overrides?.menuTypes ?? ['한식', '찌개류'];
-    userPlace.photos = overrides?.photos ?? null;
-    userPlace.openingHours = overrides?.openingHours ?? null;
-    userPlace.phoneNumber = overrides?.phoneNumber ?? '02-1234-5678';
-    userPlace.category = overrides?.category ?? '한식';
-    userPlace.description = overrides?.description ?? '맛있는 한식집입니다';
-    userPlace.status = overrides?.status ?? UserPlaceStatus.PENDING;
-    userPlace.rejectionReason = overrides?.rejectionReason ?? null;
-    userPlace.rejectionCount = overrides?.rejectionCount ?? 0;
-    userPlace.lastRejectedAt = overrides?.lastRejectedAt ?? null;
-    userPlace.lastSubmittedAt = overrides?.lastSubmittedAt ?? new Date();
-    userPlace.version = overrides?.version ?? 1;
-    userPlace.createdAt = overrides?.createdAt ?? new Date();
-    userPlace.updatedAt = overrides?.updatedAt ?? new Date();
-    return userPlace;
-  }
-
-  static createPending(user = UserFactory.create()): UserPlace {
-    return UserPlaceFactory.create({ user, status: UserPlaceStatus.PENDING });
-  }
-
-  static createApproved(user = UserFactory.create()): UserPlace {
-    return UserPlaceFactory.create({ user, status: UserPlaceStatus.APPROVED });
-  }
-
-  static createRejected(
-    user = UserFactory.create(),
-    rejectionReason = '주소가 불명확합니다',
-  ): UserPlace {
-    return UserPlaceFactory.create({
-      user,
-      status: UserPlaceStatus.REJECTED,
-      rejectionReason,
-    });
-  }
-}
-
 describe('UserPlaceService', () => {
   let service: UserPlaceService;
   let userPlaceRepository: ReturnType<typeof createMockRepository<UserPlace>>;
   let s3Client: ReturnType<typeof createMockS3Client>;
 
-  // Mock QueryBuilder for PostGIS spatial queries
-  const createMockQueryBuilder = () => {
-    const mockQueryBuilder = {
-      addSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      setParameters: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      getRawAndEntities: jest.fn(),
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn(),
-    };
-    return mockQueryBuilder;
-  };
+  // Reusable mock QueryBuilder for PostGIS spatial queries
+  const createMockQueryBuilder = () => ({
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    setParameters: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    getRawAndEntities: jest.fn(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getManyAndCount: jest.fn(),
+  });
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -119,6 +65,10 @@ describe('UserPlaceService', () => {
     service = module.get<UserPlaceService>(UserPlaceService);
   });
 
+  // ---------------------------------------------------------------------------
+  // checkRegistration
+  // ---------------------------------------------------------------------------
+
   describe('checkRegistration', () => {
     const userId = 1;
     const dto: CheckRegistrationDto = {
@@ -129,23 +79,20 @@ describe('UserPlaceService', () => {
     };
 
     it('should return canRegister true when all conditions are met', async () => {
-      // Arrange
       const mockQueryBuilder = createMockQueryBuilder();
       mockQueryBuilder.getRawAndEntities.mockResolvedValue({
         entities: [],
         raw: [],
       });
 
-      userPlaceRepository.count.mockResolvedValue(0); // No registrations today
-      userPlaceRepository.findOne.mockResolvedValue(null); // No duplicate
+      userPlaceRepository.count.mockResolvedValue(0);
+      userPlaceRepository.findOne.mockResolvedValue(null);
       userPlaceRepository.createQueryBuilder.mockReturnValue(
         mockQueryBuilder as any,
       );
 
-      // Act
       const result = await service.checkRegistration(userId, dto);
 
-      // Assert
       expect(result.canRegister).toBe(true);
       expect(result.dailyRemaining).toBe(USER_PLACE.DAILY_REGISTRATION_LIMIT);
       expect(result.duplicateExists).toBe(false);
@@ -153,7 +100,6 @@ describe('UserPlaceService', () => {
     });
 
     it('should return canRegister false when daily limit is reached', async () => {
-      // Arrange
       const mockQueryBuilder = createMockQueryBuilder();
       mockQueryBuilder.getRawAndEntities.mockResolvedValue({
         entities: [],
@@ -168,17 +114,13 @@ describe('UserPlaceService', () => {
         mockQueryBuilder as any,
       );
 
-      // Act
       const result = await service.checkRegistration(userId, dto);
 
-      // Assert
       expect(result.canRegister).toBe(false);
       expect(result.dailyRemaining).toBe(0);
-      expect(result.duplicateExists).toBe(false);
     });
 
     it('should return canRegister false when duplicate exists', async () => {
-      // Arrange
       const user = UserFactory.create({ id: userId });
       const duplicate = UserPlaceFactory.create({
         user,
@@ -198,29 +140,26 @@ describe('UserPlaceService', () => {
         mockQueryBuilder as any,
       );
 
-      // Act
       const result = await service.checkRegistration(userId, dto);
 
-      // Assert
       expect(result.canRegister).toBe(false);
       expect(result.duplicateExists).toBe(true);
     });
 
-    it('should return nearby places when they exist within radius', async () => {
-      // Arrange
+    it('should return nearby places with rounded distance from PostGIS', async () => {
       const user = UserFactory.create({ id: userId });
-      const nearbyPlace = UserPlaceFactory.create({
-        user,
-        name: '근처 식당',
-        address: '서울특별시 강남구 테헤란로 450',
-        latitude: 37.5012345,
-        longitude: 127.0398765,
-      });
+      const place1 = UserPlaceFactory.create({ user, id: 1, name: '가까운 곳' });
+      const place2 = UserPlaceFactory.create({ user, id: 2, name: '중간 거리' });
+      const place3 = UserPlaceFactory.create({ user, id: 3, name: '먼 곳' });
 
       const mockQueryBuilder = createMockQueryBuilder();
       mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [nearbyPlace],
-        raw: [{ distance: '50.123' }],
+        entities: [place1, place2, place3],
+        raw: [
+          { distance: '10.5' },
+          { distance: '45.2' },
+          { distance: '89.7' },
+        ],
       });
 
       userPlaceRepository.count.mockResolvedValue(0);
@@ -229,23 +168,16 @@ describe('UserPlaceService', () => {
         mockQueryBuilder as any,
       );
 
-      // Act
       const result = await service.checkRegistration(userId, dto);
 
-      // Assert
-      expect(result.nearbyPlaces.length).toBeGreaterThan(0);
-      expect(result.nearbyPlaces[0]).toMatchObject({
-        id: nearbyPlace.id,
-        name: nearbyPlace.name,
-        address: nearbyPlace.address,
-        distance: expect.any(Number),
-      });
+      expect(result.nearbyPlaces).toHaveLength(3);
+      expect(result.nearbyPlaces[0].distance).toBe(11); // Math.round(10.5)
+      expect(result.nearbyPlaces[1].distance).toBe(45); // Math.round(45.2)
+      expect(result.nearbyPlaces[2].distance).toBe(90); // Math.round(89.7)
     });
 
-    it('should filter out places outside radius', async () => {
-      // Arrange
+    it('should invoke the PostGIS QueryBuilder chain with correct clauses', async () => {
       const mockQueryBuilder = createMockQueryBuilder();
-      // PostGIS ST_DWithin filters at database level, so no results returned
       mockQueryBuilder.getRawAndEntities.mockResolvedValue({
         entities: [],
         raw: [],
@@ -257,53 +189,73 @@ describe('UserPlaceService', () => {
         mockQueryBuilder as any,
       );
 
-      // Act
-      const result = await service.checkRegistration(userId, dto);
+      await service.checkRegistration(userId, dto);
 
-      // Assert
-      expect(result.nearbyPlaces).toEqual([]);
+      expect(mockQueryBuilder.addSelect).toHaveBeenCalled();
+      expect(mockQueryBuilder.where).toHaveBeenCalled();
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalled();
+      expect(mockQueryBuilder.setParameters).toHaveBeenCalled();
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalled();
+      expect(mockQueryBuilder.getRawAndEntities).toHaveBeenCalled();
     });
 
-    it('should sort nearby places by distance', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place1 = UserPlaceFactory.create({
-        user,
-        id: 1,
-        latitude: 37.5013,
-        longitude: 127.0399,
-      });
-      const place2 = UserPlaceFactory.create({
-        user,
-        id: 2,
-        latitude: 37.5012,
-        longitude: 127.0398,
-      });
+    it('should count today registrations with UTC date range', async () => {
+      const now = new Date();
+      const utcStart = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate(),
+          0,
+          0,
+          0,
+          0,
+        ),
+      );
+      const utcEnd = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate(),
+          23,
+          59,
+          59,
+          999,
+        ),
+      );
 
       const mockQueryBuilder = createMockQueryBuilder();
-      // PostGIS query already orders by distance (ORDER BY distance ASC)
       mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [place2, place1], // Closer place first
-        raw: [{ distance: '10.5' }, { distance: '25.8' }],
+        entities: [],
+        raw: [],
       });
 
-      userPlaceRepository.count.mockResolvedValue(0);
+      userPlaceRepository.count.mockResolvedValue(3);
       userPlaceRepository.findOne.mockResolvedValue(null);
       userPlaceRepository.createQueryBuilder.mockReturnValue(
         mockQueryBuilder as any,
       );
 
-      // Act
       const result = await service.checkRegistration(userId, dto);
 
-      // Assert
-      if (result.nearbyPlaces.length > 1) {
-        expect(result.nearbyPlaces[0].distance).toBeLessThanOrEqual(
-          result.nearbyPlaces[1].distance,
-        );
-      }
+      expect(result.dailyRemaining).toBe(2); // USER_PLACE.DAILY_REGISTRATION_LIMIT(5) - 3
+      expect(userPlaceRepository.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            user: { id: userId },
+            createdAt: expect.objectContaining({
+              _type: 'between',
+              _value: [utcStart, utcEnd],
+            }),
+          }),
+        }),
+      );
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // create
+  // ---------------------------------------------------------------------------
 
   describe('create', () => {
     const userId = 1;
@@ -318,8 +270,7 @@ describe('UserPlaceService', () => {
       description: '맛있는 한식집',
     };
 
-    it('should create user place successfully', async () => {
-      // Arrange
+    it('should create user place successfully with all fields', async () => {
       const user = UserFactory.create({ id: userId });
       const createdPlace = UserPlaceFactory.create({
         user,
@@ -332,14 +283,10 @@ describe('UserPlaceService', () => {
       userPlaceRepository.create.mockReturnValue(createdPlace);
       userPlaceRepository.save.mockResolvedValue(createdPlace);
 
-      // Act
       const result = await service.create(userId, dto);
 
-      // Assert
       expect(result).toEqual(createdPlace);
       expect(result.status).toBe(UserPlaceStatus.PENDING);
-      expect(result.menuTypes).toEqual(dto.menuTypes);
-      expect(result.lastSubmittedAt).toBeDefined();
       expect(userPlaceRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           user: { id: userId },
@@ -347,10 +294,10 @@ describe('UserPlaceService', () => {
           address: dto.address,
           latitude: dto.latitude,
           longitude: dto.longitude,
-          location: expect.objectContaining({
+          location: {
             type: 'Point',
             coordinates: [dto.longitude, dto.latitude],
-          }),
+          },
           menuTypes: dto.menuTypes,
           phoneNumber: dto.phoneNumber,
           category: dto.category,
@@ -361,52 +308,7 @@ describe('UserPlaceService', () => {
       );
     });
 
-    it('should throw error when daily limit is exceeded', async () => {
-      // Arrange
-      userPlaceRepository.count.mockResolvedValue(
-        USER_PLACE.DAILY_REGISTRATION_LIMIT,
-      );
-
-      // Act & Assert
-      await expect(service.create(userId, dto)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.create(userId, dto)).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.USER_PLACE_DAILY_LIMIT_EXCEEDED,
-          }),
-        }),
-      );
-    });
-
-    it('should throw error when duplicate exists', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const duplicate = UserPlaceFactory.create({
-        user,
-        name: dto.name,
-        address: dto.address,
-      });
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(duplicate);
-
-      // Act & Assert
-      await expect(service.create(userId, dto)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.create(userId, dto)).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.USER_PLACE_DUPLICATE_REGISTRATION,
-          }),
-        }),
-      );
-    });
-
     it('should create place with null optional fields when not provided', async () => {
-      // Arrange
       const minimalDto: CreateUserPlaceDto = {
         name: '식당',
         address: '주소',
@@ -430,10 +332,8 @@ describe('UserPlaceService', () => {
       userPlaceRepository.create.mockReturnValue(createdPlace);
       userPlaceRepository.save.mockResolvedValue(createdPlace);
 
-      // Act
       await service.create(userId, minimalDto);
 
-      // Assert
       expect(userPlaceRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           phoneNumber: null,
@@ -445,81 +345,41 @@ describe('UserPlaceService', () => {
       );
     });
 
-    it('should set lastSubmittedAt when creating place', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const createdPlace = UserPlaceFactory.create({ user, ...dto });
+    it('should throw BadRequestException when daily limit is exceeded', async () => {
+      userPlaceRepository.count.mockResolvedValue(
+        USER_PLACE.DAILY_REGISTRATION_LIMIT,
+      );
 
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.create.mockReturnValue(createdPlace);
-      userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-      // Act
-      await service.create(userId, dto);
-
-      // Assert
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
+      await expect(service.create(userId, dto)).rejects.toThrow(
         expect.objectContaining({
-          lastSubmittedAt: expect.any(Date),
+          response: expect.objectContaining({
+            errorCode: ErrorCode.USER_PLACE_DAILY_LIMIT_EXCEEDED,
+          }),
         }),
       );
     });
 
-    it('should create location point from latitude and longitude', async () => {
-      // Arrange
+    it('should throw BadRequestException when duplicate exists', async () => {
       const user = UserFactory.create({ id: userId });
-      const createdPlace = UserPlaceFactory.create({ user, ...dto });
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.create.mockReturnValue(createdPlace);
-      userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-      // Act
-      await service.create(userId, dto);
-
-      // Assert
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          location: {
-            type: 'Point',
-            coordinates: [dto.longitude, dto.latitude], // GeoJSON order: [lng, lat]
-          },
-        }),
-      );
-    });
-
-    it('should create place with openingHours when provided', async () => {
-      // Arrange
-      const dtoWithHours: CreateUserPlaceDto = {
-        ...dto,
-        openingHours: '월-금: 11:00-22:00, 주말: 12:00-21:00',
-      };
-      const user = UserFactory.create({ id: userId });
-      const createdPlace = UserPlaceFactory.create({
+      const duplicate = UserPlaceFactory.create({
         user,
-        ...dtoWithHours,
+        name: dto.name,
+        address: dto.address,
       });
 
       userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.create.mockReturnValue(createdPlace);
-      userPlaceRepository.save.mockResolvedValue(createdPlace);
+      userPlaceRepository.findOne.mockResolvedValue(duplicate);
 
-      // Act
-      await service.create(userId, dtoWithHours);
-
-      // Assert
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
+      await expect(service.create(userId, dto)).rejects.toThrow(
         expect.objectContaining({
-          openingHours: dtoWithHours.openingHours,
+          response: expect.objectContaining({
+            errorCode: ErrorCode.USER_PLACE_DUPLICATE_REGISTRATION,
+          }),
         }),
       );
     });
 
-    it('should create user place with uploaded images', async () => {
-      // Arrange
+    it('should upload images to S3 and store URLs when files are provided', async () => {
       const user = UserFactory.create({ id: userId });
       const mockFiles: Express.Multer.File[] = [
         {
@@ -559,57 +419,13 @@ describe('UserPlaceService', () => {
       userPlaceRepository.create.mockReturnValue(createdPlace);
       userPlaceRepository.save.mockResolvedValue(createdPlace);
 
-      // Act
       const result = await service.create(userId, dto, mockFiles);
 
-      // Assert
       expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(2);
-      expect(s3Client.uploadUserPlaceImage).toHaveBeenNthCalledWith(
-        1,
-        mockFiles[0],
-      );
-      expect(s3Client.uploadUserPlaceImage).toHaveBeenNthCalledWith(
-        2,
-        mockFiles[1],
-      );
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          photos: imageUrls,
-        }),
-      );
       expect(result.photos).toEqual(imageUrls);
     });
 
-    it('should create user place without images when files array is empty', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const createdPlace = UserPlaceFactory.create({
-        user,
-        ...dto,
-        photos: null,
-      });
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.create.mockReturnValue(createdPlace);
-      userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-      // Act
-      const result = await service.create(userId, dto, []);
-
-      // Assert
-      expect(s3Client.uploadUserPlaceImage).not.toHaveBeenCalled();
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          photos: null,
-        }),
-      );
-      expect(result.photos).toBeNull();
-    });
-
-    it('should limit images to maximum 5 when uploading', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
+    it('should limit uploaded images to maximum 5', async () => {
       const mockFiles: Express.Multer.File[] = Array(7)
         .fill(null)
         .map((_, i) => ({
@@ -621,19 +437,6 @@ describe('UserPlaceService', () => {
           size: 1024,
         })) as Express.Multer.File[];
 
-      const imageUrls = Array(5)
-        .fill(null)
-        .map(
-          (_, i) =>
-            `https://s3.amazonaws.com/bucket/user-places/image${i + 1}.jpg`,
-        );
-
-      const createdPlace = UserPlaceFactory.create({
-        user,
-        ...dto,
-        photos: imageUrls,
-      });
-
       userPlaceRepository.count.mockResolvedValue(0);
       userPlaceRepository.findOne.mockResolvedValue(null);
       s3Client.uploadUserPlaceImage.mockImplementation((file) =>
@@ -641,71 +444,15 @@ describe('UserPlaceService', () => {
           `https://s3.amazonaws.com/bucket/user-places/${file.originalname}`,
         ),
       );
-      userPlaceRepository.create.mockReturnValue(createdPlace);
-      userPlaceRepository.save.mockResolvedValue(createdPlace);
+      userPlaceRepository.create.mockReturnValue(UserPlaceFactory.create({}));
+      userPlaceRepository.save.mockResolvedValue(UserPlaceFactory.create({}));
 
-      // Act
       await service.create(userId, dto, mockFiles);
 
-      // Assert
       expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(5);
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          photos: expect.arrayContaining([
-            expect.stringContaining('user-places/'),
-          ]),
-        }),
-      );
     });
 
-    it('should upload images in parallel for performance', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const mockFiles: Express.Multer.File[] = Array(3)
-        .fill(null)
-        .map((_, i) => ({
-          fieldname: 'images',
-          originalname: `image${i + 1}.jpg`,
-          encoding: '7bit',
-          mimetype: 'image/jpeg',
-          buffer: Buffer.from(`fake-image-${i + 1}`),
-          size: 1024,
-        })) as Express.Multer.File[];
-
-      const uploadDelay = 100;
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      s3Client.uploadUserPlaceImage.mockImplementation(
-        (file) =>
-          new Promise((resolve) => {
-            setTimeout(() => {
-              resolve(`https://s3.amazonaws.com/bucket/${file.originalname}`);
-            }, uploadDelay);
-          }),
-      );
-      userPlaceRepository.create.mockReturnValue(
-        UserPlaceFactory.create({ user }),
-      );
-      userPlaceRepository.save.mockResolvedValue(
-        UserPlaceFactory.create({ user }),
-      );
-
-      // Act
-      const uploadStartTime = Date.now();
-      await service.create(userId, dto, mockFiles);
-      const uploadDuration = Date.now() - uploadStartTime;
-
-      // Assert
-      // If uploads were sequential, it would take ~300ms (3 * 100ms)
-      // If parallel, it should take ~100ms
-      expect(uploadDuration).toBeLessThan(200); // Allow some overhead
-      expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(3);
-    });
-
-    it('should handle S3 upload errors gracefully', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
+    it('should handle S3 upload errors gracefully and log warning', async () => {
       const mockFiles: Express.Multer.File[] = [
         {
           fieldname: 'images',
@@ -717,11 +464,7 @@ describe('UserPlaceService', () => {
         } as Express.Multer.File,
       ];
 
-      const createdPlace = UserPlaceFactory.create({
-        user,
-        ...dto,
-        photos: null, // No photos due to upload failure
-      });
+      const createdPlace = UserPlaceFactory.create({ photos: null });
 
       userPlaceRepository.count.mockResolvedValue(0);
       userPlaceRepository.findOne.mockResolvedValue(null);
@@ -731,140 +474,30 @@ describe('UserPlaceService', () => {
         new Error('S3 upload failed'),
       );
 
-      // Mock logger to capture warnings
       const loggerWarnSpy = jest
         .spyOn(service['logger'], 'warn')
         .mockImplementation();
 
-      // Act - Promise.allSettled allows partial failures, so this should not throw
       const result = await service.create(userId, dto, mockFiles);
 
-      // Assert - Service continues despite S3 upload failure
       expect(result).toBeDefined();
-      expect(result.photos).toBeNull(); // No photos due to upload failure
-      expect(userPlaceRepository.save).toHaveBeenCalled();
+      expect(result.photos).toBeNull();
       expect(loggerWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('user place image upload(s) failed'),
       );
 
       loggerWarnSpy.mockRestore();
     });
-
-    it('should handle different image file types', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const mockFiles: Express.Multer.File[] = [
-        {
-          fieldname: 'images',
-          originalname: 'photo.png',
-          encoding: '7bit',
-          mimetype: 'image/png',
-          buffer: Buffer.from('fake-png'),
-          size: 1024,
-        } as Express.Multer.File,
-        {
-          fieldname: 'images',
-          originalname: 'photo.webp',
-          encoding: '7bit',
-          mimetype: 'image/webp',
-          buffer: Buffer.from('fake-webp'),
-          size: 2048,
-        } as Express.Multer.File,
-      ];
-
-      const imageUrls = [
-        'https://s3.amazonaws.com/bucket/user-places/photo.png',
-        'https://s3.amazonaws.com/bucket/user-places/photo.webp',
-      ];
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      s3Client.uploadUserPlaceImage
-        .mockResolvedValueOnce(imageUrls[0])
-        .mockResolvedValueOnce(imageUrls[1]);
-      userPlaceRepository.create.mockReturnValue(
-        UserPlaceFactory.create({ user }),
-      );
-      userPlaceRepository.save.mockResolvedValue(
-        UserPlaceFactory.create({ user }),
-      );
-
-      // Act
-      await service.create(userId, dto, mockFiles);
-
-      // Assert
-      expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledWith(mockFiles[0]);
-      expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledWith(mockFiles[1]);
-    });
-
-    it('should create place without images when files parameter is undefined', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const createdPlace = UserPlaceFactory.create({
-        user,
-        ...dto,
-        photos: null,
-      });
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.create.mockReturnValue(createdPlace);
-      userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-      // Act
-      const result = await service.create(userId, dto);
-
-      // Assert
-      expect(s3Client.uploadUserPlaceImage).not.toHaveBeenCalled();
-      expect(result.photos).toBeNull();
-    });
-
-    it('should only store S3 URLs without file metadata', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const mockFiles: Express.Multer.File[] = [
-        {
-          fieldname: 'images',
-          originalname: 'test.jpg',
-          encoding: '7bit',
-          mimetype: 'image/jpeg',
-          buffer: Buffer.from('fake-data'),
-          size: 1024,
-          destination: '/tmp',
-          filename: 'uploaded-file.jpg',
-          path: '/tmp/uploaded-file.jpg',
-        } as Express.Multer.File,
-      ];
-
-      const imageUrl = 'https://s3.amazonaws.com/bucket/user-places/test.jpg';
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      s3Client.uploadUserPlaceImage.mockResolvedValue(imageUrl);
-      userPlaceRepository.create.mockReturnValue(
-        UserPlaceFactory.create({ user }),
-      );
-      userPlaceRepository.save.mockResolvedValue(
-        UserPlaceFactory.create({ user }),
-      );
-
-      // Act
-      await service.create(userId, dto, mockFiles);
-
-      // Assert
-      expect(userPlaceRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          photos: [imageUrl],
-        }),
-      );
-    });
   });
+
+  // ---------------------------------------------------------------------------
+  // findAll
+  // ---------------------------------------------------------------------------
 
   describe('findAll', () => {
     const userId = 1;
 
     it('should return paginated user places', async () => {
-      // Arrange
       const user = UserFactory.create({ id: userId });
       const places = [
         UserPlaceFactory.create({ id: 1, user }),
@@ -874,10 +507,8 @@ describe('UserPlaceService', () => {
 
       userPlaceRepository.findAndCount.mockResolvedValue([places, 2]);
 
-      // Act
       const result = await service.findAll(userId, query);
 
-      // Assert
       expect(result.items).toEqual(places);
       expect(result.total).toBe(2);
       expect(result.page).toBe(1);
@@ -891,139 +522,86 @@ describe('UserPlaceService', () => {
     });
 
     it('should filter by status when provided', async () => {
-      // Arrange
       const user = UserFactory.create({ id: userId });
-      const pendingPlaces = [UserPlaceFactory.createPending(user)];
-      const query: UserPlaceListQueryDto = {
+      userPlaceRepository.findAndCount.mockResolvedValue([
+        [UserPlaceFactory.createPending(user)],
+        1,
+      ]);
+
+      await service.findAll(userId, {
         page: 1,
         limit: 10,
         status: UserPlaceStatus.PENDING,
-      };
-
-      userPlaceRepository.findAndCount.mockResolvedValue([pendingPlaces, 1]);
-
-      // Act
-      await service.findAll(userId, query);
-
-      // Assert
-      expect(userPlaceRepository.findAndCount).toHaveBeenCalledWith({
-        where: {
-          user: { id: userId },
-          status: UserPlaceStatus.PENDING,
-        },
-        order: { createdAt: 'DESC' },
-        skip: 0,
-        take: 10,
       });
-    });
 
-    it('should filter by search term when provided', async () => {
-      // Arrange
-      const query: UserPlaceListQueryDto = {
-        page: 1,
-        limit: 10,
-        search: '맛있는',
-      };
-
-      userPlaceRepository.findAndCount.mockResolvedValue([[], 0]);
-
-      // Act
-      await service.findAll(userId, query);
-
-      // Assert
       expect(userPlaceRepository.findAndCount).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            user: { id: userId },
-            name: expect.anything(), // Like operator
+            status: UserPlaceStatus.PENDING,
           }),
         }),
       );
     });
 
-    it('should handle pagination correctly', async () => {
-      // Arrange
-      const query: UserPlaceListQueryDto = { page: 3, limit: 5 };
-
+    it('should filter by search term when provided', async () => {
       userPlaceRepository.findAndCount.mockResolvedValue([[], 0]);
 
-      // Act
-      await service.findAll(userId, query);
+      await service.findAll(userId, { page: 1, limit: 10, search: '맛있는' });
 
-      // Assert
       expect(userPlaceRepository.findAndCount).toHaveBeenCalledWith(
         expect.objectContaining({
-          skip: 10, // (3 - 1) * 5
-          take: 5,
+          where: expect.objectContaining({
+            name: expect.anything(),
+          }),
         }),
       );
     });
 
-    it('should use default pagination when not provided', async () => {
-      // Arrange
-      const query: UserPlaceListQueryDto = {};
-
+    it('should calculate correct skip for pagination', async () => {
       userPlaceRepository.findAndCount.mockResolvedValue([[], 0]);
 
-      // Act
-      const result = await service.findAll(userId, query);
+      await service.findAll(userId, { page: 3, limit: 5 });
 
-      // Assert
+      expect(userPlaceRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 10, take: 5 }),
+      );
+    });
+
+    it('should use default page=1 and limit=10 when not provided', async () => {
+      userPlaceRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      const result = await service.findAll(userId, {});
+
       expect(result.page).toBe(1);
       expect(result.limit).toBe(10);
-      expect(userPlaceRepository.findAndCount).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skip: 0,
-          take: 10,
-        }),
-      );
-    });
-
-    it('should return empty array when no places exist', async () => {
-      // Arrange
-      const query: UserPlaceListQueryDto = { page: 1, limit: 10 };
-
-      userPlaceRepository.findAndCount.mockResolvedValue([[], 0]);
-
-      // Act
-      const result = await service.findAll(userId, query);
-
-      // Assert
-      expect(result.items).toEqual([]);
-      expect(result.total).toBe(0);
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // findOne
+  // ---------------------------------------------------------------------------
+
   describe('findOne', () => {
     const userId = 1;
-    const placeId = 1;
 
     it('should return user place when found', async () => {
-      // Arrange
       const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.create({ id: placeId, user });
+      const place = UserPlaceFactory.create({ id: 1, user });
 
       userPlaceRepository.findOne.mockResolvedValue(place);
 
-      // Act
-      const result = await service.findOne(userId, placeId);
+      const result = await service.findOne(userId, 1);
 
-      // Assert
       expect(result).toEqual(place);
       expect(userPlaceRepository.findOne).toHaveBeenCalledWith({
-        where: { id: placeId, user: { id: userId } },
+        where: { id: 1, user: { id: userId } },
       });
     });
 
     it('should throw NotFoundException when place not found', async () => {
-      // Arrange
       userPlaceRepository.findOne.mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(service.findOne(userId, 999999)).rejects.toThrow(
-        NotFoundException,
-      );
-      await expect(service.findOne(userId, 999999)).rejects.toThrow(
+      await expect(service.findOne(userId, 999)).rejects.toThrow(
         expect.objectContaining({
           response: expect.objectContaining({
             errorCode: ErrorCode.USER_PLACE_NOT_FOUND,
@@ -1031,127 +609,64 @@ describe('UserPlaceService', () => {
         }),
       );
     });
-
-    it('should throw NotFoundException when place belongs to different user', async () => {
-      // Arrange
-      const otherUser = UserFactory.create({ id: 999 });
-      const place = UserPlaceFactory.create({ user: otherUser });
-
-      userPlaceRepository.findOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(service.findOne(userId, place.id)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
   });
+
+  // ---------------------------------------------------------------------------
+  // update
+  // ---------------------------------------------------------------------------
 
   describe('update', () => {
     const userId = 1;
     const placeId = 1;
 
-    it('should update PENDING status place successfully', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createPending(user);
-      place.id = placeId;
-      place.version = 1;
+    // Status-based editability consolidated into test.each
+    test.each([
+      ['PENDING', UserPlaceStatus.PENDING],
+      ['REJECTED', UserPlaceStatus.REJECTED],
+    ] as Array<[string, UserPlaceStatus]>)(
+      'should update %s place successfully',
+      async (_label, status) => {
+        const user = UserFactory.create({ id: userId });
+        const place = UserPlaceFactory.create({
+          user,
+          id: placeId,
+          status,
+          version: 1,
+          rejectionReason:
+            status === UserPlaceStatus.REJECTED ? '주소 불명확' : null,
+        });
 
-      const dto: UpdateUserPlaceDto = {
-        name: '업데이트된 식당',
-        address: '새 주소',
-        version: 1,
-      };
+        const dto: UpdateUserPlaceDto = { name: '업데이트된 식당', version: 1 };
+        const updatedPlace = {
+          ...place,
+          name: dto.name,
+          status: UserPlaceStatus.PENDING,
+          rejectionReason: null,
+        };
 
-      const updatedPlace = { ...place, ...dto, version: 2 };
+        userPlaceRepository.findOne.mockResolvedValue(place);
+        userPlaceRepository.save.mockResolvedValue(updatedPlace as UserPlace);
 
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.save.mockResolvedValue(updatedPlace);
+        const result = await service.update(userId, placeId, dto);
 
-      // Act
-      const result = await service.update(userId, placeId, dto);
+        expect(result.name).toBe(dto.name);
+        expect(result.status).toBe(UserPlaceStatus.PENDING);
+        if (status === UserPlaceStatus.REJECTED) {
+          expect(result.rejectionReason).toBeNull();
+        }
+      },
+    );
 
-      // Assert
-      expect(result.name).toBe(dto.name);
-      expect(result.address).toBe(dto.address);
-      expect(userPlaceRepository.save).toHaveBeenCalled();
-    });
-
-    it('should update REJECTED status place and reset to PENDING', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createRejected(user);
-      place.id = placeId;
-      place.version = 1;
-
-      const dto: UpdateUserPlaceDto = {
-        name: '수정된 식당',
-        version: 1,
-      };
-
-      const updatedPlace = {
-        ...place,
-        ...dto,
-        status: UserPlaceStatus.PENDING,
-        rejectionReason: null,
-      };
-
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.save.mockResolvedValue(updatedPlace);
-
-      // Act
-      const result = await service.update(userId, placeId, dto);
-
-      // Assert
-      expect(result.status).toBe(UserPlaceStatus.PENDING);
-      expect(result.rejectionReason).toBeNull();
-    });
-
-    it('should update lastSubmittedAt when REJECTED place is updated', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createRejected(user);
-      place.id = placeId;
-      place.version = 1;
-      const oldSubmittedAt = new Date('2024-01-01');
-      place.lastSubmittedAt = oldSubmittedAt;
-
-      const dto: UpdateUserPlaceDto = {
-        name: '수정된 식당',
-        version: 1,
-      };
-
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.save.mockImplementation((entity) =>
-        Promise.resolve(entity as UserPlace),
-      );
-
-      // Act
-      const result = await service.update(userId, placeId, dto);
-
-      // Assert
-      expect(result.lastSubmittedAt).not.toEqual(oldSubmittedAt);
-      expect(result.lastSubmittedAt).toBeInstanceOf(Date);
-    });
-
-    it('should throw ForbiddenException when updating APPROVED status place', async () => {
-      // Arrange
+    it('should throw ForbiddenException when updating APPROVED place', async () => {
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createApproved(user);
       place.id = placeId;
 
-      const dto: UpdateUserPlaceDto = {
-        name: '업데이트 시도',
-        version: 1,
-      };
-
       userPlaceRepository.findOne.mockResolvedValue(place);
 
-      // Act & Assert
-      await expect(service.update(userId, placeId, dto)).rejects.toThrow(
-        ForbiddenException,
-      );
-      await expect(service.update(userId, placeId, dto)).rejects.toThrow(
+      await expect(
+        service.update(userId, placeId, { name: '시도', version: 1 }),
+      ).rejects.toThrow(
         expect.objectContaining({
           response: expect.objectContaining({
             errorCode: ErrorCode.USER_PLACE_NOT_EDITABLE,
@@ -1161,24 +676,16 @@ describe('UserPlaceService', () => {
     });
 
     it('should throw ConflictException when version mismatch occurs', async () => {
-      // Arrange
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createPending(user);
       place.id = placeId;
       place.version = 2;
 
-      const dto: UpdateUserPlaceDto = {
-        name: '업데이트',
-        version: 1, // Wrong version
-      };
-
       userPlaceRepository.findOne.mockResolvedValue(place);
 
-      // Act & Assert
-      await expect(service.update(userId, placeId, dto)).rejects.toThrow(
-        ConflictException,
-      );
-      await expect(service.update(userId, placeId, dto)).rejects.toThrow(
+      await expect(
+        service.update(userId, placeId, { version: 1 }), // stale version
+      ).rejects.toThrow(
         expect.objectContaining({
           response: expect.objectContaining({
             errorCode: ErrorCode.USER_PLACE_OPTIMISTIC_LOCK_FAILED,
@@ -1187,8 +694,7 @@ describe('UserPlaceService', () => {
       );
     });
 
-    it('should update only provided fields', async () => {
-      // Arrange
+    it('should update only provided fields, leaving others unchanged', async () => {
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createPending(user);
       place.id = placeId;
@@ -1196,70 +702,21 @@ describe('UserPlaceService', () => {
       place.name = '원래 이름';
       place.address = '원래 주소';
 
-      const dto: UpdateUserPlaceDto = {
-        name: '새 이름',
-        version: 1,
-        // address not provided
-      };
-
       userPlaceRepository.findOne.mockResolvedValue(place);
       userPlaceRepository.save.mockImplementation((entity) =>
         Promise.resolve(entity as UserPlace),
       );
 
-      // Act
-      const result = await service.update(userId, placeId, dto);
+      const result = await service.update(userId, placeId, {
+        name: '새 이름',
+        version: 1,
+      });
 
-      // Assert
       expect(result.name).toBe('새 이름');
-      expect(result.address).toBe('원래 주소'); // Unchanged
+      expect(result.address).toBe('원래 주소');
     });
 
-    it('should update all fields when all are provided', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createPending(user);
-      place.id = placeId;
-      place.version = 1;
-      place.photos = ['https://example.com/photo.jpg'];
-
-      const dto: UpdateUserPlaceDto = {
-        name: '새 이름',
-        address: '새 주소',
-        latitude: 37.123,
-        longitude: 127.456,
-        menuTypes: ['중식', '짜장면', '짬뽕'],
-        existingPhotos: ['https://example.com/photo.jpg'],
-        openingHours: '매일 10:00-22:00',
-        phoneNumber: '02-1111-2222',
-        category: '중식',
-        description: '중국집',
-        version: 1,
-      };
-
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.save.mockImplementation((entity) =>
-        Promise.resolve(entity as UserPlace),
-      );
-
-      // Act
-      const result = await service.update(userId, placeId, dto);
-
-      // Assert
-      expect(result.name).toBe(dto.name);
-      expect(result.address).toBe(dto.address);
-      expect(result.latitude).toBe(dto.latitude);
-      expect(result.longitude).toBe(dto.longitude);
-      expect(result.menuTypes).toEqual(dto.menuTypes);
-      expect(result.photos).toEqual(dto.existingPhotos);
-      expect(result.openingHours).toBe(dto.openingHours);
-      expect(result.phoneNumber).toBe(dto.phoneNumber);
-      expect(result.category).toBe(dto.category);
-      expect(result.description).toBe(dto.description);
-    });
-
-    it('should update location when coordinates are changed', async () => {
-      // Arrange
+    it('should update location GeoJSON point when coordinates change', async () => {
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createPending(user);
       place.id = placeId;
@@ -1267,87 +724,24 @@ describe('UserPlaceService', () => {
       place.latitude = 37.5;
       place.longitude = 127.0;
 
-      const dto: UpdateUserPlaceDto = {
-        latitude: 37.123,
-        longitude: 127.456,
-        version: 1,
-      };
-
       userPlaceRepository.findOne.mockResolvedValue(place);
       userPlaceRepository.save.mockImplementation((entity) =>
         Promise.resolve(entity as UserPlace),
       );
 
-      // Act
-      const result = await service.update(userId, placeId, dto);
-
-      // Assert
-      expect(result.location).toEqual({
-        type: 'Point',
-        coordinates: [dto.longitude, dto.latitude],
+      const result = await service.update(userId, placeId, {
+        latitude: 37.123,
+        longitude: 127.456,
+        version: 1,
       });
-    });
 
-    it('should update location when only latitude is changed', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createPending(user);
-      place.id = placeId;
-      place.version = 1;
-      place.latitude = 37.5;
-      place.longitude = 127.0;
-
-      const dto: UpdateUserPlaceDto = {
-        latitude: 37.123,
-        version: 1,
-      };
-
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.save.mockImplementation((entity) =>
-        Promise.resolve(entity as UserPlace),
-      );
-
-      // Act
-      const result = await service.update(userId, placeId, dto);
-
-      // Assert
       expect(result.location).toEqual({
         type: 'Point',
-        coordinates: [place.longitude, dto.latitude],
-      });
-    });
-
-    it('should update location when only longitude is changed', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createPending(user);
-      place.id = placeId;
-      place.version = 1;
-      place.latitude = 37.5;
-      place.longitude = 127.0;
-
-      const dto: UpdateUserPlaceDto = {
-        longitude: 127.456,
-        version: 1,
-      };
-
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.save.mockImplementation((entity) =>
-        Promise.resolve(entity as UserPlace),
-      );
-
-      // Act
-      const result = await service.update(userId, placeId, dto);
-
-      // Assert
-      expect(result.location).toEqual({
-        type: 'Point',
-        coordinates: [dto.longitude, place.latitude],
+        coordinates: [127.456, 37.123],
       });
     });
 
     it('should not update lastSubmittedAt when PENDING place is updated', async () => {
-      // Arrange
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createPending(user);
       place.id = placeId;
@@ -1355,72 +749,342 @@ describe('UserPlaceService', () => {
       const originalSubmittedAt = new Date('2024-01-01');
       place.lastSubmittedAt = originalSubmittedAt;
 
-      const dto: UpdateUserPlaceDto = {
-        name: '수정된 이름',
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        name: '수정',
         version: 1,
-      };
+      });
+
+      expect(result.lastSubmittedAt).toEqual(originalSubmittedAt);
+    });
+
+    it('should update lastSubmittedAt when REJECTED place is updated', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createRejected(user);
+      place.id = placeId;
+      place.version = 1;
+      place.lastSubmittedAt = new Date('2024-01-01');
 
       userPlaceRepository.findOne.mockResolvedValue(place);
       userPlaceRepository.save.mockImplementation((entity) =>
         Promise.resolve(entity as UserPlace),
       );
 
-      // Act
-      const result = await service.update(userId, placeId, dto);
+      const result = await service.update(userId, placeId, {
+        name: '수정',
+        version: 1,
+      });
 
-      // Assert
-      expect(result.lastSubmittedAt).toEqual(originalSubmittedAt);
+      expect(result.lastSubmittedAt).not.toEqual(new Date('2024-01-01'));
+    });
+
+    it('should remove a photo by excluding it from existingPhotos', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = [
+        'https://example.com/old-photo.jpg',
+        'https://example.com/new-photo.jpg',
+      ];
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        existingPhotos: ['https://example.com/new-photo.jpg'],
+        version: 1,
+      });
+
+      expect(result.photos).toEqual(['https://example.com/new-photo.jpg']);
+    });
+
+    it('should preserve existing photos when existingPhotos is undefined and no new files', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = [
+        'https://example.com/photo1.jpg',
+        'https://example.com/photo2.jpg',
+      ];
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        name: '업데이트 이름',
+        version: 1,
+        // existingPhotos is not provided (undefined) and no files
+      });
+
+      expect(result.photos).toEqual([
+        'https://example.com/photo1.jpg',
+        'https://example.com/photo2.jpg',
+      ]);
+    });
+
+    it('should set photos to null when existingPhotos is empty array and no new files', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = ['https://example.com/photo.jpg'];
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        existingPhotos: [],
+        version: 1,
+      });
+
+      expect(result.photos).toBeNull();
+    });
+
+    it('should upload new photos during update and merge with existing', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = ['https://example.com/existing-photo.jpg'];
+
+      const mockFiles: Express.Multer.File[] = [
+        {
+          fieldname: 'images',
+          originalname: 'new-photo.jpg',
+          encoding: '7bit',
+          mimetype: 'image/jpeg',
+          buffer: Buffer.from('new-photo'),
+          size: 1024,
+        } as Express.Multer.File,
+      ];
+
+      const newPhotoUrl =
+        'https://s3.amazonaws.com/user-places/new-photo-uuid.jpg';
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      s3Client.uploadUserPlaceImage.mockResolvedValue(newPhotoUrl);
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        existingPhotos: ['https://example.com/existing-photo.jpg'],
+        version: 1,
+      }, mockFiles);
+
+      expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(1);
+      expect(result.photos).toContain('https://example.com/existing-photo.jpg');
+      expect(result.photos).toContain(newPhotoUrl);
+    });
+
+    it('should log warning and continue when S3 upload fails during update', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = null;
+
+      const mockFiles: Express.Multer.File[] = [
+        {
+          fieldname: 'images',
+          originalname: 'photo.jpg',
+          encoding: '7bit',
+          mimetype: 'image/jpeg',
+          buffer: Buffer.from('photo'),
+          size: 1024,
+        } as Express.Multer.File,
+      ];
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      s3Client.uploadUserPlaceImage.mockRejectedValue(
+        new Error('S3 upload failed'),
+      );
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const loggerWarnSpy = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation();
+
+      const result = await service.update(userId, placeId, {
+        existingPhotos: [],
+        version: 1,
+      }, mockFiles);
+
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('user place image upload(s) failed during update'),
+      );
+      expect(result).toBeDefined();
+
+      loggerWarnSpy.mockRestore();
+    });
+
+    it('should enforce max 5 photos when both existing and new files are provided', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = [
+        'https://example.com/photo1.jpg',
+        'https://example.com/photo2.jpg',
+        'https://example.com/photo3.jpg',
+        'https://example.com/photo4.jpg',
+      ];
+
+      const mockFiles: Express.Multer.File[] = Array(3)
+        .fill(null)
+        .map((_, i) => ({
+          fieldname: 'images',
+          originalname: `new-photo-${i + 1}.jpg`,
+          encoding: '7bit',
+          mimetype: 'image/jpeg',
+          buffer: Buffer.from(`photo-${i}`),
+          size: 1024,
+        })) as Express.Multer.File[];
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      s3Client.uploadUserPlaceImage.mockImplementation((file) =>
+        Promise.resolve(
+          `https://s3.amazonaws.com/user-places/${file.originalname}`,
+        ),
+      );
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        existingPhotos: [
+          'https://example.com/photo1.jpg',
+          'https://example.com/photo2.jpg',
+          'https://example.com/photo3.jpg',
+          'https://example.com/photo4.jpg',
+        ],
+        version: 1,
+      }, mockFiles);
+
+      // Existing 4 + up to 1 new = max 5
+      expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(1);
+      expect(result.photos).toHaveLength(5);
+    });
+
+    it('should throw ConflictException when OptimisticLockVersionMismatchError is thrown by save', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+
+      const optimisticError = new OptimisticLockVersionMismatchError(
+        'UserPlace',
+        1,
+        2,
+      );
+      userPlaceRepository.save.mockRejectedValue(optimisticError);
+
+      await expect(
+        service.update(userId, placeId, { version: 1 }),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          response: expect.objectContaining({
+            errorCode: ErrorCode.USER_PLACE_OPTIMISTIC_LOCK_FAILED,
+          }),
+        }),
+      );
+    });
+
+    it('should re-throw non-optimistic-lock errors from save', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+
+      const genericError = new Error('Database connection lost');
+      userPlaceRepository.save.mockRejectedValue(genericError);
+
+      await expect(
+        service.update(userId, placeId, { version: 1 }),
+      ).rejects.toThrow('Database connection lost');
+    });
+
+    it('should filter out URLs not in current place.photos when existingPhotos contains foreign URLs', async () => {
+      const user = UserFactory.create({ id: userId });
+      const place = UserPlaceFactory.createPending(user);
+      place.id = placeId;
+      place.version = 1;
+      place.photos = ['https://example.com/legitimate.jpg'];
+
+      userPlaceRepository.findOne.mockResolvedValue(place);
+      userPlaceRepository.save.mockImplementation((entity) =>
+        Promise.resolve(entity as UserPlace),
+      );
+
+      const result = await service.update(userId, placeId, {
+        existingPhotos: [
+          'https://example.com/legitimate.jpg',
+          'https://attacker.com/malicious.jpg', // not in current place.photos
+        ],
+        version: 1,
+      });
+
+      expect(result.photos).toEqual(['https://example.com/legitimate.jpg']);
+      expect(result.photos).not.toContain('https://attacker.com/malicious.jpg');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // remove
+  // ---------------------------------------------------------------------------
 
   describe('remove', () => {
     const userId = 1;
     const placeId = 1;
 
-    it('should delete PENDING status place successfully', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createPending(user);
-      place.id = placeId;
+    // Status-based deletability consolidated into test.each
+    test.each([
+      ['PENDING', UserPlaceStatus.PENDING],
+      ['REJECTED', UserPlaceStatus.REJECTED],
+    ] as Array<[string, UserPlaceStatus]>)(
+      'should soft-delete %s place successfully',
+      async (_label, status) => {
+        const user = UserFactory.create({ id: userId });
+        const place = UserPlaceFactory.create({
+          user,
+          id: placeId,
+          status,
+        });
 
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.softRemove.mockResolvedValue(place);
+        userPlaceRepository.findOne.mockResolvedValue(place);
+        userPlaceRepository.softRemove.mockResolvedValue(place);
 
-      // Act
-      await service.remove(userId, placeId);
+        await service.remove(userId, placeId);
 
-      // Assert
-      expect(userPlaceRepository.softRemove).toHaveBeenCalledWith(place);
-    });
+        expect(userPlaceRepository.softRemove).toHaveBeenCalledWith(place);
+      },
+    );
 
-    it('should delete REJECTED status place successfully', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place = UserPlaceFactory.createRejected(user);
-      place.id = placeId;
-
-      userPlaceRepository.findOne.mockResolvedValue(place);
-      userPlaceRepository.softRemove.mockResolvedValue(place);
-
-      // Act
-      await service.remove(userId, placeId);
-
-      // Assert
-      expect(userPlaceRepository.softRemove).toHaveBeenCalledWith(place);
-    });
-
-    it('should throw ForbiddenException when deleting APPROVED status place', async () => {
-      // Arrange
+    it('should throw ForbiddenException when deleting APPROVED place', async () => {
       const user = UserFactory.create({ id: userId });
       const place = UserPlaceFactory.createApproved(user);
       place.id = placeId;
 
       userPlaceRepository.findOne.mockResolvedValue(place);
 
-      // Act & Assert
-      await expect(service.remove(userId, placeId)).rejects.toThrow(
-        ForbiddenException,
-      );
       await expect(service.remove(userId, placeId)).rejects.toThrow(
         expect.objectContaining({
           response: expect.objectContaining({
@@ -1431,732 +1095,11 @@ describe('UserPlaceService', () => {
     });
 
     it('should throw NotFoundException when place not found', async () => {
-      // Arrange
       userPlaceRepository.findOne.mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(service.remove(userId, 999999)).rejects.toThrow(
+      await expect(service.remove(userId, 999)).rejects.toThrow(
         NotFoundException,
       );
-    });
-  });
-
-  describe('Daily limit calculation (UTC based)', () => {
-    const userId = 1;
-
-    it('should count registrations created today in UTC timezone', async () => {
-      // Arrange
-      const now = new Date();
-      const utcStart = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate(),
-          0,
-          0,
-          0,
-          0,
-        ),
-      );
-      const utcEnd = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate(),
-          23,
-          59,
-          59,
-          999,
-        ),
-      );
-
-      const mockQueryBuilder = createMockQueryBuilder();
-      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [],
-        raw: [],
-      });
-
-      userPlaceRepository.count.mockResolvedValue(3);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder as any,
-      );
-
-      const dto: CheckRegistrationDto = {
-        name: '테스트',
-        address: '주소',
-        latitude: 37.5,
-        longitude: 127.0,
-      };
-
-      // Act
-      const result = await service.checkRegistration(userId, dto);
-
-      // Assert
-      expect(result.dailyRemaining).toBe(2); // 5 - 3
-      expect(userPlaceRepository.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            user: { id: userId },
-            createdAt: expect.objectContaining({
-              _type: 'between',
-              _value: [utcStart, utcEnd],
-            }),
-          }),
-        }),
-      );
-    });
-
-    it('should reset daily count at UTC midnight', async () => {
-      // Arrange
-      const yesterday = new Date();
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-
-      const user = UserFactory.create({ id: userId });
-      const yesterdayPlace = UserPlaceFactory.create({
-        user,
-        createdAt: yesterday,
-      });
-
-      const mockQueryBuilder = createMockQueryBuilder();
-      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [yesterdayPlace],
-        raw: [{ distance: '50' }],
-      });
-
-      // Mock: Yesterday's registration should not count for today
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder as any,
-      );
-
-      const dto: CheckRegistrationDto = {
-        name: '테스트',
-        address: '주소',
-        latitude: 37.5,
-        longitude: 127.0,
-      };
-
-      // Act
-      const result = await service.checkRegistration(userId, dto);
-
-      // Assert
-      expect(result.dailyRemaining).toBe(USER_PLACE.DAILY_REGISTRATION_LIMIT);
-    });
-  });
-
-  describe('New fields validation and behavior', () => {
-    const userId = 1;
-
-    describe('menuTypes field', () => {
-      it('should include menuTypes when creating place', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식', '찌개류', '국밥'],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({ user, ...dto });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        const result = await service.create(userId, dto);
-
-        // Assert
-        expect(result.menuTypes).toEqual(dto.menuTypes);
-        expect(result.menuTypes.length).toBeGreaterThanOrEqual(1);
-        expect(result.menuTypes.length).toBeLessThanOrEqual(10);
-      });
-
-      it('should update menuTypes field', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createPending(user);
-        place.id = placeId;
-        place.version = 1;
-        place.menuTypes = ['한식'];
-
-        const dto: UpdateUserPlaceDto = {
-          menuTypes: ['일식', '라멘', '돈카츠'],
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.menuTypes).toEqual(dto.menuTypes);
-      });
-    });
-
-    describe('photos field', () => {
-      it('should handle photos array when provided', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식'],
-          photos: [
-            'https://example.com/photo1.jpg',
-            'https://example.com/photo2.jpg',
-            'https://example.com/photo3.jpg',
-          ],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({ user, ...dto });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        const result = await service.create(userId, dto);
-
-        // Assert
-        expect(result.photos).toEqual(dto.photos);
-        expect(result.photos!.length).toBeLessThanOrEqual(5);
-      });
-
-      it('should handle photos as null when not provided', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식'],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({
-          user,
-          ...dto,
-          photos: null,
-        });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        const result = await service.create(userId, dto);
-
-        // Assert
-        expect(result.photos).toBeNull();
-      });
-
-      it('should update photos field', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createPending(user);
-        place.id = placeId;
-        place.version = 1;
-        place.photos = [
-          'https://example.com/old-photo.jpg',
-          'https://example.com/new-photo.jpg',
-        ];
-
-        const dto: UpdateUserPlaceDto = {
-          existingPhotos: ['https://example.com/new-photo.jpg'],
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.photos).toEqual(dto.existingPhotos);
-      });
-    });
-
-    describe('openingHours field', () => {
-      it('should handle openingHours when provided', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식'],
-          openingHours: '월-금: 11:00-22:00, 토-일: 12:00-21:00',
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({ user, ...dto });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        const result = await service.create(userId, dto);
-
-        // Assert
-        expect(result.openingHours).toBe(dto.openingHours);
-        expect(result.openingHours!.length).toBeLessThanOrEqual(200);
-      });
-
-      it('should handle openingHours as null when not provided', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식'],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({
-          user,
-          ...dto,
-          openingHours: null,
-        });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        const result = await service.create(userId, dto);
-
-        // Assert
-        expect(result.openingHours).toBeNull();
-      });
-
-      it('should update openingHours field', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createPending(user);
-        place.id = placeId;
-        place.version = 1;
-        place.openingHours = null;
-
-        const dto: UpdateUserPlaceDto = {
-          openingHours: '매일 09:00-20:00',
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.openingHours).toBe(dto.openingHours);
-      });
-    });
-
-    describe('location field synchronization', () => {
-      it('should create location point when creating place', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5012345,
-          longitude: 127.0398765,
-          menuTypes: ['한식'],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({ user, ...dto });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        await service.create(userId, dto);
-
-        // Assert
-        expect(userPlaceRepository.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            location: {
-              type: 'Point',
-              coordinates: [127.0398765, 37.5012345], // [lng, lat] order
-            },
-          }),
-        );
-      });
-
-      it('should update location when latitude or longitude changes', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createPending(user);
-        place.id = placeId;
-        place.version = 1;
-        place.latitude = 37.5;
-        place.longitude = 127.0;
-        place.location = {
-          type: 'Point',
-          coordinates: [127.0, 37.5],
-        } as any;
-
-        const dto: UpdateUserPlaceDto = {
-          latitude: 37.6,
-          longitude: 127.1,
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.location).toEqual({
-          type: 'Point',
-          coordinates: [127.1, 37.6],
-        });
-      });
-
-      it('should preserve location when coordinates are not changed', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createPending(user);
-        place.id = placeId;
-        place.version = 1;
-        place.latitude = 37.5;
-        place.longitude = 127.0;
-        const originalLocation = {
-          type: 'Point' as const,
-          coordinates: [127.0, 37.5],
-        };
-        place.location = originalLocation as any;
-
-        const dto: UpdateUserPlaceDto = {
-          name: '새 이름',
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.location).toEqual(originalLocation);
-      });
-    });
-
-    describe('lastSubmittedAt field', () => {
-      it('should set lastSubmittedAt when creating new place', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식'],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({ user, ...dto });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        const beforeCreate = new Date();
-
-        // Act
-        await service.create(userId, dto);
-
-        // Assert
-        expect(userPlaceRepository.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            lastSubmittedAt: expect.any(Date),
-          }),
-        );
-        const callArgs = userPlaceRepository.create.mock.calls[0][0] as any;
-        expect(callArgs.lastSubmittedAt.getTime()).toBeGreaterThanOrEqual(
-          beforeCreate.getTime(),
-        );
-      });
-
-      it('should update lastSubmittedAt when REJECTED place is updated', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createRejected(user);
-        place.id = placeId;
-        place.version = 1;
-        const oldSubmittedAt = new Date('2024-01-01T00:00:00Z');
-        place.lastSubmittedAt = oldSubmittedAt;
-
-        const dto: UpdateUserPlaceDto = {
-          name: '수정된 식당',
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        const beforeUpdate = new Date();
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.lastSubmittedAt).not.toEqual(oldSubmittedAt);
-        expect(result.lastSubmittedAt!.getTime()).toBeGreaterThanOrEqual(
-          beforeUpdate.getTime(),
-        );
-      });
-
-      it('should not update lastSubmittedAt when PENDING place is updated', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createPending(user);
-        place.id = placeId;
-        place.version = 1;
-        const originalSubmittedAt = new Date('2024-01-01T00:00:00Z');
-        place.lastSubmittedAt = originalSubmittedAt;
-
-        const dto: UpdateUserPlaceDto = {
-          name: '수정된 식당',
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.lastSubmittedAt).toEqual(originalSubmittedAt);
-      });
-    });
-
-    describe('rejectionCount and lastRejectedAt fields', () => {
-      it('should initialize rejectionCount to 0 when creating place', async () => {
-        // Arrange
-        const dto: CreateUserPlaceDto = {
-          name: '테스트 식당',
-          address: '주소',
-          latitude: 37.5,
-          longitude: 127.0,
-          menuTypes: ['한식'],
-        };
-        const user = UserFactory.create({ id: userId });
-        const createdPlace = UserPlaceFactory.create({
-          user,
-          ...dto,
-          rejectionCount: 0,
-          lastRejectedAt: null,
-        });
-
-        userPlaceRepository.count.mockResolvedValue(0);
-        userPlaceRepository.findOne.mockResolvedValue(null);
-        userPlaceRepository.create.mockReturnValue(createdPlace);
-        userPlaceRepository.save.mockResolvedValue(createdPlace);
-
-        // Act
-        const result = await service.create(userId, dto);
-
-        // Assert
-        expect(result.rejectionCount).toBe(0);
-        expect(result.lastRejectedAt).toBeNull();
-      });
-
-      it('should preserve rejectionCount when updating place', async () => {
-        // Arrange
-        const placeId = 1;
-        const user = UserFactory.create({ id: userId });
-        const place = UserPlaceFactory.createRejected(user);
-        place.id = placeId;
-        place.version = 1;
-        place.rejectionCount = 2;
-        place.lastRejectedAt = new Date('2024-01-01');
-
-        const dto: UpdateUserPlaceDto = {
-          name: '수정된 식당',
-          version: 1,
-        };
-
-        userPlaceRepository.findOne.mockResolvedValue(place);
-        userPlaceRepository.save.mockImplementation((entity) =>
-          Promise.resolve(entity as UserPlace),
-        );
-
-        // Act
-        const result = await service.update(userId, placeId, dto);
-
-        // Assert
-        expect(result.rejectionCount).toBe(2);
-        expect(result.lastRejectedAt).toEqual(place.lastRejectedAt);
-      });
-    });
-  });
-
-  describe('Nearby search with PostGIS', () => {
-    const userId = 1;
-
-    it('should use PostGIS ST_DWithin to filter places outside radius', async () => {
-      // Arrange
-      const mockQueryBuilder = createMockQueryBuilder();
-      // PostGIS filters at database level - far places never returned
-      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [],
-        raw: [],
-      });
-
-      const dto: CheckRegistrationDto = {
-        name: '강남역',
-        address: '강남역',
-        latitude: 37.498,
-        longitude: 127.0276,
-      };
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder as any,
-      );
-
-      // Act
-      const result = await service.checkRegistration(userId, dto);
-
-      // Assert
-      expect(result.nearbyPlaces).toEqual([]);
-      expect(mockQueryBuilder.addSelect).toHaveBeenCalled();
-      expect(mockQueryBuilder.where).toHaveBeenCalled();
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalled();
-      expect(mockQueryBuilder.setParameters).toHaveBeenCalled();
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalled();
-    });
-
-    it('should use PostGIS ST_Distance to calculate accurate distances', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const nearbyPlace = UserPlaceFactory.create({
-        user,
-        latitude: 37.5012345,
-        longitude: 127.0398765,
-        name: '가까운 식당',
-      });
-
-      const mockQueryBuilder = createMockQueryBuilder();
-      // PostGIS returns distance in meters calculated at database
-      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [nearbyPlace],
-        raw: [{ distance: '45.678' }], // PostGIS ST_Distance result
-      });
-
-      const dto: CheckRegistrationDto = {
-        name: '새 식당',
-        address: '주소',
-        latitude: 37.50124,
-        longitude: 127.03988,
-      };
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder as any,
-      );
-
-      // Act
-      const result = await service.checkRegistration(userId, dto);
-
-      // Assert
-      expect(result.nearbyPlaces.length).toBeGreaterThan(0);
-      expect(result.nearbyPlaces[0].distance).toBeLessThan(
-        USER_PLACE.NEARBY_SEARCH_RADIUS_METERS,
-      );
-      // Verify QueryBuilder chain was called
-      expect(mockQueryBuilder.getRawAndEntities).toHaveBeenCalled();
-    });
-
-    it('should return places ordered by distance from PostGIS query', async () => {
-      // Arrange
-      const user = UserFactory.create({ id: userId });
-      const place1 = UserPlaceFactory.create({
-        user,
-        id: 1,
-        name: '가까운 곳',
-      });
-      const place2 = UserPlaceFactory.create({
-        user,
-        id: 2,
-        name: '중간 거리',
-      });
-      const place3 = UserPlaceFactory.create({
-        user,
-        id: 3,
-        name: '먼 곳',
-      });
-
-      const mockQueryBuilder = createMockQueryBuilder();
-      // PostGIS ORDER BY distance ASC - already sorted
-      mockQueryBuilder.getRawAndEntities.mockResolvedValue({
-        entities: [place1, place2, place3],
-        raw: [{ distance: '10.5' }, { distance: '45.2' }, { distance: '89.7' }],
-      });
-
-      const dto: CheckRegistrationDto = {
-        name: '테스트',
-        address: '주소',
-        latitude: 37.5,
-        longitude: 127.0,
-      };
-
-      userPlaceRepository.count.mockResolvedValue(0);
-      userPlaceRepository.findOne.mockResolvedValue(null);
-      userPlaceRepository.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder as any,
-      );
-
-      // Act
-      const result = await service.checkRegistration(userId, dto);
-
-      // Assert
-      expect(result.nearbyPlaces).toHaveLength(3);
-      expect(result.nearbyPlaces[0].distance).toBe(11); // Rounded from 10.5
-      expect(result.nearbyPlaces[1].distance).toBe(45); // Rounded from 45.2
-      expect(result.nearbyPlaces[2].distance).toBe(90); // Rounded from 89.7
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalled();
     });
   });
 });

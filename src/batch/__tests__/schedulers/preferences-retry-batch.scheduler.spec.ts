@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { PreferencesRetryBatchScheduler } from '../../schedulers/preferences-retry-batch.scheduler';
 import { PreferenceBatchService } from '../../services/preference-batch.service';
 import {
@@ -14,6 +16,7 @@ import {
   createMockQueryBuilder,
   createMockUpdateResult,
 } from '../../../../test/mocks/repository.mock';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 
 describe('PreferencesRetryBatchScheduler', () => {
   let scheduler: PreferencesRetryBatchScheduler;
@@ -55,12 +58,80 @@ describe('PreferencesRetryBatchScheduler', () => {
           provide: DataSource,
           useValue: dataSource,
         },
+        {
+          provide: SchedulerAlertService,
+          useValue: {
+            alertFailure: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('0 2 * * *'),
+          },
+        },
+        {
+          provide: SchedulerRegistry,
+          useValue: {
+            addCronJob: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     scheduler = module.get<PreferencesRetryBatchScheduler>(
       PreferencesRetryBatchScheduler,
     );
+  });
+
+  describe('onModuleInit', () => {
+    it('should register CronJob with scheduler registry and start it (lines 32-48)', () => {
+      // Access the mocked SchedulerRegistry via the scheduler's private field
+      // The addCronJob mock was set up in beforeEach
+      const mockSchedulerRegistry = {
+        addCronJob: jest.fn(),
+      };
+
+      // Re-create scheduler with a spy-able schedulerRegistry
+      const schedulerWithSpy = new (scheduler.constructor as any)(
+        mockPreferenceBatchService,
+        mockMenuSelectionRepository,
+        dataSource,
+        { alertFailure: jest.fn() },
+        { get: jest.fn().mockReturnValue('0 2 * * *') },
+        mockSchedulerRegistry,
+      );
+
+      schedulerWithSpy.onModuleInit();
+
+      expect(mockSchedulerRegistry.addCronJob).toHaveBeenCalledWith(
+        'preferences-retry-batch',
+        expect.any(Object),
+      );
+    });
+
+    it('should use configured cron expression from ConfigService (lines 32-35)', () => {
+      const mockSchedulerRegistry = { addCronJob: jest.fn() };
+      const mockConfigServiceCustom = {
+        get: jest.fn().mockReturnValue('0 6 * * 5'),
+      };
+
+      const schedulerWithSpy = new (scheduler.constructor as any)(
+        mockPreferenceBatchService,
+        mockMenuSelectionRepository,
+        dataSource,
+        { alertFailure: jest.fn() },
+        mockConfigServiceCustom,
+        mockSchedulerRegistry,
+      );
+
+      schedulerWithSpy.onModuleInit();
+
+      expect(mockSchedulerRegistry.addCronJob).toHaveBeenCalledWith(
+        'preferences-retry-batch',
+        expect.any(Object),
+      );
+    });
   });
 
   describe('handleExpiredBatchProcessingItems', () => {
@@ -438,6 +509,28 @@ describe('PreferencesRetryBatchScheduler', () => {
 
       // Act & Assert
       await expect(scheduler.submitRetryBatch()).resolves.not.toThrow();
+    });
+
+    it('should log warning and skip when advisory lock is not acquired (line 96 branch)', async () => {
+      // Arrange: make withAdvisoryLock return acquired=false (another instance is running)
+      const mockQueryRunnerLockFailed = {
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: false }]),
+        release: jest.fn().mockResolvedValue(undefined),
+      };
+
+      dataSource.createQueryRunner.mockReturnValue(mockQueryRunnerLockFailed as any);
+
+      const warnSpy = jest.spyOn(scheduler['logger'], 'warn');
+
+      // Act
+      await scheduler.submitRetryBatch();
+
+      // Assert: submitRetryBatch on preferenceBatchService should NOT be called
+      expect(mockPreferenceBatchService.submitRetryBatch).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('다른 인스턴스에서 이미 실행 중'),
+      );
     });
   });
 

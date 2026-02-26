@@ -1,5 +1,4 @@
 import {
-  SYSTEM_PROMPT,
   SYSTEM_PROMPT_KO,
   SYSTEM_PROMPT_EN,
   getSystemPrompt,
@@ -7,341 +6,529 @@ import {
   buildUserPromptWithValidation,
   MENU_RECOMMENDATIONS_JSON_SCHEMA,
   getMenuRecommendationsJsonSchema,
+  getAgeGroup,
+  getAgeGroupEN,
+  buildUserPromptWithAddress,
+  buildUserProfile,
 } from '../../../openai/prompts/menu-recommendation.prompts';
+import type { StructuredAnalysis } from '../../../openai/prompts/menu-recommendation.prompts';
+
+const SYSTEM_PROMPT = getSystemPrompt('ko');
 
 describe('menu-recommendation.prompts', () => {
-  describe('SYSTEM_PROMPT (backward compatibility - Korean)', () => {
-    it('should be a non-empty string', () => {
-      expect(typeof SYSTEM_PROMPT).toBe('string');
-      expect(SYSTEM_PROMPT.length).toBeGreaterThan(0);
+  // ============================================================================
+  // System Prompts
+  // ============================================================================
+
+  describe('SYSTEM_PROMPT (backward compatibility)', () => {
+    it('should equal SYSTEM_PROMPT_KO for backward compatibility', () => {
+      expect(SYSTEM_PROMPT).toBe(SYSTEM_PROMPT_KO);
     });
 
-    it('should contain role definition in Korean', () => {
+    it('should contain all required section tags and Korean-specific content', () => {
       expect(SYSTEM_PROMPT).toContain('Pick-Eat');
       expect(SYSTEM_PROMPT).toContain('음식 컨설턴트');
       expect(SYSTEM_PROMPT).toContain('<role>');
-    });
-
-    it('should contain input data description', () => {
       expect(SYSTEM_PROMPT).toContain('<input_data>');
       expect(SYSTEM_PROMPT).toContain('USER_PROMPT');
       expect(SYSTEM_PROMPT).toContain('PREFERENCES');
       expect(SYSTEM_PROMPT).toContain('PREFERENCE_ANALYSIS');
-    });
-
-    it('should contain output format specification', () => {
       expect(SYSTEM_PROMPT).toContain('<output_format>');
       expect(SYSTEM_PROMPT).toContain('intro');
       expect(SYSTEM_PROMPT).toContain('recommendations');
       expect(SYSTEM_PROMPT).toContain('closing');
-    });
-
-    it('should contain recommendation principles in Korean', () => {
       expect(SYSTEM_PROMPT).toContain('<recommendation_principles>');
       expect(SYSTEM_PROMPT).toContain('1-5개의 메뉴');
       expect(SYSTEM_PROMPT).toContain('중복 없음');
-    });
-
-    it('should contain exploration menu requirement in Korean', () => {
       expect(SYSTEM_PROMPT).toContain('탐색 메뉴 필수');
       expect(SYSTEM_PROMPT).toContain('최소 1개는');
-    });
-
-    it('should contain judgment criteria', () => {
       expect(SYSTEM_PROMPT).toContain('<judgment_criteria>');
-      expect(SYSTEM_PROMPT).toContain('USER_PROMPT');
-      expect(SYSTEM_PROMPT).toContain('PREFERENCES');
-    });
-
-    it('should contain recommendation unavailable situation', () => {
       expect(SYSTEM_PROMPT).toContain('<recommendation_unavailable_situation>');
       expect(SYSTEM_PROMPT).toContain('빈 배열 []');
-    });
-
-    it('should contain reason writing guide in Korean', () => {
       expect(SYSTEM_PROMPT).toContain('<response_structure_guide>');
-      expect(SYSTEM_PROMPT).toContain('intro');
       expect(SYSTEM_PROMPT).toContain('금지:');
-    });
-
-    it('should contain language rule', () => {
       expect(SYSTEM_PROMPT).toContain('<language_rule>');
       expect(SYSTEM_PROMPT).toContain('RESPONSE_LANGUAGE');
       expect(SYSTEM_PROMPT).toContain('절대적 우선순위');
     });
   });
 
+  describe('SYSTEM_PROMPT_KO / SYSTEM_PROMPT_EN structure', () => {
+    const SHARED_TAGS = [
+      '<role>',
+      '<input_data>',
+      '<output_format>',
+      '<recommendation_principles>',
+      '<language_rule>',
+      'Pick-Eat',
+      'intro',
+    ];
+
+    test.each([
+      ['ko', SYSTEM_PROMPT_KO, '음식 컨설턴트', '존댓말', '메뉴명'],
+      ['en', SYSTEM_PROMPT_EN, 'food consultant', 'warm', 'menu'],
+    ])(
+      'SYSTEM_PROMPT_%s should be non-empty, contain shared tags and language-specific content',
+      (_lang, prompt, uniquePhrase, uniqueWord1, uniqueWord2) => {
+        expect(typeof prompt).toBe('string');
+        expect(prompt.length).toBeGreaterThan(0);
+        for (const tag of SHARED_TAGS) {
+          expect(prompt).toContain(tag);
+        }
+        expect(prompt).toContain(uniquePhrase);
+        expect(prompt).toContain(uniqueWord1);
+        expect(prompt).toContain(uniqueWord2);
+      },
+    );
+  });
+
+  describe('getSystemPrompt', () => {
+    test.each([
+      ['ko' as const, SYSTEM_PROMPT_KO, '음식 컨설턴트'],
+      ['en' as const, SYSTEM_PROMPT_EN, 'food consultant'],
+    ])(
+      'should return %s prompt and contain expected phrase',
+      (lang, expectedPrompt, expectedPhrase) => {
+        const result = getSystemPrompt(lang);
+        expect(result).toBe(expectedPrompt);
+        expect(result).toContain(expectedPhrase);
+      },
+    );
+
+    it('should default to Korean when no language parameter or undefined is passed', () => {
+      expect(getSystemPrompt()).toBe(SYSTEM_PROMPT_KO);
+      expect(getSystemPrompt(undefined)).toBe(SYSTEM_PROMPT_KO);
+    });
+  });
+
+  // ============================================================================
+  // getAgeGroup
+  // ============================================================================
+
+  describe('getAgeGroup', () => {
+    const currentYear = new Date().getFullYear();
+
+    test.each([
+      [currentYear - 15, '10대'],
+      [currentYear - 25, '20대'],
+      [currentYear - 35, '30대'],
+      [currentYear - 45, '40대'],
+      [currentYear - 55, '50대'],
+      [currentYear - 65, '60대 이상'],
+    ])(
+      'should return correct Korean age group for birth year %i (age ~%i)',
+      (birthYear, expected) => {
+        expect(getAgeGroup(birthYear)).toBe(expected);
+      },
+    );
+
+    it('should return "10대" for someone who is exactly 10 years old', () => {
+      expect(getAgeGroup(currentYear - 10)).toBe('10대');
+    });
+
+    it('should return "20대" for someone who is exactly 20 years old', () => {
+      expect(getAgeGroup(currentYear - 20)).toBe('20대');
+    });
+
+    it('should return "30대" for someone who is exactly 30 years old', () => {
+      expect(getAgeGroup(currentYear - 30)).toBe('30대');
+    });
+
+    it('should return "40대" for someone who is exactly 40 years old', () => {
+      expect(getAgeGroup(currentYear - 40)).toBe('40대');
+    });
+
+    it('should return "50대" for someone who is exactly 50 years old', () => {
+      expect(getAgeGroup(currentYear - 50)).toBe('50대');
+    });
+
+    it('should return "60대 이상" for someone who is exactly 60 years old', () => {
+      expect(getAgeGroup(currentYear - 60)).toBe('60대 이상');
+    });
+
+    it('should return "60대 이상" for someone who is 80 years old', () => {
+      expect(getAgeGroup(currentYear - 80)).toBe('60대 이상');
+    });
+  });
+
+  // ============================================================================
+  // getAgeGroupEN
+  // ============================================================================
+
+  describe('getAgeGroupEN', () => {
+    const currentYear = new Date().getFullYear();
+
+    test.each([
+      [currentYear - 15, 'teens'],
+      [currentYear - 25, '20s'],
+      [currentYear - 35, '30s'],
+      [currentYear - 45, '40s'],
+      [currentYear - 55, '50s'],
+      [currentYear - 65, '60s or older'],
+    ])(
+      'should return correct English age group for birth year %i',
+      (birthYear, expected) => {
+        expect(getAgeGroupEN(birthYear)).toBe(expected);
+      },
+    );
+
+    it('should return "teens" for someone who is exactly 10 years old', () => {
+      expect(getAgeGroupEN(currentYear - 10)).toBe('teens');
+    });
+
+    it('should return "20s" for someone who is exactly 20 years old', () => {
+      expect(getAgeGroupEN(currentYear - 20)).toBe('20s');
+    });
+
+    it('should return "30s" for someone who is exactly 30 years old', () => {
+      expect(getAgeGroupEN(currentYear - 30)).toBe('30s');
+    });
+
+    it('should return "40s" for someone who is exactly 40 years old', () => {
+      expect(getAgeGroupEN(currentYear - 40)).toBe('40s');
+    });
+
+    it('should return "50s" for someone who is exactly 50 years old', () => {
+      expect(getAgeGroupEN(currentYear - 50)).toBe('50s');
+    });
+
+    it('should return "60s or older" for someone who is exactly 60 years old', () => {
+      expect(getAgeGroupEN(currentYear - 60)).toBe('60s or older');
+    });
+
+    it('should return "60s or older" for someone who is 90 years old', () => {
+      expect(getAgeGroupEN(currentYear - 90)).toBe('60s or older');
+    });
+  });
+
+  // ============================================================================
+  // buildUserPrompt
+  // ============================================================================
+
   describe('buildUserPrompt', () => {
-    describe('RESPONSE_LANGUAGE field - language detection', () => {
-      it('should detect English when prompt is in English', () => {
-        const result = buildUserPrompt(
-          'I want something light',
-          ['국', '면'],
-          ['매운 음식'],
-          '한국어 분석',
-        );
+    describe('RESPONSE_LANGUAGE detection', () => {
+      test.each([
+        ['I want something light', 'English', 'pure English text'],
+        ['가벼운 거 먹고 싶어', 'Korean', 'pure Korean text'],
+        ['I want 김치찌개 today please', 'English', 'English-dominant mixed'],
+        ['오늘 pizza 먹을까', 'Korean', 'Korean-dominant mixed'],
+        ['abc가나', 'English', 'equal count edge case (English >= Korean)'],
+        ['ab가나', 'Korean', 'Korean chars match or exceed English chars'],
+        ['123!@#', 'Korean', 'numbers and special chars default to Korean'],
+        ['', 'Korean', 'empty string defaults to Korean'],
+        ['   ', 'Korean', 'whitespace-only defaults to Korean'],
+      ])(
+        'should detect %s when prompt is "%s"',
+        (prompt, expectedLang, _description) => {
+          const result = buildUserPrompt(prompt, [], [], undefined);
+          expect(result).toContain(`RESPONSE_LANGUAGE: ${expectedLang}`);
+        },
+      );
 
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-      });
-
-      it('should detect Korean when prompt is in Korean', () => {
-        const result = buildUserPrompt(
-          '가벼운 거 먹고 싶어',
-          ['국', '면'],
-          [],
-          undefined,
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should detect English when mixed text has more English characters', () => {
-        const result = buildUserPrompt(
-          'I want 김치찌개 today please',
-          [],
-          [],
-          undefined,
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-      });
-
-      it('should detect Korean when mixed text has more Korean characters', () => {
-        const result = buildUserPrompt('오늘 pizza 먹을까', [], [], undefined);
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should default to Korean when text has only numbers and special characters', () => {
-        const result = buildUserPrompt('123!@#', [], [], undefined);
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should default to Korean when prompt is empty string', () => {
-        const result = buildUserPrompt('', [], [], undefined);
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should default to Korean when prompt is whitespace only', () => {
-        const result = buildUserPrompt('   ', [], [], undefined);
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should detect English when English characters outnumber Korean (equal count edge case)', () => {
-        const result = buildUserPrompt('abc가나', [], [], undefined);
-
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-      });
-
-      it('should detect Korean when Korean characters equal English characters', () => {
-        const result = buildUserPrompt('ab가나', [], [], undefined);
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
+      test.each([
+        ['ko' as const, 'I want pizza', 'Korean'],
+        ['en' as const, '오늘 점심 뭐 먹을까', 'English'],
+      ])(
+        'should use explicit language parameter "%s" instead of auto-detecting',
+        (lang, prompt, expectedLang) => {
+          const result = buildUserPrompt(prompt, [], [], undefined, lang);
+          expect(result).toContain(`RESPONSE_LANGUAGE: ${expectedLang}`);
+        },
+      );
     });
 
     describe('USER_PROMPT section', () => {
-      it('should include USER_PROMPT section with user input', () => {
-        const result = buildUserPrompt('test prompt', [], [], undefined);
-
+      it('should wrap user input in user_prompt tags and preserve content', () => {
+        const result = buildUserPrompt(
+          'First line\nSecond line 😋',
+          [],
+          [],
+          undefined,
+        );
         expect(result).toContain('<user_prompt>');
-        expect(result).toContain('test prompt');
-      });
-
-      it('should preserve multi-line user prompts', () => {
-        const result = buildUserPrompt(
-          'First line\nSecond line',
-          [],
-          [],
-          undefined,
-        );
-
-        expect(result).toContain('First line\nSecond line');
-      });
-
-      it('should preserve special characters in user prompt', () => {
-        const result = buildUserPrompt(
-          '오늘 점심 뭐 먹을까? 😋',
-          [],
-          [],
-          undefined,
-        );
-
-        expect(result).toContain('오늘 점심 뭐 먹을까? 😋');
+        expect(result).toContain('</user_prompt>');
+        expect(result).toContain('First line\nSecond line 😋');
       });
     });
 
     describe('PREFERENCES section - likes and dislikes', () => {
-      it('should include likes and dislikes when both are provided', () => {
-        const result = buildUserPrompt(
-          'test',
-          ['국밥', '찌개'],
-          ['매운 음식'],
-          undefined,
-        );
+      test.each([
+        [['국밥', '찌개'], ['매운 음식'], 'Likes: 국밥, 찌개', 'Dislikes: 매운 음식'],
+        [[], ['매운 음식'], 'Likes: None', 'Dislikes: 매운 음식'],
+        [['국밥'], [], 'Likes: 국밥', 'Dislikes: None'],
+        [[], [], 'Likes: None', 'Dislikes: None'],
+        [null as any, ['매운 음식'], 'Likes: None', 'Dislikes: 매운 음식'],
+        [undefined as any, ['매운 음식'], 'Likes: None', 'Dislikes: 매운 음식'],
+        [['국밥'], null as any, 'Likes: 국밥', 'Dislikes: None'],
+        [['국밥'], undefined as any, 'Likes: 국밥', 'Dislikes: None'],
+      ])(
+        'should render likes=%j dislikes=%j as "%s" and "%s"',
+        (likes, dislikes, expectedLikes, expectedDislikes) => {
+          const result = buildUserPrompt('test', likes, dislikes, undefined);
+          expect(result).toContain('PREFERENCES (use only what is needed):');
+          expect(result).toContain(expectedLikes);
+          expect(result).toContain(expectedDislikes);
+        },
+      );
 
-        expect(result).toContain('PREFERENCES (use only what is needed):');
-        expect(result).toContain('Likes: 국밥, 찌개');
-        expect(result).toContain('Dislikes: 매운 음식');
-      });
-
-      it('should display "None" when likes array is empty', () => {
-        const result = buildUserPrompt('test', [], ['매운 음식'], undefined);
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: 매운 음식');
-      });
-
-      it('should display "None" when dislikes array is empty', () => {
-        const result = buildUserPrompt('test', ['국밥'], [], undefined);
-
-        expect(result).toContain('Likes: 국밥');
-        expect(result).toContain('Dislikes: None');
-      });
-
-      it('should display "None" for both when both arrays are empty', () => {
-        const result = buildUserPrompt('test', [], [], undefined);
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: None');
-      });
-
-      it('should handle null likes array safely', () => {
-        const result = buildUserPrompt(
-          'test',
-          null as any,
-          ['매운 음식'],
-          undefined,
-        );
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: 매운 음식');
-      });
-
-      it('should handle undefined likes array safely', () => {
-        const result = buildUserPrompt(
-          'test',
-          undefined as any,
-          ['매운 음식'],
-          undefined,
-        );
-
-        expect(result).toContain('Likes: None');
-        expect(result).toContain('Dislikes: 매운 음식');
-      });
-
-      it('should handle null dislikes array safely', () => {
-        const result = buildUserPrompt(
-          'test',
-          ['국밥'],
-          null as any,
-          undefined,
-        );
-
-        expect(result).toContain('Likes: 국밥');
-        expect(result).toContain('Dislikes: None');
-      });
-
-      it('should handle undefined dislikes array safely', () => {
-        const result = buildUserPrompt(
-          'test',
-          ['국밥'],
-          undefined as any,
-          undefined,
-        );
-
-        expect(result).toContain('Likes: 국밥');
-        expect(result).toContain('Dislikes: None');
-      });
-
-      it('should join multiple likes with comma separator', () => {
+      it('should join multiple items with comma separator', () => {
         const result = buildUserPrompt(
           'test',
           ['한식', '일식', '중식'],
-          [],
+          ['매운 음식', '기름진 음식'],
           undefined,
         );
-
         expect(result).toContain('Likes: 한식, 일식, 중식');
-      });
-
-      it('should join multiple dislikes with comma separator', () => {
-        const result = buildUserPrompt(
-          'test',
-          [],
-          ['매운 음식', '기름진 음식', '단 음식'],
-          undefined,
-        );
-
-        expect(result).toContain('Dislikes: 매운 음식, 기름진 음식, 단 음식');
+        expect(result).toContain('Dislikes: 매운 음식, 기름진 음식');
       });
     });
 
     describe('PREFERENCE_ANALYSIS section', () => {
-      it('should include analysis when provided', () => {
-        const result = buildUserPrompt(
-          'test',
-          [],
-          [],
-          '한식을 선호하시는 경향이 있습니다.',
-        );
+      test.each([
+        ['한식을 선호하시는 경향이 있습니다.', '한식을 선호하시는 경향이 있습니다.'],
+        [undefined, 'None'],
+        ['', 'None'],
+        ['   ', 'None'],
+      ])(
+        'should render analysis "%s" correctly',
+        (analysis, expectedInResult) => {
+          const result = buildUserPrompt('test', [], [], analysis);
+          expect(result).toContain('PREFERENCE_ANALYSIS:');
+          expect(result).toContain(expectedInResult);
+        },
+      );
 
-        expect(result).toContain('PREFERENCE_ANALYSIS:');
-        expect(result).toContain('한식을 선호하시는 경향이 있습니다.');
-      });
-
-      it('should display "None" when analysis is undefined', () => {
-        const result = buildUserPrompt('test', [], [], undefined);
-
-        expect(result).toContain('PREFERENCE_ANALYSIS:');
-        expect(result).toContain('None');
-      });
-
-      it('should display "None" when analysis is empty string', () => {
-        const result = buildUserPrompt('test', [], [], '');
-
-        expect(result).toContain('PREFERENCE_ANALYSIS:');
-        expect(result).toContain('None');
-      });
-
-      it('should display "None" when analysis is whitespace only', () => {
-        const result = buildUserPrompt('test', [], [], '   ');
-
-        expect(result).toContain('PREFERENCE_ANALYSIS:');
-        expect(result).toContain('None');
-      });
-
-      it('should trim analysis text', () => {
+      it('should trim whitespace from analysis text', () => {
         const result = buildUserPrompt('test', [], [], '  분석 내용  ');
-
         expect(result).toContain('분석 내용');
         expect(result).not.toContain('  분석 내용  ');
       });
 
       it('should preserve multi-line analysis', () => {
-        const result = buildUserPrompt(
-          'test',
-          [],
-          [],
-          '첫 줄\n둘째 줄\n셋째 줄',
-        );
-
+        const result = buildUserPrompt('test', [], [], '첫 줄\n둘째 줄\n셋째 줄');
         expect(result).toContain('첫 줄\n둘째 줄\n셋째 줄');
       });
     });
 
-    describe('output format and structure', () => {
-      it('should have correct section order', () => {
+    describe('compactSummary parameter', () => {
+      it('should use compactSummary when provided instead of analysis', () => {
         const result = buildUserPrompt(
-          '테스트 프롬프트',
-          ['한식'],
-          ['양식'],
-          '분석 내용',
+          'test',
+          [],
+          [],
+          '기존 분석 내용',
+          undefined,
+          '간결 요약본',
         );
+        expect(result).toContain('PREFERENCE_ANALYSIS:');
+        expect(result).toContain('간결 요약본');
+        expect(result).not.toContain('기존 분석 내용');
+      });
 
+      it('should fall back to analysis when compactSummary is not provided', () => {
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          '기존 분석 내용',
+          undefined,
+          undefined,
+        );
+        expect(result).toContain('PREFERENCE_ANALYSIS:');
+        expect(result).toContain('기존 분석 내용');
+      });
+
+      it('should show None when both compactSummary and analysis are absent', () => {
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+        );
+        expect(result).toContain('PREFERENCE_ANALYSIS:');
+        expect(result).toContain('None');
+      });
+
+      it('should prefer compactSummary over analysis even when both provided', () => {
+        const result = buildUserPrompt(
+          'test prompt',
+          ['한식'],
+          [],
+          'full analysis text',
+          'ko',
+          'compact summary text',
+        );
+        expect(result).toContain('compact summary text');
+        expect(result).not.toContain('full analysis text');
+      });
+    });
+
+    describe('structuredAnalysis parameter', () => {
+      const mockStructuredAnalysis: StructuredAnalysis = {
+        stablePatterns: {
+          confidence: 'high',
+          categories: ['한식', '일식'],
+          flavors: ['담백한', '깔끔한'],
+          cookingMethods: ['찜', '구이'],
+        },
+        recentSignals: {
+          trending: ['마라탕'],
+          declining: ['패스트푸드'],
+        },
+        diversityHints: {
+          explorationAreas: ['중식', '동남아식'],
+          rotationSuggestions: [],
+        },
+      };
+
+      it('should include STRUCTURED_PREFERENCE_ANALYSIS section when provided', () => {
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          mockStructuredAnalysis,
+        );
+        expect(result).toContain('STRUCTURED_PREFERENCE_ANALYSIS:');
+      });
+
+      it('should include stablePatterns data with confidence and arrays', () => {
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          mockStructuredAnalysis,
+        );
+        expect(result).toContain('Stable Patterns (confidence: high):');
+        expect(result).toContain('Categories: 한식, 일식');
+        expect(result).toContain('Flavors: 담백한, 깔끔한');
+        expect(result).toContain('Cooking Methods: 찜, 구이');
+      });
+
+      it('should include recentSignals data with trending and declining', () => {
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          mockStructuredAnalysis,
+        );
+        expect(result).toContain('Recent Signals:');
+        expect(result).toContain('Trending (max 1): 마라탕');
+        expect(result).toContain('Declining (NEVER recommend): 패스트푸드');
+      });
+
+      it('should include diversityHints explorationAreas', () => {
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          mockStructuredAnalysis,
+        );
+        expect(result).toContain(
+          'Exploration Areas (include at least 1): 중식, 동남아식',
+        );
+      });
+
+      it('should not include STRUCTURED_PREFERENCE_ANALYSIS section when not provided', () => {
+        const result = buildUserPrompt('test', [], [], undefined);
+        expect(result).not.toContain('STRUCTURED_PREFERENCE_ANALYSIS:');
+      });
+
+      it('should handle structuredAnalysis without stablePatterns', () => {
+        const partialAnalysis: StructuredAnalysis = {
+          recentSignals: {
+            trending: ['마라탕'],
+            declining: [],
+          },
+          diversityHints: {
+            explorationAreas: ['중식'],
+            rotationSuggestions: [],
+          },
+        };
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          partialAnalysis,
+        );
+        expect(result).toContain('STRUCTURED_PREFERENCE_ANALYSIS:');
+        expect(result).not.toContain('Stable Patterns');
+        expect(result).toContain('Recent Signals:');
+      });
+
+      it('should handle structuredAnalysis without recentSignals', () => {
+        const partialAnalysis: StructuredAnalysis = {
+          stablePatterns: {
+            confidence: 'medium',
+            categories: ['한식'],
+            flavors: ['매운'],
+            cookingMethods: ['볶음'],
+          },
+          diversityHints: {
+            explorationAreas: ['일식'],
+            rotationSuggestions: [],
+          },
+        };
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          partialAnalysis,
+        );
+        expect(result).toContain('STRUCTURED_PREFERENCE_ANALYSIS:');
+        expect(result).toContain('Stable Patterns (confidence: medium):');
+        expect(result).not.toContain('Recent Signals:');
+      });
+
+      it('should handle structuredAnalysis without diversityHints', () => {
+        const partialAnalysis: StructuredAnalysis = {
+          stablePatterns: {
+            confidence: 'low',
+            categories: ['한식'],
+            flavors: [],
+            cookingMethods: [],
+          },
+          recentSignals: {
+            trending: [],
+            declining: [],
+          },
+        };
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          partialAnalysis,
+        );
+        expect(result).toContain('STRUCTURED_PREFERENCE_ANALYSIS:');
+        expect(result).not.toContain('Exploration Areas');
+      });
+    });
+
+    describe('output structure', () => {
+      it('should have correct section order with all required sections', () => {
+        const result = buildUserPrompt('테스트 프롬프트', ['한식'], ['양식'], '분석 내용');
         const lines = result.split('\n');
 
         expect(lines[0]).toBe('RESPONSE_LANGUAGE: Korean');
@@ -356,10 +543,6 @@ describe('menu-recommendation.prompts', () => {
         expect(lines[9]).toBe('---');
         expect(lines[10]).toBe('PREFERENCE_ANALYSIS:');
         expect(lines[11]).toBe('분석 내용');
-      });
-
-      it('should include separator lines', () => {
-        const result = buildUserPrompt('test', ['한식'], ['양식'], '분석');
 
         const separators = result.match(/---/g);
         expect(separators).toHaveLength(2);
@@ -367,7 +550,6 @@ describe('menu-recommendation.prompts', () => {
 
       it('should maintain consistent structure with minimal data', () => {
         const result = buildUserPrompt('', [], [], undefined);
-
         expect(result).toContain('RESPONSE_LANGUAGE:');
         expect(result).toContain('<user_prompt>');
         expect(result).toContain('PREFERENCES (use only what is needed):');
@@ -375,47 +557,40 @@ describe('menu-recommendation.prompts', () => {
       });
     });
 
-    describe('comprehensive integration tests', () => {
-      it('should correctly build complete prompt with all data', () => {
-        const result = buildUserPrompt(
+    describe('comprehensive integration', () => {
+      test.each([
+        [
           'I want something light and healthy for lunch today',
           ['Soup', 'Salad', 'Fish'],
           ['Spicy food', 'Fried food'],
-          'User prefers light meals and avoids heavy foods. Likes seafood and vegetables.',
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-        expect(result).toContain('<user_prompt>');
-        expect(result).toContain(
-          'I want something light and healthy for lunch today',
-        );
-        expect(result).toContain('Likes: Soup, Salad, Fish');
-        expect(result).toContain('Dislikes: Spicy food, Fried food');
-        expect(result).toContain(
-          'User prefers light meals and avoids heavy foods. Likes seafood and vegetables.',
-        );
-      });
-
-      it('should handle Korean user prompt with complete data', () => {
-        const result = buildUserPrompt(
+          'User prefers light meals',
+          'English',
+        ],
+        [
           '오늘 점심으로 가볍고 건강한 음식을 먹고 싶어요',
           ['국물요리', '샐러드', '생선'],
           ['매운 음식', '기름진 음식'],
           '사용자는 가벼운 식사를 선호하고 무거운 음식을 피합니다.',
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-        expect(result).toContain(
-          '오늘 점심으로 가볍고 건강한 음식을 먹고 싶어요',
-        );
-        expect(result).toContain('Likes: 국물요리, 샐러드, 생선');
-        expect(result).toContain('Dislikes: 매운 음식, 기름진 음식');
-        expect(result).toContain(
-          '사용자는 가벼운 식사를 선호하고 무거운 음식을 피합니다.',
-        );
-      });
+          'Korean',
+        ],
+      ])(
+        'should correctly build complete prompt for %s language',
+        (prompt, likes, dislikes, analysis, expectedLang) => {
+          const result = buildUserPrompt(prompt, likes, dislikes, analysis);
+          expect(result).toContain(`RESPONSE_LANGUAGE: ${expectedLang}`);
+          expect(result).toContain('<user_prompt>');
+          expect(result).toContain(prompt);
+          expect(result).toContain(`Likes: ${likes.join(', ')}`);
+          expect(result).toContain(`Dislikes: ${dislikes.join(', ')}`);
+          expect(result).toContain(analysis);
+        },
+      );
     });
   });
+
+  // ============================================================================
+  // buildUserPromptWithValidation
+  // ============================================================================
 
   describe('buildUserPromptWithValidation', () => {
     const baseParams = {
@@ -425,7 +600,7 @@ describe('menu-recommendation.prompts', () => {
       analysis: 'User enjoys Western cuisine',
     };
 
-    const validationContext = {
+    const fullValidationContext = {
       intent: 'preference',
       constraints: {
         budget: 'medium',
@@ -435,13 +610,13 @@ describe('menu-recommendation.prompts', () => {
       suggestedCategories: ['Italian', 'Pizza', 'Western'],
     };
 
-    it('should include base prompt content', () => {
+    it('should include base prompt content and VALIDATION_CONTEXT section', () => {
       const result = buildUserPromptWithValidation(
         baseParams.userPrompt,
         baseParams.likes,
         baseParams.dislikes,
         baseParams.analysis,
-        validationContext,
+        fullValidationContext,
       );
 
       expect(result).toContain('RESPONSE_LANGUAGE: English');
@@ -450,235 +625,67 @@ describe('menu-recommendation.prompts', () => {
       expect(result).toContain('Likes: Italian, Fast food');
       expect(result).toContain('Dislikes: Spicy');
       expect(result).toContain('User enjoys Western cuisine');
-    });
-
-    it('should include VALIDATION_CONTEXT section', () => {
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        validationContext,
-      );
-
       expect(result).toContain('VALIDATION_CONTEXT (Stage 1 analysis result):');
       expect(result).toContain('Intent: preference');
     });
 
-    it('should include budget constraint when provided', () => {
+    it('should place base prompt before validation context', () => {
       const result = buildUserPromptWithValidation(
         baseParams.userPrompt,
         baseParams.likes,
         baseParams.dislikes,
         baseParams.analysis,
-        validationContext,
+        fullValidationContext,
       );
-
-      expect(result).toContain('Budget: medium');
+      expect(result.indexOf('RESPONSE_LANGUAGE')).toBeLessThan(
+        result.indexOf('VALIDATION_CONTEXT'),
+      );
     });
 
-    it('should omit budget constraint when not provided', () => {
-      const contextWithoutBudget = {
-        ...validationContext,
-        constraints: {
-          ...validationContext.constraints,
-          budget: undefined,
+    describe('optional constraint fields', () => {
+      test.each([
+        ['budget', 'Budget: medium', true],
+        ['urgency', 'Urgency: normal', true],
+        ['dietary', 'Dietary restrictions: vegetarian', true],
+      ])(
+        'should include %s constraint when provided',
+        (_field, expectedText, _shouldContain) => {
+          const result = buildUserPromptWithValidation(
+            baseParams.userPrompt,
+            baseParams.likes,
+            baseParams.dislikes,
+            baseParams.analysis,
+            fullValidationContext,
+          );
+          expect(result).toContain(expectedText);
         },
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        contextWithoutBudget,
       );
 
-      expect(result).not.toContain('Budget:');
-    });
-
-    it('should include dietary restrictions when provided', () => {
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        validationContext,
-      );
-
-      expect(result).toContain('Dietary restrictions: vegetarian');
-    });
-
-    it('should include multiple dietary restrictions', () => {
-      const contextWithMultipleDietary = {
-        ...validationContext,
-        constraints: {
-          ...validationContext.constraints,
-          dietary: ['vegetarian', 'gluten-free', 'dairy-free'],
-        },
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        contextWithMultipleDietary,
-      );
-
-      expect(result).toContain(
-        'Dietary restrictions: vegetarian, gluten-free, dairy-free',
-      );
-    });
-
-    it('should omit dietary restrictions when array is empty', () => {
-      const contextWithEmptyDietary = {
-        ...validationContext,
-        constraints: {
-          ...validationContext.constraints,
-          dietary: [],
-        },
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        contextWithEmptyDietary,
-      );
-
-      expect(result).not.toContain('Dietary restrictions:');
-    });
-
-    it('should omit dietary restrictions when undefined', () => {
-      const contextWithoutDietary = {
-        ...validationContext,
-        constraints: {
-          ...validationContext.constraints,
-          dietary: undefined,
-        },
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        contextWithoutDietary,
-      );
-
-      expect(result).not.toContain('Dietary restrictions:');
-    });
-
-    it('should include urgency constraint when provided', () => {
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        validationContext,
-      );
-
-      expect(result).toContain('Urgency: normal');
-    });
-
-    it('should omit urgency constraint when not provided', () => {
-      const contextWithoutUrgency = {
-        ...validationContext,
-        constraints: {
-          ...validationContext.constraints,
-          urgency: undefined,
-        },
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        contextWithoutUrgency,
-      );
-
-      expect(result).not.toContain('Urgency:');
-    });
-
-    it('should include suggested categories when provided', () => {
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        validationContext,
-      );
-
-      expect(result).toContain('Suggested categories: Italian, Pizza, Western');
-    });
-
-    it('should omit suggested categories when array is empty', () => {
-      const contextWithoutCategories = {
-        ...validationContext,
-        suggestedCategories: [],
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        contextWithoutCategories,
-      );
-
-      expect(result).not.toContain('Suggested categories:');
-    });
-
-    it('should handle validation context with all constraints omitted', () => {
-      const minimalContext = {
-        intent: 'mood',
-        constraints: {},
-        suggestedCategories: [],
-      };
-
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        minimalContext,
-      );
-
-      expect(result).toContain('VALIDATION_CONTEXT (Stage 1 analysis result):');
-      expect(result).toContain('Intent: mood');
-      expect(result).not.toContain('Budget:');
-      expect(result).not.toContain('Dietary restrictions:');
-      expect(result).not.toContain('Urgency:');
-      expect(result).not.toContain('Suggested categories:');
-    });
-
-    it('should maintain correct section order with validation context', () => {
-      const result = buildUserPromptWithValidation(
-        baseParams.userPrompt,
-        baseParams.likes,
-        baseParams.dislikes,
-        baseParams.analysis,
-        validationContext,
-      );
-
-      const basePromptIndex = result.indexOf('RESPONSE_LANGUAGE');
-      const validationIndex = result.indexOf('VALIDATION_CONTEXT');
-
-      expect(basePromptIndex).toBeLessThan(validationIndex);
-    });
-
-    it('should handle different intent types', () => {
-      const intents = ['preference', 'mood', 'location', 'mixed'];
-
-      intents.forEach((intent) => {
-        const context = {
-          ...validationContext,
-          intent,
+      it('should omit budget, urgency, dietary when not provided', () => {
+        const minimalContext = {
+          intent: 'mood',
+          constraints: {},
+          suggestedCategories: [],
         };
+        const result = buildUserPromptWithValidation(
+          baseParams.userPrompt,
+          baseParams.likes,
+          baseParams.dislikes,
+          baseParams.analysis,
+          minimalContext,
+        );
+        expect(result).toContain('Intent: mood');
+        expect(result).not.toContain('Budget:');
+        expect(result).not.toContain('Dietary restrictions:');
+        expect(result).not.toContain('Urgency:');
+        expect(result).not.toContain('Suggested categories:');
+      });
 
+      it('should omit dietary restrictions when empty array', () => {
+        const context = {
+          ...fullValidationContext,
+          constraints: { ...fullValidationContext.constraints, dietary: [] },
+        };
         const result = buildUserPromptWithValidation(
           baseParams.userPrompt,
           baseParams.likes,
@@ -686,30 +693,117 @@ describe('menu-recommendation.prompts', () => {
           baseParams.analysis,
           context,
         );
+        expect(result).not.toContain('Dietary restrictions:');
+      });
 
-        expect(result).toContain(`Intent: ${intent}`);
+      it('should include multiple dietary restrictions joined by comma', () => {
+        const context = {
+          ...fullValidationContext,
+          constraints: {
+            ...fullValidationContext.constraints,
+            dietary: ['vegetarian', 'gluten-free', 'dairy-free'],
+          },
+        };
+        const result = buildUserPromptWithValidation(
+          baseParams.userPrompt,
+          baseParams.likes,
+          baseParams.dislikes,
+          baseParams.analysis,
+          context,
+        );
+        expect(result).toContain(
+          'Dietary restrictions: vegetarian, gluten-free, dairy-free',
+        );
+      });
+
+      it('should include suggested categories when provided and omit when empty', () => {
+        const withCategories = buildUserPromptWithValidation(
+          baseParams.userPrompt,
+          baseParams.likes,
+          baseParams.dislikes,
+          baseParams.analysis,
+          fullValidationContext,
+        );
+        expect(withCategories).toContain(
+          'Suggested categories: Italian, Pizza, Western',
+        );
+
+        const withoutCategories = buildUserPromptWithValidation(
+          baseParams.userPrompt,
+          baseParams.likes,
+          baseParams.dislikes,
+          baseParams.analysis,
+          { ...fullValidationContext, suggestedCategories: [] },
+        );
+        expect(withoutCategories).not.toContain('Suggested categories:');
       });
     });
 
-    it('should handle Korean prompt with validation context', () => {
-      const koreanContext = {
-        intent: '선호',
-        constraints: {
-          budget: '중간',
-          dietary: ['채식'],
-          urgency: '보통',
+    describe('language parameter override', () => {
+      test.each([
+        ['ko' as const, 'I want pizza', 'Korean'],
+        ['en' as const, '오늘 점심 뭐 먹을까', 'English'],
+      ])(
+        'should use explicit language "%s" instead of auto-detecting',
+        (lang, prompt, expectedLang) => {
+          const result = buildUserPromptWithValidation(
+            prompt,
+            [],
+            [],
+            undefined,
+            fullValidationContext,
+            lang,
+          );
+          expect(result).toContain(`RESPONSE_LANGUAGE: ${expectedLang}`);
         },
-        suggestedCategories: ['한식', '일식'],
-      };
+      );
 
+      it('should auto-detect language when parameter is not provided', () => {
+        const koResult = buildUserPromptWithValidation(
+          '오늘 점심 뭐 먹을까',
+          [],
+          [],
+          undefined,
+          fullValidationContext,
+        );
+        expect(koResult).toContain('RESPONSE_LANGUAGE: Korean');
+
+        const enResult = buildUserPromptWithValidation(
+          'What should I eat for lunch',
+          [],
+          [],
+          undefined,
+          fullValidationContext,
+        );
+        expect(enResult).toContain('RESPONSE_LANGUAGE: English');
+      });
+    });
+
+    it('should handle all intent types', () => {
+      for (const intent of ['preference', 'mood', 'location', 'mixed']) {
+        const result = buildUserPromptWithValidation(
+          baseParams.userPrompt,
+          baseParams.likes,
+          baseParams.dislikes,
+          baseParams.analysis,
+          { ...fullValidationContext, intent },
+        );
+        expect(result).toContain(`Intent: ${intent}`);
+      }
+    });
+
+    it('should handle Korean context with validation', () => {
       const result = buildUserPromptWithValidation(
         '오늘 점심 뭐 먹을까',
         ['한식'],
         ['매운 음식'],
         '한식 선호 경향',
-        koreanContext,
+        {
+          intent: '선호',
+          constraints: { budget: '중간', dietary: ['채식'], urgency: '보통' },
+          suggestedCategories: ['한식', '일식'],
+        },
       );
-
       expect(result).toContain('RESPONSE_LANGUAGE: Korean');
       expect(result).toContain('Intent: 선호');
       expect(result).toContain('Budget: 중간');
@@ -719,90 +813,16 @@ describe('menu-recommendation.prompts', () => {
     });
   });
 
+  // ============================================================================
+  // MENU_RECOMMENDATIONS_JSON_SCHEMA (backward compatibility)
+  // ============================================================================
+
   describe('MENU_RECOMMENDATIONS_JSON_SCHEMA (backward compatibility - Korean)', () => {
-    it('should be an object', () => {
+    it('should have correct top-level structure', () => {
       expect(typeof MENU_RECOMMENDATIONS_JSON_SCHEMA).toBe('object');
       expect(MENU_RECOMMENDATIONS_JSON_SCHEMA).not.toBeNull();
-    });
-
-    it('should have type "object"', () => {
       expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.type).toBe('object');
-    });
-
-    it('should have properties object', () => {
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties).toBeDefined();
-      expect(typeof MENU_RECOMMENDATIONS_JSON_SCHEMA.properties).toBe('object');
-    });
-
-    it('should define recommendations property as array', () => {
-      expect(
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations,
-      ).toBeDefined();
-      expect(
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations.type,
-      ).toBe('array');
-    });
-
-    it('should define recommendations items as objects with condition and menu', () => {
-      const recommendations =
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.items.type).toBe('object');
-      expect(recommendations.items.properties.condition).toBeDefined();
-      expect(recommendations.items.properties.menu).toBeDefined();
-      expect(recommendations.items.required).toEqual(['condition', 'menu']);
-    });
-
-    it('should define recommendations minItems as 1', () => {
-      const recommendations =
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.minItems).toBe(1);
-    });
-
-    it('should define recommendations maxItems as 5', () => {
-      const recommendations =
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.maxItems).toBe(5);
-    });
-
-    it('should have recommendations description in Korean', () => {
-      const recommendations =
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.recommendations;
-      expect(recommendations.description).toContain('조건 + 메뉴 배열');
-    });
-
-    it('should define intro property as string', () => {
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro).toBeDefined();
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro.type).toBe(
-        'string',
-      );
-    });
-
-    it('should define intro minLength and maxLength', () => {
-      const intro = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro;
-      expect(intro.minLength).toBe(50);
-      expect(intro.maxLength).toBe(500);
-    });
-
-    it('should define closing property as string', () => {
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.closing).toBeDefined();
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.closing.type).toBe(
-        'string',
-      );
-    });
-
-    it('should have intro description in Korean', () => {
-      const intro = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties.intro;
-      expect(intro.description).toContain('첫 설명');
-    });
-
-    it('should have required fields array', () => {
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.required).toBeDefined();
-      expect(Array.isArray(MENU_RECOMMENDATIONS_JSON_SCHEMA.required)).toBe(
-        true,
-      );
-    });
-
-    it('should require intro, recommendations and closing fields', () => {
+      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.additionalProperties).toBe(false);
       expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.required).toEqual([
         'intro',
         'recommendations',
@@ -810,264 +830,672 @@ describe('menu-recommendation.prompts', () => {
       ]);
     });
 
-    it('should have additionalProperties set to false', () => {
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA.additionalProperties).toBe(false);
+    it('should define intro and closing as string properties with Korean descriptions', () => {
+      const { intro, closing } = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties;
+      expect(intro.type).toBe('string');
+      expect(intro.minLength).toBe(50);
+      expect(intro.maxLength).toBe(500);
+      expect(intro.description).toContain('첫 설명');
+      expect(closing.type).toBe('string');
     });
 
-    it('should have const assertion type', () => {
-      // This test verifies the schema is exported as const
-      // TypeScript will enforce this at compile time
-      expect(MENU_RECOMMENDATIONS_JSON_SCHEMA).toBeDefined();
+    it('should define recommendations as array with correct constraints and Korean description', () => {
+      const { recommendations } =
+        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties;
+      expect(recommendations.type).toBe('array');
+      expect(recommendations.minItems).toBe(1);
+      expect(recommendations.maxItems).toBe(5);
+      expect(recommendations.description).toContain('조건 + 메뉴 배열');
+      expect(recommendations.items.type).toBe('object');
+      expect(recommendations.items.properties.condition).toBeDefined();
+      expect(recommendations.items.properties.menu).toBeDefined();
+      expect(recommendations.items.required).toEqual(['condition', 'menu']);
     });
   });
 
-  describe('Phase 2: Internationalization (i18n)', () => {
-    describe('SYSTEM_PROMPT_KO', () => {
-      it('should be a non-empty Korean string', () => {
-        expect(typeof SYSTEM_PROMPT_KO).toBe('string');
-        expect(SYSTEM_PROMPT_KO.length).toBeGreaterThan(0);
-      });
+  // ============================================================================
+  // getMenuRecommendationsJsonSchema
+  // ============================================================================
 
-      it('should contain Korean language content', () => {
-        expect(SYSTEM_PROMPT_KO).toContain('Pick-Eat');
-        expect(SYSTEM_PROMPT_KO).toContain('음식 컨설턴트');
-        expect(SYSTEM_PROMPT_KO).toContain('<role>');
-        expect(SYSTEM_PROMPT_KO).toContain('<input_data>');
-        expect(SYSTEM_PROMPT_KO).toContain('<output_format>');
-        expect(SYSTEM_PROMPT_KO).toContain('<recommendation_principles>');
-        expect(SYSTEM_PROMPT_KO).toContain('<language_rule>');
-      });
-
-      it('should contain Korean-specific instructions', () => {
-        expect(SYSTEM_PROMPT_KO).toContain('존댓말');
-        expect(SYSTEM_PROMPT_KO).toContain('메뉴명');
-        expect(SYSTEM_PROMPT_KO).toContain('intro');
-      });
-    });
-
-    describe('SYSTEM_PROMPT_EN', () => {
-      it('should be a non-empty English string', () => {
-        expect(typeof SYSTEM_PROMPT_EN).toBe('string');
-        expect(SYSTEM_PROMPT_EN.length).toBeGreaterThan(0);
-      });
-
-      it('should contain English language content', () => {
-        expect(SYSTEM_PROMPT_EN).toContain('Pick-Eat');
-        expect(SYSTEM_PROMPT_EN).toContain('food consultant');
-        expect(SYSTEM_PROMPT_EN).toContain('<role>');
-        expect(SYSTEM_PROMPT_EN).toContain('<input_data>');
-        expect(SYSTEM_PROMPT_EN).toContain('<output_format>');
-        expect(SYSTEM_PROMPT_EN).toContain('<recommendation_principles>');
-        expect(SYSTEM_PROMPT_EN).toContain('<language_rule>');
-      });
-
-      it('should contain English-specific instructions', () => {
-        expect(SYSTEM_PROMPT_EN).toContain('warm');
-        expect(SYSTEM_PROMPT_EN).toContain('menu');
-        expect(SYSTEM_PROMPT_EN).toContain('intro');
-      });
-    });
-
-    describe('SYSTEM_PROMPT constant (backward compatibility)', () => {
-      it('should equal SYSTEM_PROMPT_KO for backward compatibility', () => {
-        expect(SYSTEM_PROMPT).toBe(SYSTEM_PROMPT_KO);
-      });
-    });
-
-    describe('getSystemPrompt', () => {
-      it('should return Korean prompt when language is "ko"', () => {
-        const result = getSystemPrompt('ko');
-        expect(result).toBe(SYSTEM_PROMPT_KO);
-        expect(result).toContain('음식 컨설턴트');
-      });
-
-      it('should return English prompt when language is "en"', () => {
-        const result = getSystemPrompt('en');
-        expect(result).toBe(SYSTEM_PROMPT_EN);
-        expect(result).toContain('food consultant');
-      });
-
-      it('should default to Korean when no language parameter is provided', () => {
-        const result = getSystemPrompt();
-        expect(result).toBe(SYSTEM_PROMPT_KO);
-      });
-
-      it('should default to Korean when undefined is passed', () => {
-        const result = getSystemPrompt(undefined);
-        expect(result).toBe(SYSTEM_PROMPT_KO);
-      });
-    });
-
-    describe('buildUserPrompt with language parameter', () => {
-      it('should use provided language parameter "ko" instead of detecting', () => {
-        const result = buildUserPrompt(
-          'I want pizza',
-          ['Italian'],
-          [],
-          undefined,
-          'ko',
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should use provided language parameter "en" instead of detecting', () => {
-        const result = buildUserPrompt(
-          '오늘 점심 뭐 먹을까',
-          ['한식'],
-          [],
-          undefined,
-          'en',
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-      });
-
-      it('should auto-detect language when parameter is not provided', () => {
-        const koreanResult = buildUserPrompt(
-          '오늘 점심 뭐 먹을까',
-          [],
-          [],
-          undefined,
-        );
-        expect(koreanResult).toContain('RESPONSE_LANGUAGE: Korean');
-
-        const englishResult = buildUserPrompt(
-          'What should I eat for lunch',
-          [],
-          [],
-          undefined,
-        );
-        expect(englishResult).toContain('RESPONSE_LANGUAGE: English');
-      });
-    });
-
-    describe('buildUserPromptWithValidation with language parameter', () => {
-      const validationContext = {
-        intent: 'preference',
-        constraints: {
-          budget: 'medium',
-          dietary: [],
-          urgency: 'normal',
+  describe('getMenuRecommendationsJsonSchema', () => {
+    test.each([
+      [
+        'ko' as const,
+        { intro: '첫 설명', recommendations: '조건 + 메뉴 배열', closing: '마무리 말' },
+      ],
+      [
+        'en' as const,
+        {
+          intro: 'Opening explanation',
+          recommendations: 'Condition + menu array',
+          closing: 'Closing remark',
         },
-        suggestedCategories: ['Korean'],
-      };
-
-      it('should use provided language parameter "ko"', () => {
-        const result = buildUserPromptWithValidation(
-          'I want pizza',
-          ['Italian'],
-          [],
-          undefined,
-          validationContext,
-          'ko',
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: Korean');
-      });
-
-      it('should use provided language parameter "en"', () => {
-        const result = buildUserPromptWithValidation(
-          '오늘 점심 뭐 먹을까',
-          ['한식'],
-          [],
-          undefined,
-          validationContext,
-          'en',
-        );
-
-        expect(result).toContain('RESPONSE_LANGUAGE: English');
-      });
-
-      it('should auto-detect language when parameter is not provided', () => {
-        const koreanResult = buildUserPromptWithValidation(
-          '오늘 점심 뭐 먹을까',
-          [],
-          [],
-          undefined,
-          validationContext,
-        );
-        expect(koreanResult).toContain('RESPONSE_LANGUAGE: Korean');
-
-        const englishResult = buildUserPromptWithValidation(
-          'What should I eat for lunch',
-          [],
-          [],
-          undefined,
-          validationContext,
-        );
-        expect(englishResult).toContain('RESPONSE_LANGUAGE: English');
-      });
-    });
-
-    describe('getMenuRecommendationsJsonSchema', () => {
-      it('should return Korean schema when language is "ko"', () => {
-        const schema = getMenuRecommendationsJsonSchema('ko');
-
-        expect(schema.properties.intro.description).toContain('첫 설명');
-        expect(schema.properties.recommendations.description).toContain(
-          '조건 + 메뉴 배열',
-        );
-        expect(schema.properties.closing.description).toContain('마무리 말');
-      });
-
-      it('should return English schema when language is "en"', () => {
-        const schema = getMenuRecommendationsJsonSchema('en');
-
+      ],
+    ])(
+      'should return correct descriptions for language "%s"',
+      (lang, expectedDescriptions) => {
+        const schema = getMenuRecommendationsJsonSchema(lang);
         expect(schema.properties.intro.description).toContain(
-          'Opening explanation',
+          expectedDescriptions.intro,
         );
         expect(schema.properties.recommendations.description).toContain(
-          'Condition + menu array',
+          expectedDescriptions.recommendations,
         );
         expect(schema.properties.closing.description).toContain(
-          'Closing remark',
+          expectedDescriptions.closing,
         );
+      },
+    );
+
+    it('should default to Korean when no language parameter is provided', () => {
+      const schema = getMenuRecommendationsJsonSchema();
+      expect(schema.properties.intro.description).toContain('첫 설명');
+    });
+
+    it('should have identical structure for both languages, differing only in descriptions', () => {
+      const koSchema = getMenuRecommendationsJsonSchema('ko');
+      const enSchema = getMenuRecommendationsJsonSchema('en');
+
+      expect(koSchema.type).toBe(enSchema.type);
+      expect(koSchema.required).toEqual(enSchema.required);
+      expect(koSchema.additionalProperties).toBe(enSchema.additionalProperties);
+
+      const koProp = koSchema.properties;
+      const enProp = enSchema.properties;
+      expect(koProp.intro.type).toBe(enProp.intro.type);
+      expect(koProp.intro.minLength).toBe(enProp.intro.minLength);
+      expect(koProp.intro.maxLength).toBe(enProp.intro.maxLength);
+      expect(koProp.recommendations.type).toBe(enProp.recommendations.type);
+      expect(koProp.recommendations.minItems).toBe(
+        enProp.recommendations.minItems,
+      );
+      expect(koProp.recommendations.maxItems).toBe(
+        enProp.recommendations.maxItems,
+      );
+      expect(koProp.closing.type).toBe(enProp.closing.type);
+
+      // descriptions must differ
+      expect(koProp.intro.description).not.toBe(enProp.intro.description);
+      expect(koProp.recommendations.description).not.toBe(
+        enProp.recommendations.description,
+      );
+      expect(koProp.closing.description).not.toBe(enProp.closing.description);
+    });
+  });
+
+  // ============================================================================
+  // buildUserProfile
+  // ============================================================================
+
+  describe('buildUserProfile', () => {
+    const currentYear = new Date().getFullYear();
+
+    it('should return empty profile when no parameters provided', () => {
+      const result = buildUserProfile();
+      expect(result).toEqual({});
+    });
+
+    describe('country field', () => {
+      it('should include country when provided', () => {
+        const result = buildUserProfile(undefined, undefined, 'Korea');
+        expect(result.country).toBe('Korea');
       });
 
-      it('should default to Korean when no language parameter is provided', () => {
-        const schema = getMenuRecommendationsJsonSchema();
+      it('should not include country when not provided', () => {
+        const result = buildUserProfile(undefined, undefined, undefined);
+        expect(result.country).toBeUndefined();
+      });
+    });
 
-        expect(schema.properties.intro.description).toContain('첫 설명');
+    describe('ageGroup field', () => {
+      it('should set Korean age group when language is ko', () => {
+        const result = buildUserProfile(currentYear - 30, undefined, undefined, 'ko');
+        expect(result.ageGroup).toBe('30대');
       });
 
-      it('should have same structure for both languages', () => {
-        const koSchema = getMenuRecommendationsJsonSchema('ko');
-        const enSchema = getMenuRecommendationsJsonSchema('en');
-
-        expect(koSchema.type).toBe(enSchema.type);
-        expect(koSchema.required).toEqual(enSchema.required);
-        expect(koSchema.properties.intro.type).toBe(
-          enSchema.properties.intro.type,
-        );
-        expect(koSchema.properties.recommendations.type).toBe(
-          enSchema.properties.recommendations.type,
-        );
-        expect(koSchema.properties.recommendations.minItems).toBe(
-          enSchema.properties.recommendations.minItems,
-        );
-        expect(koSchema.properties.recommendations.maxItems).toBe(
-          enSchema.properties.recommendations.maxItems,
-        );
-        expect(koSchema.properties.closing.type).toBe(
-          enSchema.properties.closing.type,
-        );
+      it('should set English age group when language is en', () => {
+        const result = buildUserProfile(currentYear - 30, undefined, undefined, 'en');
+        expect(result.ageGroup).toBe('30s');
       });
 
-      it('should only differ in description fields', () => {
-        const koSchema = getMenuRecommendationsJsonSchema('ko');
-        const enSchema = getMenuRecommendationsJsonSchema('en');
-
-        expect(koSchema.properties.intro.description).not.toBe(
-          enSchema.properties.intro.description,
-        );
-        expect(koSchema.properties.recommendations.description).not.toBe(
-          enSchema.properties.recommendations.description,
-        );
-        expect(koSchema.properties.closing.description).not.toBe(
-          enSchema.properties.closing.description,
-        );
+      it('should default to Korean age group when language not specified', () => {
+        const result = buildUserProfile(currentYear - 25);
+        expect(result.ageGroup).toBe('20대');
       });
+
+      it('should not include ageGroup when birthYear is not provided', () => {
+        const result = buildUserProfile(undefined, undefined, undefined, 'ko');
+        expect(result.ageGroup).toBeUndefined();
+      });
+
+      it('should not include ageGroup when birthYear is before 1900', () => {
+        const result = buildUserProfile(1800, undefined, undefined, 'ko');
+        expect(result.ageGroup).toBeUndefined();
+      });
+
+      it('should not include ageGroup when birthYear is in the future', () => {
+        const result = buildUserProfile(currentYear + 1, undefined, undefined, 'ko');
+        expect(result.ageGroup).toBeUndefined();
+      });
+
+      it('should include ageGroup when birthYear is exactly 1900', () => {
+        const result = buildUserProfile(1900, undefined, undefined, 'ko');
+        expect(result.ageGroup).toBeDefined();
+        expect(result.ageGroup).toBe('60대 이상');
+      });
+
+      it('should include ageGroup when birthYear is the current year', () => {
+        const result = buildUserProfile(currentYear, undefined, undefined, 'ko');
+        expect(result.ageGroup).toBeDefined();
+        expect(result.ageGroup).toBe('10대');
+      });
+    });
+
+    describe('gender field', () => {
+      test.each([
+        ['male', 'ko', '남성'],
+        ['female', 'ko', '여성'],
+        ['other', 'ko', '기타'],
+        ['male', 'en', 'Male'],
+        ['female', 'en', 'Female'],
+        ['other', 'en', 'Other'],
+      ])(
+        'should map gender "%s" to "%s" for language "%s"',
+        (gender, language, expected) => {
+          const result = buildUserProfile(
+            undefined,
+            gender,
+            undefined,
+            language as 'ko' | 'en',
+          );
+          expect(result.gender).toBe(expected);
+        },
+      );
+
+      it('should not include gender when not provided', () => {
+        const result = buildUserProfile(undefined, undefined, undefined, 'ko');
+        expect(result.gender).toBeUndefined();
+      });
+
+      it('should not include gender when invalid value provided', () => {
+        const result = buildUserProfile(
+          undefined,
+          'invalid-gender',
+          undefined,
+          'ko',
+        );
+        expect(result.gender).toBeUndefined();
+      });
+    });
+
+    it('should build complete profile with all fields', () => {
+      const result = buildUserProfile(currentYear - 35, 'female', 'USA', 'en');
+      expect(result.country).toBe('USA');
+      expect(result.ageGroup).toBe('30s');
+      expect(result.gender).toBe('Female');
+    });
+
+    it('should build complete Korean profile with all fields', () => {
+      const result = buildUserProfile(currentYear - 45, 'male', '한국', 'ko');
+      expect(result.country).toBe('한국');
+      expect(result.ageGroup).toBe('40대');
+      expect(result.gender).toBe('남성');
+    });
+  });
+
+  // ============================================================================
+  // buildUserPromptWithAddress
+  // ============================================================================
+
+  describe('buildUserPromptWithAddress', () => {
+    const baseArgs = {
+      prompt: '오늘 점심 뭐 먹을까',
+      likes: ['한식'],
+      dislikes: ['매운 음식'],
+      analysis: '한식 선호',
+    };
+
+    it('should include base prompt content without optional sections when nothing extra provided', () => {
+      const result = buildUserPromptWithAddress(
+        baseArgs.prompt,
+        baseArgs.likes,
+        baseArgs.dislikes,
+        baseArgs.analysis,
+      );
+      expect(result).toContain('RESPONSE_LANGUAGE: Korean');
+      expect(result).toContain('<user_prompt>');
+      expect(result).toContain(baseArgs.prompt);
+      expect(result).toContain('Likes: 한식');
+      expect(result).toContain('Dislikes: 매운 음식');
+      expect(result).not.toContain('USER_PROFILE');
+      expect(result).not.toContain('USER_ADDRESS');
+      expect(result).not.toContain('LOCAL_TRENDS');
+    });
+
+    it('should use buildUserPromptWithValidation when validationContext is provided', () => {
+      const validationContext = {
+        intent: 'preference' as const,
+        constraints: { budget: 'low' as const, dietary: [], urgency: 'normal' as const },
+        suggestedCategories: ['한식'],
+      };
+      const result = buildUserPromptWithAddress(
+        baseArgs.prompt,
+        baseArgs.likes,
+        baseArgs.dislikes,
+        baseArgs.analysis,
+        validationContext,
+      );
+      expect(result).toContain('VALIDATION_CONTEXT (Stage 1 analysis result):');
+      expect(result).toContain('Intent: preference');
+      expect(result).toContain('Budget: low');
+    });
+
+    it('should use buildUserPrompt when validationContext is not provided', () => {
+      const result = buildUserPromptWithAddress(
+        baseArgs.prompt,
+        baseArgs.likes,
+        baseArgs.dislikes,
+        baseArgs.analysis,
+        undefined,
+      );
+      expect(result).not.toContain('VALIDATION_CONTEXT');
+    });
+
+    describe('USER_PROFILE section', () => {
+      it('should include Korean USER_PROFILE label when language is ko', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          { country: '한국', ageGroup: '30대', gender: '남성' },
+          'ko',
+        );
+        expect(result).toContain('USER_PROFILE (참고용):');
+        expect(result).toContain('  국가: 한국');
+        expect(result).toContain('  연령대: 30대');
+        expect(result).toContain('  성별: 남성');
+      });
+
+      it('should include English USER_PROFILE label when language is en', () => {
+        const result = buildUserPromptWithAddress(
+          'I want lunch',
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          { country: 'USA', ageGroup: '30s', gender: 'Male' },
+          'en',
+        );
+        expect(result).toContain('USER_PROFILE (reference only):');
+        expect(result).toContain('  Country: USA');
+        expect(result).toContain('  Age Group: 30s');
+        expect(result).toContain('  Gender: Male');
+      });
+
+      it('should not include USER_PROFILE when userProfile is not provided', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+        );
+        expect(result).not.toContain('USER_PROFILE');
+      });
+
+      it('should not include USER_PROFILE when all profile fields are undefined', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          {},
+          'ko',
+        );
+        expect(result).not.toContain('USER_PROFILE');
+      });
+
+      it('should include profile with only country when ageGroup and gender are missing', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          { country: '한국' },
+          'ko',
+        );
+        expect(result).toContain('USER_PROFILE (참고용):');
+        expect(result).toContain('  국가: 한국');
+        expect(result).not.toContain('연령대:');
+        expect(result).not.toContain('성별:');
+      });
+
+      it('should include profile with only ageGroup when country and gender are missing', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          { ageGroup: '20대' },
+          'ko',
+        );
+        expect(result).toContain('USER_PROFILE (참고용):');
+        expect(result).toContain('  연령대: 20대');
+        expect(result).not.toContain('국가:');
+        expect(result).not.toContain('성별:');
+      });
+
+      it('should include profile with only gender when country and ageGroup are missing', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          { gender: '여성' },
+          'ko',
+        );
+        expect(result).toContain('USER_PROFILE (참고용):');
+        expect(result).toContain('  성별: 여성');
+        expect(result).not.toContain('국가:');
+        expect(result).not.toContain('연령대:');
+      });
+    });
+
+    describe('USER_ADDRESS section', () => {
+      it('should include Korean USER_ADDRESS label when language is ko', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          '서울특별시 강남구 역삼동',
+          undefined,
+          'ko',
+        );
+        expect(result).toContain('USER_ADDRESS (위치 참고):');
+        expect(result).toContain('서울특별시 강남구 역삼동');
+      });
+
+      it('should include English USER_ADDRESS label when language is en', () => {
+        const result = buildUserPromptWithAddress(
+          'I want lunch',
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          '123 Main St, New York',
+          undefined,
+          'en',
+        );
+        expect(result).toContain('USER_ADDRESS (location reference):');
+        expect(result).toContain('123 Main St, New York');
+      });
+
+      it('should not include USER_ADDRESS when userAddress is not provided', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+        );
+        expect(result).not.toContain('USER_ADDRESS');
+      });
+    });
+
+    describe('LOCAL_TRENDS section from webSearchSummary', () => {
+      it('should include Korean LOCAL_TRENDS label when confidence is high', () => {
+        const webSearchSummary = {
+          localTrends: ['삼겹살', '김치찌개'],
+          demographicFavorites: ['비빔밥'],
+          seasonalItems: ['냉면'],
+          confidence: 'high' as const,
+          summary: '여름철 인기 메뉴 요약',
+        };
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).toContain('LOCAL_TRENDS (참고용, 사용자 선호도 우선):');
+        expect(result).toContain('  지역 인기: 삼겹살, 김치찌개');
+        expect(result).toContain('  인구통계 인기: 비빔밥');
+        expect(result).toContain('  계절 메뉴: 냉면');
+        expect(result).toContain('  요약: 여름철 인기 메뉴 요약');
+      });
+
+      it('should include English LOCAL_TRENDS label when language is en', () => {
+        const webSearchSummary = {
+          localTrends: ['pizza', 'pasta'],
+          demographicFavorites: ['burger'],
+          seasonalItems: ['ice cream'],
+          confidence: 'medium' as const,
+          summary: 'Summer food trends',
+        };
+        const result = buildUserPromptWithAddress(
+          'I want lunch',
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'en',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).toContain(
+          'LOCAL_TRENDS (reference only, user preferences take priority):',
+        );
+        expect(result).toContain('  Local popular: pizza, pasta');
+        expect(result).toContain('  Demographic popular: burger');
+        expect(result).toContain('  Seasonal: ice cream');
+        expect(result).toContain('  Summary: Summer food trends');
+      });
+
+      it('should not include LOCAL_TRENDS when confidence is low', () => {
+        const webSearchSummary = {
+          localTrends: ['삼겹살'],
+          demographicFavorites: [],
+          seasonalItems: [],
+          confidence: 'low' as const,
+          summary: '',
+        };
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).not.toContain('LOCAL_TRENDS');
+      });
+
+      it('should not include LOCAL_TRENDS when webSearchSummary is null', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          null,
+        );
+        expect(result).not.toContain('LOCAL_TRENDS');
+      });
+
+      it('should not include LOCAL_TRENDS when webSearchSummary is not provided', () => {
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+        );
+        expect(result).not.toContain('LOCAL_TRENDS');
+      });
+
+      it('should omit localTrends line when array is empty', () => {
+        const webSearchSummary = {
+          localTrends: [],
+          demographicFavorites: ['비빔밥'],
+          seasonalItems: [],
+          confidence: 'high' as const,
+          summary: '',
+        };
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).toContain('LOCAL_TRENDS');
+        expect(result).not.toContain('지역 인기:');
+        expect(result).toContain('  인구통계 인기: 비빔밥');
+      });
+
+      it('should omit demographicFavorites line when array is empty', () => {
+        const webSearchSummary = {
+          localTrends: ['삼겹살'],
+          demographicFavorites: [],
+          seasonalItems: [],
+          confidence: 'medium' as const,
+          summary: '',
+        };
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).toContain('  지역 인기: 삼겹살');
+        expect(result).not.toContain('인구통계 인기:');
+      });
+
+      it('should omit seasonalItems line when array is empty', () => {
+        const webSearchSummary = {
+          localTrends: [],
+          demographicFavorites: [],
+          seasonalItems: [],
+          confidence: 'high' as const,
+          summary: '요약 텍스트',
+        };
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).not.toContain('계절 메뉴:');
+        expect(result).toContain('  요약: 요약 텍스트');
+      });
+
+      it('should omit summary line when summary is empty string', () => {
+        const webSearchSummary = {
+          localTrends: ['삼겹살'],
+          demographicFavorites: [],
+          seasonalItems: [],
+          confidence: 'high' as const,
+          summary: '',
+        };
+        const result = buildUserPromptWithAddress(
+          baseArgs.prompt,
+          baseArgs.likes,
+          baseArgs.dislikes,
+          baseArgs.analysis,
+          undefined,
+          undefined,
+          undefined,
+          'ko',
+          undefined,
+          undefined,
+          webSearchSummary,
+        );
+        expect(result).not.toContain('요약:');
+      });
+    });
+
+    it('should build full prompt with all optional sections for Korean', () => {
+      const currentYear = new Date().getFullYear();
+      const webSearchSummary = {
+        localTrends: ['삼겹살'],
+        demographicFavorites: ['비빔밥'],
+        seasonalItems: ['냉면'],
+        confidence: 'high' as const,
+        summary: '요약',
+      };
+      const result = buildUserPromptWithAddress(
+        baseArgs.prompt,
+        baseArgs.likes,
+        baseArgs.dislikes,
+        baseArgs.analysis,
+        undefined,
+        '서울특별시 강남구',
+        { country: '한국', ageGroup: '30대', gender: '남성' },
+        'ko',
+        undefined,
+        undefined,
+        webSearchSummary,
+      );
+      expect(result).toContain('RESPONSE_LANGUAGE: Korean');
+      expect(result).toContain('USER_PROFILE (참고용):');
+      expect(result).toContain('USER_ADDRESS (위치 참고):');
+      expect(result).toContain('LOCAL_TRENDS (참고용, 사용자 선호도 우선):');
+      void currentYear;
     });
   });
 });

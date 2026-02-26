@@ -5,20 +5,9 @@ import { AuthUserPayload } from '../../decorators/current-user.decorator';
  * Testing Strategy for NestJS Param Decorators:
  *
  * NestJS param decorators use `createParamDecorator` which creates metadata-driven decorators.
- * Testing these directly is challenging because:
- * 1. They rely on Reflect metadata which isn't easily testable in isolation
- * 2. They're designed to be executed by NestJS framework during request handling
+ * This test replicates the exact logic from current-user.decorator.ts lines 13-21.
  *
- * This test replicates the exact logic from current-user.decorator.ts lines 12-19.
- * While this won't show up in coverage metrics for the decorator file itself,
- * it ensures the business logic is thoroughly tested.
- *
- * The actual decorator IS exercised through:
- * - Auth controller tests (getProfile, logout, etc.)
- * - Menu controller tests
- * - User controller tests
- * - Bug report controller tests
- *
+ * The actual decorator IS exercised through controller integration tests.
  * This isolated test provides comprehensive coverage of all branches and edge cases.
  */
 const currentUserDecoratorLogic = (
@@ -26,7 +15,7 @@ const currentUserDecoratorLogic = (
   ctx: ExecutionContext,
 ): AuthUserPayload => {
   const request = ctx.switchToHttp().getRequest<{ user?: AuthUserPayload }>();
-  if (!request.user || !request.user.email) {
+  if (!request.user || !request.user.sub || !request.user.email) {
     throw new UnauthorizedException('Invalid authentication payload');
   }
   return request.user;
@@ -46,256 +35,98 @@ describe('CurrentUser Decorator', () => {
   };
 
   describe('Valid user extraction', () => {
-    it('should extract valid user with email and role when request.user exists', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
+    it('should return user payload when all required fields are present', () => {
+      const mockUser: AuthUserPayload = { sub: 1, email: 'test@example.com', role: 'USER' };
       const context = createMockExecutionContext(mockUser);
 
-      // Act
       const result = currentUserDecoratorLogic(null, context);
 
-      // Assert
       expect(result).toEqual(mockUser);
-      expect(result.email).toBe('test@example.com');
-      expect(result.role).toBe('USER');
     });
 
-    it('should extract admin user correctly', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'admin@example.com',
-        role: 'ADMIN',
-      };
+    it('should return admin user payload correctly', () => {
+      const mockUser: AuthUserPayload = { sub: 2, email: 'admin@example.com', role: 'ADMIN' };
       const context = createMockExecutionContext(mockUser);
 
-      // Act
       const result = currentUserDecoratorLogic(null, context);
 
-      // Assert
-      expect(result).toEqual(mockUser);
       expect(result.role).toBe('ADMIN');
     });
 
-    it('should extract user with long email address', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'very.long.email.address.with.multiple.dots@example.co.kr',
-        role: 'USER',
-      };
+    it('should treat whitespace-only email as valid (documents current behavior)', () => {
+      // The decorator only checks for falsy values, not whitespace
+      const mockUser: AuthUserPayload = { sub: 1, email: '   ', role: 'USER' };
       const context = createMockExecutionContext(mockUser);
 
-      // Act
       const result = currentUserDecoratorLogic(null, context);
 
-      // Assert
-      expect(result).toEqual(mockUser);
-      expect(result.email).toBe(
-        'very.long.email.address.with.multiple.dots@example.co.kr',
-      );
-    });
-  });
-
-  describe('Missing user throws UnauthorizedException', () => {
-    it('should throw UnauthorizedException when request.user is undefined', () => {
-      // Arrange
-      const context = createMockExecutionContext(undefined);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-
-    it('should throw UnauthorizedException when request.user is null', () => {
-      // Arrange
-      const context = createMockExecutionContext(null);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-  });
-
-  describe('Missing email throws UnauthorizedException', () => {
-    it('should throw UnauthorizedException when user.email is missing', () => {
-      // Arrange
-      const mockUser = { role: 'USER' } as Partial<AuthUserPayload>;
-      const context = createMockExecutionContext(mockUser);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-
-    it('should throw UnauthorizedException when user.email is empty string', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: '',
-        role: 'USER',
-      };
-      const context = createMockExecutionContext(mockUser);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-
-    it('should throw UnauthorizedException when user.email is null', () => {
-      // Arrange
-      const mockUser = {
-        email: null,
-        role: 'USER',
-      } as unknown as AuthUserPayload;
-      const context = createMockExecutionContext(mockUser);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-
-    it('should throw UnauthorizedException when user.email is undefined', () => {
-      // Arrange
-      const mockUser = {
-        email: undefined,
-        role: 'USER',
-      } as unknown as AuthUserPayload;
-      const context = createMockExecutionContext(mockUser);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-  });
-
-  describe('Edge cases', () => {
-    it('should throw UnauthorizedException when user is empty object', () => {
-      // Arrange
-      const mockUser = {} as AuthUserPayload;
-      const context = createMockExecutionContext(mockUser);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-
-    it('should throw UnauthorizedException when user has only email but email is empty', () => {
-      // Arrange
-      const mockUser = { email: '' } as AuthUserPayload;
-      const context = createMockExecutionContext(mockUser);
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-
-    it('should handle whitespace-only email as valid (documents current behavior)', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: '   ',
-        role: 'USER',
-      };
-      const context = createMockExecutionContext(mockUser);
-
-      // Act
-      // Note: The decorator only checks for falsy values, not whitespace
-      // So whitespace email will pass the check (this documents current behavior)
-      const result = currentUserDecoratorLogic(null, context);
-
-      // Assert
-      expect(result).toEqual(mockUser);
       expect(result.email).toBe('   ');
     });
 
-    it('should accept user with email containing special characters', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'user+tag@example.com',
-        role: 'USER',
-      };
+    it('should ignore the data parameter regardless of its value', () => {
+      const mockUser: AuthUserPayload = { sub: 1, email: 'test@example.com', role: 'USER' };
       const context = createMockExecutionContext(mockUser);
 
-      // Act
-      const result = currentUserDecoratorLogic(null, context);
-
-      // Assert
-      expect(result).toEqual(mockUser);
-      expect(result.email).toBe('user+tag@example.com');
-    });
-
-    it('should not validate role field (only email is checked)', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: '', // Empty role is not validated by decorator
-      };
-      const context = createMockExecutionContext(mockUser);
-
-      // Act
-      const result = currentUserDecoratorLogic(null, context);
-
-      // Assert
-      expect(result).toEqual(mockUser);
-      expect(result.role).toBe('');
-    });
-
-    it('should work with different role values', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'SUPER_ADMIN',
-      };
-      const context = createMockExecutionContext(mockUser);
-
-      // Act
-      const result = currentUserDecoratorLogic(null, context);
-
-      // Assert
-      expect(result).toEqual(mockUser);
-      expect(result.role).toBe('SUPER_ADMIN');
+      expect(currentUserDecoratorLogic(null, context)).toEqual(mockUser);
+      expect(currentUserDecoratorLogic(undefined, context)).toEqual(mockUser);
+      expect(currentUserDecoratorLogic('some-data', context)).toEqual(mockUser);
     });
   });
 
-  describe('ExecutionContext handling', () => {
-    it('should correctly call switchToHttp and getRequest', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
+  describe('UnauthorizedException when request.user is absent', () => {
+    test.each([
+      ['undefined', undefined],
+      ['null', null],
+    ])('should throw when request.user is %s', (_label, userValue) => {
+      const context = createMockExecutionContext(
+        userValue as AuthUserPayload | null | undefined,
+      );
+
+      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
+        new UnauthorizedException('Invalid authentication payload'),
+      );
+    });
+
+    it('should throw when request has no user property at all', () => {
+      const getRequest = jest.fn().mockReturnValue({});
+      const switchToHttp = jest.fn().mockReturnValue({ getRequest });
+      const context = {
+        switchToHttp,
+        getHandler: jest.fn(),
+        getClass: jest.fn(),
+      } as unknown as ExecutionContext;
+
+      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
+        new UnauthorizedException('Invalid authentication payload'),
+      );
+    });
+  });
+
+  describe('UnauthorizedException when required fields are missing', () => {
+    test.each([
+      ['sub is missing', { email: 'test@example.com', role: 'USER' }],
+      ['sub is zero (falsy)', { sub: 0, email: 'test@example.com', role: 'USER' }],
+      ['email is missing', { sub: 1, role: 'USER' }],
+      ['email is empty string', { sub: 1, email: '', role: 'USER' }],
+      ['email is null', { sub: 1, email: null, role: 'USER' }],
+      ['both sub and email are missing', {}],
+    ])(
+      'should throw UnauthorizedException when %s',
+      (_label, partialUser) => {
+        const context = createMockExecutionContext(
+          partialUser as Partial<AuthUserPayload>,
+        );
+
+        expect(() => currentUserDecoratorLogic(null, context)).toThrow(
+          new UnauthorizedException('Invalid authentication payload'),
+        );
+      },
+    );
+  });
+
+  describe('ExecutionContext interaction', () => {
+    it('should call switchToHttp and getRequest exactly once each', () => {
+      const mockUser: AuthUserPayload = { sub: 1, email: 'test@example.com', role: 'USER' };
       const getRequest = jest.fn().mockReturnValue({ user: mockUser });
       const switchToHttp = jest.fn().mockReturnValue({ getRequest });
       const context = {
@@ -304,53 +135,10 @@ describe('CurrentUser Decorator', () => {
         getClass: jest.fn(),
       } as unknown as ExecutionContext;
 
-      // Act
-      const result = currentUserDecoratorLogic(null, context);
+      currentUserDecoratorLogic(null, context);
 
-      // Assert
       expect(switchToHttp).toHaveBeenCalledTimes(1);
       expect(getRequest).toHaveBeenCalledTimes(1);
-      expect(result).toEqual(mockUser);
-    });
-
-    it('should handle request without user property', () => {
-      // Arrange
-      const getRequest = jest.fn().mockReturnValue({}); // No user property
-      const switchToHttp = jest.fn().mockReturnValue({ getRequest });
-      const context = {
-        switchToHttp,
-        getHandler: jest.fn(),
-        getClass: jest.fn(),
-      } as unknown as ExecutionContext;
-
-      // Act & Assert
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        UnauthorizedException,
-      );
-      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-        'Invalid authentication payload',
-      );
-    });
-  });
-
-  describe('Data parameter handling', () => {
-    it('should ignore data parameter (always null/undefined for this decorator)', () => {
-      // Arrange
-      const mockUser: AuthUserPayload = {
-        email: 'test@example.com',
-        role: 'USER',
-      };
-      const context = createMockExecutionContext(mockUser);
-
-      // Act
-      const resultWithNull = currentUserDecoratorLogic(null, context);
-      const resultWithUndefined = currentUserDecoratorLogic(undefined, context);
-      const resultWithData = currentUserDecoratorLogic('some-data', context);
-
-      // Assert - All should return the same user regardless of data parameter
-      expect(resultWithNull).toEqual(mockUser);
-      expect(resultWithUndefined).toEqual(mockUser);
-      expect(resultWithData).toEqual(mockUser);
     });
   });
 });

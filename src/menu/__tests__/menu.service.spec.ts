@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { MenuService } from '../menu.service';
 import { MenuRecommendationService } from '../services/menu-recommendation.service';
 import { MenuSelectionService } from '../services/menu-selection.service';
@@ -7,6 +8,10 @@ import { PlaceService } from '../services/place.service';
 import { GeminiPlacesService } from '../services/gemini-places.service';
 import { PlaceRecommendation } from '../entities/place-recommendation.entity';
 import { PlaceRecommendationSource } from '../enum/place-recommendation-source.enum';
+import {
+  GeminiPlaceRecommendationsResponse,
+} from '../interfaces/gemini-places.interface';
+import { RecommendPlacesV2Dto } from '../dto/recommend-places-v2.dto';
 import { RedisCacheService } from '@/common/cache/cache.service';
 import { createMockRepository } from '../../../test/mocks/repository.mock';
 import { createMockService } from '../../../test/utils/test-helpers';
@@ -21,6 +26,8 @@ describe('MenuService (Facade)', () => {
   let mockMenuRecommendationService: jest.Mocked<MenuRecommendationService>;
   let mockMenuSelectionService: jest.Mocked<MenuSelectionService>;
   let mockPlaceService: jest.Mocked<PlaceService>;
+  let mockGeminiPlacesService: jest.Mocked<GeminiPlacesService>;
+  let mockPlaceRecommendationRepository: ReturnType<typeof createMockRepository>;
 
   beforeEach(async () => {
     mockMenuRecommendationService = {
@@ -44,12 +51,18 @@ describe('MenuService (Facade)', () => {
       searchRestaurantBlogs: jest.fn(),
     } as unknown as jest.Mocked<PlaceService>;
 
+    mockGeminiPlacesService = {
+      recommendRestaurants: jest.fn(),
+    } as unknown as jest.Mocked<GeminiPlacesService>;
+
+    mockPlaceRecommendationRepository = createMockRepository();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MenuService,
         {
           provide: getRepositoryToken(PlaceRecommendation),
-          useValue: createMockRepository(),
+          useValue: mockPlaceRecommendationRepository,
         },
         {
           provide: MenuRecommendationService,
@@ -65,7 +78,7 @@ describe('MenuService (Facade)', () => {
         },
         {
           provide: GeminiPlacesService,
-          useValue: { recommendRestaurants: jest.fn() },
+          useValue: mockGeminiPlacesService,
         },
         {
           provide: RedisCacheService,
@@ -451,6 +464,267 @@ describe('MenuService (Facade)', () => {
         'ko',
       );
       expect(result).toEqual(expectedDetail);
+    });
+  });
+
+  describe('recommendPlacesWithGemini', () => {
+    const userId = 1;
+    const dto: RecommendPlacesV2Dto = {
+      menuRecommendationId: 1,
+      menuName: '김치찌개',
+      address: '서울시 강남구',
+      latitude: 37.5,
+      longitude: 127.0,
+      language: 'ko',
+    };
+
+    it('should save valid recommendations and return gemini response', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const geminiResponse = {
+        recommendations: [
+          {
+            placeId: 'ChIJ123',
+            nameKo: '맛있는 식당',
+            nameEn: 'Delicious Restaurant',
+            nameLocal: null,
+            reason: '평점이 높습니다',
+            reasonTags: ['맛집', '인기'],
+            source: 'GEMINI' as const,
+            location: { latitude: 37.5, longitude: 127.0 },
+            addressKo: '서울시 강남구',
+            addressEn: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+
+      const result = await service.recommendPlacesWithGemini(dto, userId);
+
+      expect(mockMenuRecommendationService.findById).toHaveBeenCalledWith(
+        dto.menuRecommendationId,
+        { id: userId },
+      );
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        dto.menuName,
+        dto.address,
+        dto.latitude,
+        dto.longitude,
+        'ko',
+      );
+      expect(mockPlaceRecommendationRepository.save).toHaveBeenCalled();
+      expect(result).toEqual(geminiResponse);
+    });
+
+    it('should filter out recommendations with null placeId', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const geminiResponse = {
+        recommendations: [
+          {
+            placeId: null,
+            nameKo: '이름 없음',
+            nameEn: null as unknown as string,
+            nameLocal: null,
+            reason: '이유 없음',
+            reasonTags: [],
+            source: 'GEMINI' as const,
+            location: undefined,
+            addressKo: null,
+            addressEn: null,
+            addressLocal: null,
+          },
+          {
+            placeId: 'ChIJ456',
+            nameKo: '유효한 식당',
+            nameEn: 'Valid Restaurant',
+            nameLocal: null,
+            reason: '유효한 이유',
+            reasonTags: ['맛집'],
+            source: 'GEMINI' as const,
+            location: { latitude: 37.5, longitude: 127.0 },
+            addressKo: '서울시 강남구',
+            addressEn: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+
+      await service.recommendPlacesWithGemini(dto, userId);
+
+      expect(mockPlaceRecommendationRepository.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle empty recommendations list (all null placeIds)', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const geminiResponse = {
+        recommendations: [
+          {
+            placeId: null,
+            nameKo: null as unknown as string,
+            nameEn: null as unknown as string,
+            nameLocal: null,
+            reason: '',
+            reasonTags: [],
+            source: 'GEMINI' as const,
+            location: undefined,
+            addressKo: null,
+            addressEn: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+
+      const result = await service.recommendPlacesWithGemini(dto, userId);
+
+      expect(mockPlaceRecommendationRepository.create).not.toHaveBeenCalled();
+      expect(result).toEqual(geminiResponse);
+    });
+
+    it('should throw BadRequestException when save fails', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const geminiResponse = {
+        recommendations: [
+          {
+            placeId: 'ChIJ789',
+            nameKo: '저장 실패 식당',
+            nameEn: null as unknown as string,
+            nameLocal: null,
+            reason: '이유',
+            reasonTags: [],
+            source: 'GEMINI' as const,
+            location: undefined,
+            addressKo: null,
+            addressEn: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockRejectedValue(
+        new Error('DB save error'),
+      );
+
+      await expect(
+        service.recommendPlacesWithGemini(dto, userId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle recommendation with non-array reasonTags', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const geminiResponse = {
+        recommendations: [
+          {
+            placeId: 'ChIJABC',
+            nameKo: '태그 없는 식당',
+            nameEn: null as unknown as string,
+            nameLocal: null,
+            reason: '이유',
+            reasonTags: null as unknown as string[],
+            source: 'GEMINI' as const,
+            location: { latitude: 37.5, longitude: 127.0 },
+            addressKo: null,
+            addressEn: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+
+      await service.recommendPlacesWithGemini(dto, userId);
+
+      expect(mockPlaceRecommendationRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ reasonTags: [] }),
+      );
+    });
+
+    it('should use English language when dto.language is "en"', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const englishDto: RecommendPlacesV2Dto = { ...dto, language: 'en' };
+      const geminiResponse = { recommendations: [] };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+
+      await service.recommendPlacesWithGemini(englishDto, userId);
+
+      expect(mockGeminiPlacesService.recommendRestaurants).toHaveBeenCalledWith(
+        englishDto.menuName,
+        englishDto.address,
+        englishDto.latitude,
+        englishDto.longitude,
+        'en',
+      );
+    });
+
+    it('should handle recommendation with null location', async () => {
+      const recommendation = MenuRecommendationFactory.create({ id: 1 });
+      const geminiResponse = {
+        recommendations: [
+          {
+            placeId: 'ChIJDEF',
+            nameKo: '위치 없는 식당',
+            nameEn: null as unknown as string,
+            nameLocal: null,
+            reason: '이유',
+            reasonTags: ['맛집'],
+            source: 'GEMINI' as const,
+            location: undefined,
+            addressKo: null,
+            addressEn: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      mockMenuRecommendationService.findById.mockResolvedValue(recommendation);
+      mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
+        geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
+      );
+      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+
+      await service.recommendPlacesWithGemini(dto, userId);
+
+      expect(mockPlaceRecommendationRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          placeLatitude: null,
+          placeLongitude: null,
+        }),
+      );
     });
   });
 

@@ -15,11 +15,11 @@ import { MessageCode } from '@/common/constants/message-codes';
 import {
   AuthUserPayload,
   CurrentUser,
-} from '../../auth/decorators/current-user.decorator';
-import { Roles } from '../../auth/decorators/roles.decorator';
-import { JwtAuthGuard } from '../../auth/guard/jwt.guard';
-import { RolesGuard } from '../../auth/guard/roles.guard';
-import { UserService } from '../../user/user.service';
+} from '@/auth/decorators/current-user.decorator';
+import { Roles } from '@/auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
+import { RolesGuard } from '@/auth/guard/roles.guard';
+import { UserService } from '@/user/user.service';
 import { CreateNotificationDto } from '../dto/create-notification.dto';
 import { NotificationListQueryDto } from '../dto/notification-list-query.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';

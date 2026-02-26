@@ -2,14 +2,14 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
-import { AuthUserPayload } from '../auth/decorators/current-user.decorator';
+import { AuthUserPayload } from '@/auth/decorators/current-user.decorator';
 import {
   PageInfo,
   PaginatedResponse,
-} from '../common/interfaces/pagination.interface';
-import { S3Client } from '../external/aws/clients/s3.client';
-import { User } from '../user/entities/user.entity';
-import { UserService } from '../user/user.service';
+} from '@/common/interfaces/pagination.interface';
+import { S3Client } from '@/external/aws/clients/s3.client';
+import { User } from '@/user/entities/user.entity';
+import { UserService } from '@/user/user.service';
 import { AdminBugReportDetailDto } from './dto/admin-bug-report-detail.dto';
 import { BugReportListQueryDto } from './dto/bug-report-list-query.dto';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';

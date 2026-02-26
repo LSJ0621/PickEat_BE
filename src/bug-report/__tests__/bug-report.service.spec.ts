@@ -6,8 +6,8 @@ import { BugReportService } from '../bug-report.service';
 import { BugReport } from '../entities/bug-report.entity';
 import { BugReportStatusHistory } from '../entities/bug-report-status-history.entity';
 import { BugReportStatus } from '../enum/bug-report-status.enum';
-import { UserService } from '../../user/user.service';
-import { S3Client } from '../../external/aws/clients/s3.client';
+import { UserService } from '@/user/user.service';
+import { S3Client } from '@/external/aws/clients/s3.client';
 import { createMockRepository } from '../../../test/mocks/repository.mock';
 import { createMockService } from '../../../test/utils/test-helpers';
 import { createMockS3Client } from '../../../test/mocks/external-clients.mock';
@@ -84,7 +84,7 @@ describe('BugReportService', () => {
   });
 
   describe('createBugReport', () => {
-    const authUser = { email: 'test@example.com', role: 'USER' as const };
+    const authUser = { sub: 1, email: 'test@example.com', role: 'USER' as const };
     const dto: CreateBugReportDto = {
       category: 'UI/UX',
       title: '버튼이 작동하지 않습니다',
@@ -407,6 +407,385 @@ describe('BugReportService', () => {
       await expect(service.findOne(999)).rejects.toThrow(
         '버그 제보를 찾을 수 없습니다. (ID: 999)',
       );
+    });
+  });
+
+  describe('updateStatusWithHistory', () => {
+    it('should update status and create status history record', async () => {
+      const adminUser = UserFactory.create({ id: 10, role: 'ADMIN' });
+      const bugReport = BugReportFactory.create({
+        id: 1,
+        status: BugReportStatus.UNCONFIRMED,
+      });
+      bugReport.createdAt = new Date('2024-01-01T00:00:00Z');
+      bugReport.updatedAt = new Date('2024-01-01T00:00:00Z');
+      const updatedBugReport = {
+        ...bugReport,
+        status: BugReportStatus.CONFIRMED,
+      };
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      bugReportRepository.save
+        .mockResolvedValueOnce(updatedBugReport as BugReport)
+        .mockResolvedValueOnce({} as any);
+
+      const result = await service.updateStatusWithHistory(
+        1,
+        BugReportStatus.CONFIRMED,
+        adminUser,
+      );
+
+      expect(result.status).toBe(BugReportStatus.CONFIRMED);
+      expect(bugReportRepository.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('should record the previous status in the history entry', async () => {
+      const adminUser = UserFactory.create({ id: 10, role: 'ADMIN' });
+      const bugReport = BugReportFactory.create({
+        id: 1,
+        status: BugReportStatus.CONFIRMED,
+      });
+      bugReport.createdAt = new Date('2024-01-01T00:00:00Z');
+      bugReport.updatedAt = new Date('2024-01-01T00:00:00Z');
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport as BugReport);
+
+      await service.updateStatusWithHistory(
+        1,
+        BugReportStatus.FIXED,
+        adminUser,
+      );
+
+      // Second save call is for BugReportStatusHistory
+      const secondSaveCall = bugReportRepository.save.mock.calls[1];
+      const historyData = secondSaveCall[0] as Record<string, unknown>;
+      expect(historyData['previousStatus']).toBe(BugReportStatus.CONFIRMED);
+      expect(historyData['status']).toBe(BugReportStatus.FIXED);
+      expect(historyData['changedBy']).toBe(adminUser);
+    });
+
+    it('should throw NotFoundException when bug report does not exist in transaction', async () => {
+      const adminUser = UserFactory.create({ id: 10, role: 'ADMIN' });
+
+      bugReportRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateStatusWithHistory(
+          999,
+          BugReportStatus.CONFIRMED,
+          adminUser,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should use the provided changedBy user in history entry', async () => {
+      const adminUser = UserFactory.create({ id: 99, email: 'admin@test.com', role: 'ADMIN' });
+      const bugReport = BugReportFactory.create({ id: 1 });
+      bugReport.createdAt = new Date();
+      bugReport.updatedAt = new Date();
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport as BugReport);
+
+      await service.updateStatusWithHistory(
+        1,
+        BugReportStatus.CLOSED,
+        adminUser,
+      );
+
+      const secondSaveCall = bugReportRepository.save.mock.calls[1];
+      const historyData = secondSaveCall[0] as Record<string, unknown>;
+      expect(historyData['changedBy']).toEqual(adminUser);
+    });
+  });
+
+  describe('findOneWithDetails', () => {
+    it('should return bug report detail with status history', async () => {
+      const user = UserFactory.create({
+        id: 1,
+        email: 'user@test.com',
+        name: 'Test User',
+      });
+      user.createdAt = new Date('2024-01-01T00:00:00Z');
+
+      const bugReport = BugReportFactory.create({ id: 1, user });
+      bugReport.createdAt = new Date('2024-01-15T10:00:00Z');
+      bugReport.updatedAt = new Date('2024-01-16T12:00:00Z');
+
+      const changedBy = UserFactory.create({ id: 10, email: 'admin@test.com' });
+      const statusHistory = [
+        {
+          id: 'uuid-1',
+          bugReport,
+          previousStatus: BugReportStatus.UNCONFIRMED,
+          status: BugReportStatus.CONFIRMED,
+          changedAt: new Date('2024-01-16T12:00:00Z'),
+          changedBy,
+          deletedAt: null,
+        },
+      ];
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      statusHistoryRepository.find.mockResolvedValue(statusHistory as any);
+
+      const result = await service.findOneWithDetails(1);
+
+      expect(result.id).toBe(1);
+      expect(result.title).toBe(bugReport.title);
+      expect(result.statusHistory).toHaveLength(1);
+      expect(result.statusHistory[0].previousStatus).toBe(
+        BugReportStatus.UNCONFIRMED,
+      );
+      expect(result.statusHistory[0].status).toBe(BugReportStatus.CONFIRMED);
+      expect(result.statusHistory[0].changedBy).toEqual({
+        id: changedBy.id,
+        email: changedBy.email,
+      });
+      expect(result.user.email).toBe(user.email);
+    });
+
+    it('should return null changedBy when changedBy is null in history', async () => {
+      const user = UserFactory.create({ id: 1 });
+      user.createdAt = new Date('2024-01-01T00:00:00Z');
+
+      const bugReport = BugReportFactory.create({ id: 1, user });
+      bugReport.createdAt = new Date('2024-01-15T10:00:00Z');
+      bugReport.updatedAt = new Date('2024-01-16T12:00:00Z');
+
+      const statusHistory = [
+        {
+          id: 'uuid-2',
+          bugReport,
+          previousStatus: BugReportStatus.UNCONFIRMED,
+          status: BugReportStatus.CONFIRMED,
+          changedAt: new Date('2024-01-16T12:00:00Z'),
+          changedBy: null,
+          deletedAt: null,
+        },
+      ];
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      statusHistoryRepository.find.mockResolvedValue(statusHistory as any);
+
+      const result = await service.findOneWithDetails(1);
+
+      expect(result.statusHistory[0].changedBy).toBeNull();
+    });
+
+    it('should return empty statusHistory array when no history exists', async () => {
+      const user = UserFactory.create({ id: 1 });
+      user.createdAt = new Date('2024-01-01T00:00:00Z');
+
+      const bugReport = BugReportFactory.create({ id: 1, user });
+      bugReport.createdAt = new Date('2024-01-15T10:00:00Z');
+      bugReport.updatedAt = new Date('2024-01-15T10:00:00Z');
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      statusHistoryRepository.find.mockResolvedValue([]);
+
+      const result = await service.findOneWithDetails(1);
+
+      expect(result.statusHistory).toHaveLength(0);
+    });
+
+    it('should throw NotFoundException when bug report does not exist', async () => {
+      bugReportRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.findOneWithDetails(999)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should query status history ordered by changedAt DESC', async () => {
+      const user = UserFactory.create({ id: 1 });
+      user.createdAt = new Date('2024-01-01T00:00:00Z');
+
+      const bugReport = BugReportFactory.create({ id: 1, user });
+      bugReport.createdAt = new Date('2024-01-15T10:00:00Z');
+      bugReport.updatedAt = new Date('2024-01-15T10:00:00Z');
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      statusHistoryRepository.find.mockResolvedValue([]);
+
+      await service.findOneWithDetails(1);
+
+      expect(statusHistoryRepository.find).toHaveBeenCalledWith({
+        where: { bugReport: { id: 1 } },
+        relations: ['changedBy'],
+        order: { changedAt: 'DESC' },
+      });
+    });
+
+    it('should return correct ISO date strings for all timestamps', async () => {
+      const user = UserFactory.create({ id: 1 });
+      user.createdAt = new Date('2024-01-01T00:00:00Z');
+
+      const bugReport = BugReportFactory.create({ id: 1, user });
+      const fixedDate = new Date('2024-06-15T08:30:00Z');
+      bugReport.createdAt = fixedDate;
+      bugReport.updatedAt = fixedDate;
+
+      bugReportRepository.findOne.mockResolvedValue(bugReport);
+      statusHistoryRepository.find.mockResolvedValue([]);
+
+      const result = await service.findOneWithDetails(1);
+
+      expect(result.createdAt).toBe(fixedDate.toISOString());
+      expect(result.updatedAt).toBe(fixedDate.toISOString());
+    });
+  });
+
+  describe('createBugReport - image upload failures', () => {
+    const authUser = { sub: 1, email: 'test@example.com', role: 'USER' as const };
+
+    it('should log warning when some image uploads fail', async () => {
+      const user = UserFactory.create();
+      const mockFiles: Express.Multer.File[] = [
+        {
+          fieldname: 'images',
+          originalname: 'success.png',
+          encoding: '7bit',
+          mimetype: 'image/png',
+          buffer: Buffer.from('data'),
+          size: 1024,
+        } as Express.Multer.File,
+        {
+          fieldname: 'images',
+          originalname: 'fail.png',
+          encoding: '7bit',
+          mimetype: 'image/png',
+          buffer: Buffer.from('data'),
+          size: 1024,
+        } as Express.Multer.File,
+      ];
+
+      const successUrl = 'https://s3.amazonaws.com/bug-reports/success.png';
+
+      userService.getAuthenticatedEntity.mockResolvedValue(user);
+      s3Client.uploadBugReportImage
+        .mockResolvedValueOnce(successUrl)
+        .mockRejectedValueOnce(new Error('Upload failed'));
+      bugReportRepository.create.mockReturnValue(
+        BugReportFactory.create({ user, images: [successUrl] }),
+      );
+      bugReportRepository.save.mockResolvedValue(
+        BugReportFactory.create({ user, images: [successUrl] }),
+      );
+
+      const loggerWarnSpy = jest
+        .spyOn(service['logger'], 'warn')
+        .mockImplementation();
+
+      const result = await service.createBugReport(authUser, {
+        category: 'Bug',
+        title: 'Test',
+        description: 'Desc',
+      }, mockFiles);
+
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('bug report image upload(s) failed'),
+      );
+      expect(result).toBeDefined();
+
+      loggerWarnSpy.mockRestore();
+    });
+
+    it('should set imageUrls to null when all image uploads fail', async () => {
+      const user = UserFactory.create();
+      const mockFiles: Express.Multer.File[] = [
+        {
+          fieldname: 'images',
+          originalname: 'fail.png',
+          encoding: '7bit',
+          mimetype: 'image/png',
+          buffer: Buffer.from('data'),
+          size: 1024,
+        } as Express.Multer.File,
+      ];
+
+      userService.getAuthenticatedEntity.mockResolvedValue(user);
+      s3Client.uploadBugReportImage.mockRejectedValue(
+        new Error('Upload failed'),
+      );
+      const bugReport = BugReportFactory.create({ user, images: null });
+      bugReportRepository.create.mockReturnValue(bugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport);
+
+      const result = await service.createBugReport(authUser, {
+        category: 'Bug',
+        title: 'Test',
+        description: 'Desc',
+      }, mockFiles);
+
+      expect(bugReportRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ images: null }),
+      );
+      expect(result.images).toBeNull();
+    });
+  });
+
+  describe('findAll - additional branch coverage', () => {
+    it('should filter by category when provided', async () => {
+      const queryDto: BugReportListQueryDto = {
+        page: 1,
+        limit: 20,
+        category: 'UI/UX',
+      };
+
+      const mockQueryBuilder =
+        bugReportRepository.createQueryBuilder() as unknown as jest.Mocked<
+          SelectQueryBuilder<BugReport>
+        >;
+      mockQueryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll(queryDto);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'bugReport.category = :category',
+        { category: 'UI/UX' },
+      );
+    });
+
+    it('should filter by search term when provided', async () => {
+      const queryDto: BugReportListQueryDto = {
+        page: 1,
+        limit: 20,
+        search: '버튼',
+      };
+
+      const mockQueryBuilder =
+        bugReportRepository.createQueryBuilder() as unknown as jest.Mocked<
+          SelectQueryBuilder<BugReport>
+        >;
+      mockQueryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll(queryDto);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(bugReport.title ILIKE :search OR bugReport.description ILIKE :search)',
+        { search: '%버튼%' },
+      );
+    });
+
+    it('should return hasNext false when on last page', async () => {
+      const queryDto: BugReportListQueryDto = { page: 3, limit: 10 };
+      const bugReports = Array(5).fill(BugReportFactory.create());
+      const totalCount = 25;
+
+      const mockQueryBuilder =
+        bugReportRepository.createQueryBuilder() as unknown as jest.Mocked<
+          SelectQueryBuilder<BugReport>
+        >;
+      mockQueryBuilder.getManyAndCount.mockResolvedValue([
+        bugReports,
+        totalCount,
+      ]);
+
+      const result = await service.findAll(queryDto);
+
+      // skip=20, items=5, totalCount=25 => hasNext = (20+5 < 25) = false
+      expect(result.pageInfo.hasNext).toBe(false);
     });
   });
 });

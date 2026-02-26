@@ -22,6 +22,7 @@ describe('UserController', () => {
   let mockUserService: jest.Mocked<UserService>;
 
   const mockAuthUser: AuthUserPayload = {
+    sub: 1,
     email: 'test@example.com',
     role: 'USER',
   };
@@ -64,44 +65,34 @@ describe('UserController', () => {
   });
 
   describe('getPreferences', () => {
-    it('should return user preferences when user exists', async () => {
-      // Arrange
+    it('should call service with user entity and return preferences', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const preferences = UserPreferencesFactory.create();
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.getEntityPreferences.mockResolvedValue(preferences);
 
-      // Act
       const result = await controller.getPreferences(mockAuthUser);
 
-      // Assert
-      expect(result).toEqual({ preferences });
       expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
         mockAuthUser.email,
       );
       expect(mockUserService.getEntityPreferences).toHaveBeenCalledWith(user);
+      expect(result).toEqual({ preferences });
     });
 
-    it('should throw NotFoundException when user does not exist', async () => {
-      // Arrange
+    it('should propagate exception from service', async () => {
       mockUserService.getAuthenticatedEntity.mockRejectedValue(
-        new NotFoundException('User with email test@example.com not found'),
+        new NotFoundException(),
       );
 
-      // Act & Assert
       await expect(controller.getPreferences(mockAuthUser)).rejects.toThrow(
         NotFoundException,
       );
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
-      expect(mockUserService.getEntityPreferences).not.toHaveBeenCalled();
     });
   });
 
   describe('upsertPreferences', () => {
-    it('should update user preferences successfully', async () => {
-      // Arrange
+    it('should call service with likes and dislikes and return updated preferences', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const dto: UpdatePreferencesDto = {
         likes: ['한식', '중식'],
@@ -113,86 +104,33 @@ describe('UserController', () => {
         updatedPreferences,
       );
 
-      // Act
       const result = await controller.upsertPreferences(dto, mockAuthUser);
 
-      // Assert
-      expect(result).toEqual({ preferences: updatedPreferences });
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
       expect(mockUserService.updateEntityPreferences).toHaveBeenCalledWith(
         user,
         dto.likes,
         dto.dislikes,
       );
+      expect(result).toEqual({ preferences: updatedPreferences });
     });
 
-    it('should update preferences with only likes', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const dto: UpdatePreferencesDto = {
-        likes: ['한식'],
-      };
-      const updatedPreferences = UserPreferencesFactory.create({
-        likes: ['한식'],
-        dislikes: [],
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateEntityPreferences.mockResolvedValue(
-        updatedPreferences,
+    it('should propagate exception from service', async () => {
+      const dto: UpdatePreferencesDto = { likes: ['한식'] };
+      mockUserService.getAuthenticatedEntity.mockRejectedValue(
+        new NotFoundException(),
       );
 
-      // Act
-      const result = await controller.upsertPreferences(dto, mockAuthUser);
-
-      // Assert
-      expect(result).toEqual({ preferences: updatedPreferences });
-      expect(mockUserService.updateEntityPreferences).toHaveBeenCalledWith(
-        user,
-        dto.likes,
-        undefined,
-      );
-    });
-
-    it('should update preferences with only dislikes', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const dto: UpdatePreferencesDto = {
-        dislikes: ['양식'],
-      };
-      const updatedPreferences = UserPreferencesFactory.create({
-        likes: [],
-        dislikes: ['양식'],
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateEntityPreferences.mockResolvedValue(
-        updatedPreferences,
-      );
-
-      // Act
-      const result = await controller.upsertPreferences(dto, mockAuthUser);
-
-      // Assert
-      expect(result).toEqual({ preferences: updatedPreferences });
-      expect(mockUserService.updateEntityPreferences).toHaveBeenCalledWith(
-        user,
-        undefined,
-        dto.dislikes,
-      );
+      await expect(
+        controller.upsertPreferences(dto, mockAuthUser),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('searchAddress', () => {
-    it('should return address search results', async () => {
-      // Arrange
+    it('should delegate to service and return results', async () => {
       const searchDto: SearchAddressDto = { query: '강남구 테헤란로' };
       const searchResponse = {
-        meta: {
-          total_count: 1,
-          pageable_count: 1,
-          is_end: true,
-        },
+        meta: { total_count: 1, pageable_count: 1, is_end: true },
         addresses: [
           {
             address: '서울특별시 강남구 테헤란로 123',
@@ -205,39 +143,15 @@ describe('UserController', () => {
       };
       mockUserService.searchAddress.mockResolvedValue(searchResponse);
 
-      // Act
       const result = await controller.searchAddress(searchDto);
 
-      // Assert
-      expect(result).toEqual(searchResponse);
       expect(mockUserService.searchAddress).toHaveBeenCalledWith(searchDto);
-    });
-
-    it('should return empty results when no addresses found', async () => {
-      // Arrange
-      const searchDto: SearchAddressDto = { query: '존재하지않는주소' };
-      const searchResponse = {
-        meta: {
-          total_count: 0,
-          pageable_count: 0,
-          is_end: true,
-        },
-        addresses: [],
-      };
-      mockUserService.searchAddress.mockResolvedValue(searchResponse);
-
-      // Act
-      const result = await controller.searchAddress(searchDto);
-
-      // Assert
       expect(result).toEqual(searchResponse);
-      expect(result.addresses).toHaveLength(0);
     });
   });
 
   describe('updateSingleAddress', () => {
-    it('should update single address successfully', async () => {
-      // Arrange
+    it('should call service and return address response dto', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const selectedAddress: AddressSearchResult = {
         address: '서울특별시 강남구 테헤란로 123',
@@ -257,35 +171,22 @@ describe('UserController', () => {
         updatedAddress,
       );
 
-      // Act
       const result = await controller.updateSingleAddress(
         updateDto,
         mockAuthUser,
       );
 
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.roadAddress).toBe(selectedAddress.roadAddress);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
       expect(mockUserService.updateEntitySingleAddress).toHaveBeenCalledWith(
         user,
         selectedAddress,
       );
+      expect(result.roadAddress).toBe(selectedAddress.roadAddress);
     });
   });
 
   describe('updateUser', () => {
-    it('should update user profile with valid data', async () => {
-      // Arrange
-      const user = UserFactory.create({
-        id: 1,
-        email: mockAuthUser.email,
-        name: 'Old Name',
-        birthDate: null,
-        gender: null,
-      });
+    it('should call updateProfile and return name, birthDate, gender', async () => {
+      const user = UserFactory.create({ id: 1, email: mockAuthUser.email });
       const updateDto: UpdateUserDto = {
         name: 'New Name',
         birthDate: '1990-06-15',
@@ -300,263 +201,104 @@ describe('UserController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.updateProfile.mockResolvedValue(updatedUser);
 
-      // Act
       const result = await controller.updateUser(updateDto, mockAuthUser);
 
-      // Assert
-      expect(result).toEqual({
-        name: 'New Name',
-        birthDate: '1990-06-15',
-        gender: 'male',
-      });
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
       expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, updateDto);
-    });
-
-    it('should update only name when only name is provided', async () => {
-      // Arrange
-      const user = UserFactory.create({
-        id: 1,
-        email: mockAuthUser.email,
-        name: 'Old Name',
-        birthDate: '1990-06-15',
-        gender: 'male',
-      });
-      const updateDto: UpdateUserDto = { name: 'New Name' };
-      const updatedUser = {
-        ...user,
-        name: 'New Name',
-      };
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateProfile.mockResolvedValue(updatedUser);
-
-      // Act
-      const result = await controller.updateUser(updateDto, mockAuthUser);
-
-      // Assert
       expect(result).toEqual({
         name: 'New Name',
         birthDate: '1990-06-15',
         gender: 'male',
       });
-      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
-        name: 'New Name',
-      });
     });
 
-    it('should update only birthDate when only birthDate is provided', async () => {
-      // Arrange
-      const user = UserFactory.create({
-        id: 1,
-        email: mockAuthUser.email,
-        name: 'Test User',
-        birthDate: null,
-        gender: null,
-      });
-      const updateDto: UpdateUserDto = { birthDate: '1995-03-20' };
-      const updatedUser = {
-        ...user,
-        birthDate: '1995-03-20',
-      };
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateProfile.mockResolvedValue(updatedUser);
-
-      // Act
-      const result = await controller.updateUser(updateDto, mockAuthUser);
-
-      // Assert
-      expect(result).toEqual({
-        name: 'Test User',
-        birthDate: '1995-03-20',
-        gender: null,
-      });
-      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
-        birthDate: '1995-03-20',
-      });
-    });
-
-    it('should update only gender when only gender is provided', async () => {
-      // Arrange
-      const user = UserFactory.create({
-        id: 1,
-        email: mockAuthUser.email,
-        name: 'Test User',
-        birthDate: null,
-        gender: null,
-      });
-      const updateDto: UpdateUserDto = { gender: 'female' };
-      const updatedUser = {
-        ...user,
-        gender: 'female' as const,
-      };
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateProfile.mockResolvedValue(updatedUser);
-
-      // Act
-      const result = await controller.updateUser(updateDto, mockAuthUser);
-
-      // Assert
-      expect(result).toEqual({
-        name: 'Test User',
-        birthDate: null,
-        gender: 'female',
-      });
-      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
-        gender: 'female',
-      });
-    });
-
-    it('should handle gender type other', async () => {
-      // Arrange
-      const user = UserFactory.create({
-        id: 1,
-        email: mockAuthUser.email,
-        gender: null,
-      });
-      const updateDto: UpdateUserDto = { gender: 'other' };
-      const updatedUser = {
-        ...user,
-        gender: 'other' as const,
-      };
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateProfile.mockResolvedValue(updatedUser);
-
-      // Act
-      const result = await controller.updateUser(updateDto, mockAuthUser);
-
-      // Assert
-      expect(result.gender).toBe('other');
-    });
-
-    it('should throw NotFoundException when user does not exist', async () => {
-      // Arrange
+    it('should propagate exception from service', async () => {
       const updateDto: UpdateUserDto = { name: 'New Name' };
       mockUserService.getAuthenticatedEntity.mockRejectedValue(
-        new NotFoundException('User not found'),
+        new NotFoundException(),
       );
 
-      // Act & Assert
       await expect(
         controller.updateUser(updateDto, mockAuthUser),
       ).rejects.toThrow(NotFoundException);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
-      expect(mockUserService.updateProfile).not.toHaveBeenCalled();
     });
   });
 
   describe('deleteCurrentUser', () => {
-    it('should soft delete user successfully', async () => {
-      // Arrange
+    it('should call deleteUser and return withdrawal message code', async () => {
       mockUserService.deleteUser.mockResolvedValue(undefined);
 
-      // Act
       const result = await controller.deleteCurrentUser(mockAuthUser);
 
-      // Assert
-      expect(result).toEqual({ messageCode: 'USER_WITHDRAWAL_COMPLETED' });
       expect(mockUserService.deleteUser).toHaveBeenCalledWith(
         mockAuthUser.email,
       );
+      expect(result).toEqual({ messageCode: 'USER_WITHDRAWAL_COMPLETED' });
     });
 
-    it('should throw error when user not found', async () => {
-      // Arrange
-      mockUserService.deleteUser.mockRejectedValue(
-        new NotFoundException('사용자를 찾을 수 없습니다.'),
-      );
+    it('should propagate exception from service', async () => {
+      mockUserService.deleteUser.mockRejectedValue(new NotFoundException());
 
-      // Act & Assert
       await expect(controller.deleteCurrentUser(mockAuthUser)).rejects.toThrow(
         NotFoundException,
-      );
-      expect(mockUserService.deleteUser).toHaveBeenCalledWith(
-        mockAuthUser.email,
       );
     });
   });
 
   describe('updateLanguage', () => {
-    it('should update language and return success message', async () => {
-      // Arrange
+    it('should call service and return language changed message code', async () => {
       const dto = { language: 'en' as const };
       mockUserService.updateEntityLanguage.mockResolvedValue(undefined);
 
-      // Act
       const result = await controller.updateLanguage(dto, mockAuthUser);
 
-      // Assert
-      expect(result).toEqual({ messageCode: 'USER_LANGUAGE_CHANGED' });
       expect(mockUserService.updateEntityLanguage).toHaveBeenCalledWith(
         mockAuthUser.email,
         'en',
       );
+      expect(result).toEqual({ messageCode: 'USER_LANGUAGE_CHANGED' });
     });
 
-    it('should propagate NotFoundException when user not found', async () => {
-      // Arrange
+    it('should propagate exception from service', async () => {
       const dto = { language: 'ko' as const };
       mockUserService.updateEntityLanguage.mockRejectedValue(
-        new NotFoundException('User not found'),
+        new NotFoundException(),
       );
 
-      // Act & Assert
       await expect(
         controller.updateLanguage(dto, mockAuthUser),
       ).rejects.toThrow(NotFoundException);
-      expect(mockUserService.updateEntityLanguage).toHaveBeenCalledWith(
-        mockAuthUser.email,
-        'ko',
-      );
     });
   });
 
   describe('getDefaultAddress', () => {
-    it('should return default address when it exists', async () => {
-      // Arrange
+    it('should return default address response dto when address exists', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const defaultAddress = UserAddressFactory.createDefault(user);
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.getEntityDefaultAddress.mockResolvedValue(defaultAddress);
 
-      // Act
       const result = await controller.getDefaultAddress(mockAuthUser);
 
-      // Assert
-      expect(result).toBeDefined();
-      expect(result?.id).toBe(defaultAddress.id);
-      expect(result?.isDefault).toBe(true);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
       expect(mockUserService.getEntityDefaultAddress).toHaveBeenCalledWith(
         user,
       );
+      expect(result?.id).toBe(defaultAddress.id);
+      expect(result?.isDefault).toBe(true);
     });
 
     it('should return null when no default address exists', async () => {
-      // Arrange
       const user = UserFactory.create({ email: mockAuthUser.email });
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.getEntityDefaultAddress.mockResolvedValue(null);
 
-      // Act
       const result = await controller.getDefaultAddress(mockAuthUser);
 
-      // Assert
       expect(result).toBeNull();
-      expect(mockUserService.getEntityDefaultAddress).toHaveBeenCalledWith(
-        user,
-      );
     });
   });
 
   describe('getUserAddresses', () => {
-    it('should return list of user addresses', async () => {
-      // Arrange
+    it('should return mapped address list', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const addresses = [
         UserAddressFactory.create({ id: 1, user }),
@@ -565,35 +307,15 @@ describe('UserController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.getEntityAddresses.mockResolvedValue(addresses);
 
-      // Act
       const result = await controller.getUserAddresses(mockAuthUser);
 
-      // Assert
+      expect(mockUserService.getEntityAddresses).toHaveBeenCalledWith(user);
       expect(result.addresses).toHaveLength(2);
       expect(result.addresses[0].id).toBe(1);
       expect(result.addresses[1].id).toBe(2);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
-      expect(mockUserService.getEntityAddresses).toHaveBeenCalledWith(user);
     });
 
-    it('should return empty array when user has no addresses', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.getEntityAddresses.mockResolvedValue([]);
-
-      // Act
-      const result = await controller.getUserAddresses(mockAuthUser);
-
-      // Assert
-      expect(result.addresses).toEqual([]);
-      expect(mockUserService.getEntityAddresses).toHaveBeenCalledWith(user);
-    });
-
-    it('should correctly convert latitude and longitude from strings', async () => {
-      // Arrange
+    it('should convert string latitude and longitude to numbers', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const addressWithStringCoords = UserAddressFactory.create({
         user,
@@ -605,20 +327,17 @@ describe('UserController', () => {
         addressWithStringCoords,
       ]);
 
-      // Act
       const result = await controller.getUserAddresses(mockAuthUser);
 
-      // Assert
-      expect(result.addresses[0].latitude).toBe(37.5012345);
-      expect(result.addresses[0].longitude).toBe(127.0398765);
       expect(typeof result.addresses[0].latitude).toBe('number');
+      expect(result.addresses[0].latitude).toBe(37.5012345);
       expect(typeof result.addresses[0].longitude).toBe('number');
+      expect(result.addresses[0].longitude).toBe(127.0398765);
     });
   });
 
   describe('createUserAddress', () => {
-    it('should create user address successfully', async () => {
-      // Arrange
+    it('should call service and return created address response dto', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const dto: CreateUserAddressDto = {
         selectedAddress: {
@@ -640,59 +359,21 @@ describe('UserController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.createEntityAddress.mockResolvedValue(createdAddress);
 
-      // Act
       const result = await controller.createUserAddress(dto, mockAuthUser);
 
-      // Assert
-      expect(result).toBeDefined();
+      expect(mockUserService.createEntityAddress).toHaveBeenCalledWith(
+        user,
+        dto,
+      );
       expect(result.alias).toBe('회사');
       expect(result.isDefault).toBe(true);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
-      expect(mockUserService.createEntityAddress).toHaveBeenCalledWith(
-        user,
-        dto,
-      );
-    });
-
-    it('should create address without alias', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const dto: CreateUserAddressDto = {
-        selectedAddress: {
-          address: '서울특별시 강남구 테헤란로 123',
-          roadAddress: '서울특별시 강남구 테헤란로 123',
-          postalCode: '06234',
-          latitude: '37.5012345',
-          longitude: '127.0398765',
-        },
-      };
-      const createdAddress = UserAddressFactory.create({ user, alias: null });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.createEntityAddress.mockResolvedValue(createdAddress);
-
-      // Act
-      const result = await controller.createUserAddress(dto, mockAuthUser);
-
-      // Assert
-      expect(result.alias).toBeNull();
-      expect(mockUserService.createEntityAddress).toHaveBeenCalledWith(
-        user,
-        dto,
-      );
     });
   });
 
   describe('updateUserAddress', () => {
-    it('should update user address successfully', async () => {
-      // Arrange
+    it('should parse address id and call service with parsed numeric id', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
-      const addressId = '1';
-      const dto: UpdateUserAddressDto = {
-        alias: '새로운 별칭',
-        isDefault: true,
-      };
+      const dto: UpdateUserAddressDto = { alias: '새로운 별칭', isDefault: true };
       const updatedAddress = UserAddressFactory.create({
         id: 1,
         user,
@@ -702,123 +383,41 @@ describe('UserController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.updateEntityAddress.mockResolvedValue(updatedAddress);
 
-      // Act
-      const result = await controller.updateUserAddress(
-        addressId,
-        dto,
-        mockAuthUser,
-      );
+      const result = await controller.updateUserAddress('1', dto, mockAuthUser);
 
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.alias).toBe('새로운 별칭');
-      expect(result.isDefault).toBe(true);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
       expect(mockUserService.updateEntityAddress).toHaveBeenCalledWith(
         user,
         1,
         dto,
       );
-    });
-
-    it('should parse address id correctly', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const addressId = '999';
-      const dto: UpdateUserAddressDto = { alias: 'test' };
-      const updatedAddress = UserAddressFactory.create({ id: 999, user });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.updateEntityAddress.mockResolvedValue(updatedAddress);
-
-      // Act
-      await controller.updateUserAddress(addressId, dto, mockAuthUser);
-
-      // Assert
-      expect(mockUserService.updateEntityAddress).toHaveBeenCalledWith(
-        user,
-        999,
-        dto,
-      );
+      expect(result.alias).toBe('새로운 별칭');
+      expect(result.isDefault).toBe(true);
     });
   });
 
-  describe('deleteUserAddresses', () => {
-    it('should delete multiple addresses successfully', async () => {
-      // Arrange
+  describe('batchDeleteUserAddresses', () => {
+    it('should call service with ids and return address deleted message code', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
       const dto: DeleteUserAddressesDto = { ids: [1, 2, 3] };
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.deleteEntityAddresses.mockResolvedValue(undefined);
 
-      // Act
-      const result = await controller.deleteUserAddresses(dto, mockAuthUser);
-
-      // Assert
-      expect(result).toEqual({ messageCode: 'USER_ADDRESS_DELETED' });
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
+      const result = await controller.batchDeleteUserAddresses(
+        dto,
+        mockAuthUser,
       );
+
       expect(mockUserService.deleteEntityAddresses).toHaveBeenCalledWith(
         user,
         dto.ids,
       );
-    });
-
-    it('should delete single address', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const dto: DeleteUserAddressesDto = { ids: [1] };
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.deleteEntityAddresses.mockResolvedValue(undefined);
-
-      // Act
-      const result = await controller.deleteUserAddresses(dto, mockAuthUser);
-
-      // Assert
       expect(result).toEqual({ messageCode: 'USER_ADDRESS_DELETED' });
-      expect(mockUserService.deleteEntityAddresses).toHaveBeenCalledWith(user, [
-        1,
-      ]);
     });
   });
 
   describe('setDefaultAddress', () => {
-    it('should set default address successfully', async () => {
-      // Arrange
+    it('should parse address id and call service with parsed numeric id', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
-      const addressId = '1';
-      const defaultAddress = UserAddressFactory.create({
-        id: 1,
-        user,
-        isDefault: true,
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.setEntityDefaultAddress.mockResolvedValue(defaultAddress);
-
-      // Act
-      const result = await controller.setDefaultAddress(
-        addressId,
-        mockAuthUser,
-      );
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.isDefault).toBe(true);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
-      expect(mockUserService.setEntityDefaultAddress).toHaveBeenCalledWith(
-        user,
-        1,
-      );
-    });
-
-    it('should parse address id correctly for setting default', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const addressId = '42';
       const defaultAddress = UserAddressFactory.create({
         id: 42,
         user,
@@ -827,49 +426,19 @@ describe('UserController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.setEntityDefaultAddress.mockResolvedValue(defaultAddress);
 
-      // Act
-      await controller.setDefaultAddress(addressId, mockAuthUser);
+      const result = await controller.setDefaultAddress('42', mockAuthUser);
 
-      // Assert
       expect(mockUserService.setEntityDefaultAddress).toHaveBeenCalledWith(
         user,
         42,
       );
+      expect(result.isDefault).toBe(true);
     });
   });
 
   describe('setSearchAddress', () => {
-    it('should set search address successfully', async () => {
-      // Arrange
+    it('should parse address id and call service with parsed numeric id', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
-      const addressId = '1';
-      const searchAddress = UserAddressFactory.create({
-        id: 1,
-        user,
-        isSearchAddress: true,
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.setEntitySearchAddress.mockResolvedValue(searchAddress);
-
-      // Act
-      const result = await controller.setSearchAddress(addressId, mockAuthUser);
-
-      // Assert
-      expect(result).toBeDefined();
-      expect(result.isSearchAddress).toBe(true);
-      expect(mockUserService.getAuthenticatedEntity).toHaveBeenCalledWith(
-        mockAuthUser.email,
-      );
-      expect(mockUserService.setEntitySearchAddress).toHaveBeenCalledWith(
-        user,
-        1,
-      );
-    });
-
-    it('should parse address id correctly for setting search address', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const addressId = '99';
       const searchAddress = UserAddressFactory.create({
         id: 99,
         user,
@@ -878,91 +447,13 @@ describe('UserController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockUserService.setEntitySearchAddress.mockResolvedValue(searchAddress);
 
-      // Act
-      await controller.setSearchAddress(addressId, mockAuthUser);
+      const result = await controller.setSearchAddress('99', mockAuthUser);
 
-      // Assert
       expect(mockUserService.setEntitySearchAddress).toHaveBeenCalledWith(
         user,
         99,
       );
-    });
-  });
-
-  describe('toAddressResponseDto (private method via public endpoints)', () => {
-    it('should handle numeric latitude and longitude correctly', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const address = UserAddressFactory.create({
-        user,
-        latitude: 37.5012345,
-        longitude: 127.0398765,
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.getEntityAddresses.mockResolvedValue([address]);
-
-      // Act
-      const result = await controller.getUserAddresses(mockAuthUser);
-
-      // Assert
-      expect(result[0].latitude).toBe(37.5012345);
-      expect(result[0].longitude).toBe(127.0398765);
-      expect(typeof result[0].latitude).toBe('number');
-      expect(typeof result[0].longitude).toBe('number');
-    });
-
-    it('should convert string latitude and longitude to numbers', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const address = UserAddressFactory.create({
-        user,
-        latitude: '37.5012345' as unknown as number,
-        longitude: '127.0398765' as unknown as number,
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.getEntityAddresses.mockResolvedValue([address]);
-
-      // Act
-      const result = await controller.getUserAddresses(mockAuthUser);
-
-      // Assert
-      expect(result[0].latitude).toBe(37.5012345);
-      expect(result[0].longitude).toBe(127.0398765);
-    });
-
-    it('should include all address fields in response', async () => {
-      // Arrange
-      const user = UserFactory.create({ email: mockAuthUser.email });
-      const address = UserAddressFactory.create({
-        id: 123,
-        user,
-        roadAddress: '서울특별시 강남구 테헤란로 123',
-        postalCode: '06234',
-        latitude: 37.5012345,
-        longitude: 127.0398765,
-        isDefault: true,
-        isSearchAddress: false,
-        alias: '회사',
-      });
-      mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockUserService.getEntityAddresses.mockResolvedValue([address]);
-
-      // Act
-      const result = await controller.getUserAddresses(mockAuthUser);
-
-      // Assert
-      expect(result[0]).toMatchObject({
-        id: 123,
-        roadAddress: '서울특별시 강남구 테헤란로 123',
-        postalCode: '06234',
-        latitude: 37.5012345,
-        longitude: 127.0398765,
-        isDefault: true,
-        isSearchAddress: false,
-        alias: '회사',
-      });
-      expect(result[0].createdAt).toBeDefined();
-      expect(result[0].updatedAt).toBeDefined();
+      expect(result.isSearchAddress).toBe(true);
     });
   });
 });

@@ -3,7 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { LocalStrategy } from '../../strategy/local.strategy';
 import { AuthService } from '../../auth.service';
 import { UserFactory } from '../../../../test/factories/entity.factory';
-import { ErrorCode } from '../../../common/constants/error-codes';
+import { ErrorCode } from '@/common/constants/error-codes';
 
 describe('LocalStrategy', () => {
   let strategy: LocalStrategy;

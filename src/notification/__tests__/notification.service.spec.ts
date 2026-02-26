@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '@/user/entities/user.entity';
 import { NotificationListQueryDto } from '../dto/notification-list-query.dto';
 import { Notification } from '../entities/notification.entity';
 import { NotificationStatus } from '../enum/notification-status.enum';

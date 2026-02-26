@@ -171,12 +171,6 @@ export function getPreferenceSystemPrompt(
     : PREFERENCE_SYSTEM_PROMPT_KO;
 }
 
-/**
- * @deprecated Use getPreferenceSystemPrompt() instead
- * Maintained for backward compatibility
- */
-export const PREFERENCE_SYSTEM_PROMPT = PREFERENCE_SYSTEM_PROMPT_KO;
-
 export function buildPreferenceUserPrompt(params: {
   currentLikes: string[];
   currentDislikes: string[];
@@ -407,9 +401,3 @@ export function getPreferenceResponseSchema(
     },
   };
 }
-
-/**
- * @deprecated Use getPreferenceResponseSchema() instead
- * Maintained for backward compatibility
- */
-export const PREFERENCE_RESPONSE_SCHEMA = getPreferenceResponseSchema('ko');

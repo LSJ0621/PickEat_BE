@@ -10,7 +10,6 @@ export type { StructuredAnalysis };
 export {
   SYSTEM_PROMPT_KO,
   SYSTEM_PROMPT_EN,
-  SYSTEM_PROMPT,
   getSystemPrompt,
 } from '@/external/openai/prompts/menu-recommendation-system.prompts';
 

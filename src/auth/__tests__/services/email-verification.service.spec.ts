@@ -12,7 +12,7 @@ import { createMockRepository } from '../../../../test/mocks/repository.mock';
 import { EmailVerificationFactory } from '../../../../test/factories/entity.factory';
 import { EMAIL_VERIFICATION } from '@/common/constants/business.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
-import { UserService } from '../../../user/user.service';
+import { UserService } from '@/user/user.service';
 import { EmailNotificationService } from '../../services/email-notification.service';
 
 // 유닛 테스트에서는 테스트 모드 바이패스 비활성화

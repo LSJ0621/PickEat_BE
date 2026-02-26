@@ -14,12 +14,12 @@ import { ErrorCode } from '@/common/constants/error-codes';
 import {
   AuthUserPayload,
   CurrentUser,
-} from '../../auth/decorators/current-user.decorator';
-import { Roles } from '../../auth/decorators/roles.decorator';
-import { JwtAuthGuard } from '../../auth/guard/jwt.guard';
-import { RolesGuard } from '../../auth/guard/roles.guard';
+} from '@/auth/decorators/current-user.decorator';
+import { Roles } from '@/auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
+import { RolesGuard } from '@/auth/guard/roles.guard';
 import { ADMIN_ROLES } from '@/common/constants/roles.constants';
-import { UserService } from '../../user/user.service';
+import { UserService } from '@/user/user.service';
 import { BugReportService } from '../bug-report.service';
 import { BugReportListQueryDto } from '../dto/bug-report-list-query.dto';
 import { UpdateBugReportStatusDto } from '../dto/update-bug-report-status.dto';

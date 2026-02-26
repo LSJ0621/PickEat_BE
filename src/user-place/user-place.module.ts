@@ -22,7 +22,11 @@ import { AdminUserPlaceController } from './controllers/admin-user-place.control
     AwsModule,
   ],
   controllers: [UserPlaceController, AdminUserPlaceController],
-  providers: [UserPlaceService, AdminUserPlaceService, AdminUserPlaceStatsService],
+  providers: [
+    UserPlaceService,
+    AdminUserPlaceService,
+    AdminUserPlaceStatsService,
+  ],
   exports: [UserPlaceService],
 })
 export class UserPlaceModule {}

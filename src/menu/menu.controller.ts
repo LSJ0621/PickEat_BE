@@ -17,13 +17,14 @@ import { Request, Response } from 'express';
 import {
   AuthUserPayload,
   CurrentUser,
-} from '../auth/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../auth/guard/jwt.guard';
-import { ErrorCode } from '../common/constants/error-codes';
-import { streamingAsyncLocalStorage } from '../common/utils/retry-context';
-import { isAbortError } from '../common/utils/retry.util';
-import { parseLanguage } from '../common/utils/language.util';
-import { UserService } from '../user/user.service';
+} from '@/auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { SSE_CONFIG } from '@/common/constants/business.constants';
+import { streamingAsyncLocalStorage } from '@/common/utils/retry-context';
+import { isAbortError } from '@/common/utils/retry.util';
+import { parseLanguage } from '@/common/utils/language.util';
+import { UserService } from '@/user/user.service';
 import { CreateMenuSelectionDto } from './dto/create-menu-selection.dto';
 import { RecommendCommunityPlacesDto } from './dto/recommend-community-places.dto';
 import { RecommendMenuDto } from './dto/recommend-menu.dto';
@@ -306,6 +307,13 @@ export class MenuController {
     };
     req.on('close', closeHandler);
 
+    const timeout = setTimeout(() => {
+      if (!res.writableEnded) {
+        sendEvent({ type: 'error', message: 'Server timeout' });
+        abortController.abort();
+      }
+    }, SSE_CONFIG.SERVER_TIMEOUT_MS);
+
     try {
       if (abortController.signal.aborted) return;
       const entity = await this.userService.getAuthenticatedEntity(
@@ -328,6 +336,7 @@ export class MenuController {
         sendEvent({ type: 'error', message });
       }
     } finally {
+      clearTimeout(timeout);
       req.removeListener('close', closeHandler);
       if (!res.writableEnded) res.end();
     }
@@ -358,6 +367,13 @@ export class MenuController {
       }
     };
     req.on('close', closeHandler);
+
+    const timeout = setTimeout(() => {
+      if (!res.writableEnded) {
+        sendEvent({ type: 'error', message: 'Server timeout' });
+        abortController.abort();
+      }
+    }, SSE_CONFIG.SERVER_TIMEOUT_MS);
 
     try {
       if (abortController.signal.aborted) return;
@@ -404,6 +420,7 @@ export class MenuController {
         sendEvent({ type: 'error', message });
       }
     } finally {
+      clearTimeout(timeout);
       req.removeListener('close', closeHandler);
       if (!res.writableEnded) res.end();
     }
@@ -433,6 +450,13 @@ export class MenuController {
       }
     };
     req.on('close', closeHandler);
+
+    const timeout = setTimeout(() => {
+      if (!res.writableEnded) {
+        sendEvent({ type: 'error', message: 'Server timeout' });
+        abortController.abort();
+      }
+    }, SSE_CONFIG.SERVER_TIMEOUT_MS);
 
     try {
       if (abortController.signal.aborted) return;
@@ -488,6 +512,7 @@ export class MenuController {
         sendEvent({ type: 'error', message });
       }
     } finally {
+      clearTimeout(timeout);
       req.removeListener('close', closeHandler);
       if (!res.writableEnded) res.end();
     }

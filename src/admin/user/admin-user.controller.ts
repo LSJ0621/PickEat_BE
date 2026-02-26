@@ -22,9 +22,10 @@ import { Roles } from '@/auth/decorators/roles.decorator';
 import { ADMIN_ROLES, Role } from '@/common/constants/roles.constants';
 import { UserService } from '@/user/user.service';
 import { AdminUserService } from './admin-user.service';
-import { AdminUserListQueryDto, AdminUserDetailDto } from './dto';
-import { PaginatedResponse } from '@/common/interfaces/pagination.interface';
+import { AdminUserListQueryDto } from './dto/admin-user-list-query.dto';
+import { AdminUserDetailDto } from './dto/admin-user-detail.dto';
 import { AdminUserListItemDto } from './dto/admin-user-list-item.dto';
+import { PaginatedResponse } from '@/common/interfaces/pagination.interface';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)

@@ -1,5 +1,5 @@
-import { UserPreferences } from '../../user/interfaces/user-preferences.interface';
-import { User } from '../../user/entities/user.entity';
+import { UserPreferences } from '@/user/interfaces/user-preferences.interface';
+import { User } from '@/user/entities/user.entity';
 
 /**
  * 로그인/인증 결과 인터페이스

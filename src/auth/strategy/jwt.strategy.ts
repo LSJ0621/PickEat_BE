@@ -38,9 +38,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: AuthUserPayload): AuthUserPayload {
-    // email과 role만 검증 (JWT 서명 검증은 이미 완료됨)
-    if (!payload.email || !payload.role) {
-      throw new UnauthorizedException('Invalid token: missing email or role');
+    // sub, email, role 검증 (JWT 서명 검증은 이미 완료됨)
+    if (!payload.sub || !payload.email || !payload.role) {
+      throw new UnauthorizedException(
+        'Invalid token: missing sub, email or role',
+      );
     }
 
     return payload;

@@ -119,6 +119,56 @@ describe('UserAddressService', () => {
       // Assert
       expect(result).toEqual([]);
     });
+
+    it('should return cached addresses when cache hits', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const now = new Date();
+      const cachedAddresses = {
+        addresses: [
+          {
+            id: 1,
+            roadAddress: '서울특별시 강남구 테헤란로 123',
+            postalCode: '06234',
+            latitude: 37.5012345,
+            longitude: 127.0398765,
+            isDefault: true,
+            isSearchAddress: true,
+            alias: '집',
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+          },
+        ],
+      };
+      (mockCacheService.getUserAddresses as jest.Mock).mockResolvedValue(
+        cachedAddresses,
+      );
+
+      // Act
+      const result = await service.getAddresses(user);
+
+      // Assert
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(1);
+      expect(result[0].roadAddress).toBe('서울특별시 강남구 테헤란로 123');
+      expect(result[0].isDefault).toBe(true);
+      expect(result[0].isSearchAddress).toBe(true);
+      expect(result[0].alias).toBe('집');
+      expect(userAddressRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('should suppress cache set errors when saving addresses to cache fails', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const addresses = [UserAddressFactory.create({ id: 1, user })];
+      userAddressRepository.find.mockResolvedValue(addresses);
+      (mockCacheService.setUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis connection error'),
+      );
+
+      // Act & Assert - should not throw even if cache fails
+      await expect(service.getAddresses(user)).resolves.toEqual(addresses);
+    });
   });
 
   describe('createAddress', () => {
@@ -248,6 +298,73 @@ describe('UserAddressService', () => {
       );
     });
 
+    it('should fall back to address when roadAddress is empty string', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const dto = {
+        selectedAddress: {
+          address: '지번주소만존재',
+          roadAddress: '',
+          postalCode: '06234',
+          latitude: '37.5012345',
+          longitude: '127.0398765',
+        },
+        alias: undefined,
+      };
+
+      userAddressRepository.count.mockResolvedValue(0);
+      const createdAddress = UserAddressFactory.create({
+        roadAddress: '지번주소만존재',
+      });
+      mockTransactionManager.create.mockReturnValue(createdAddress);
+      mockTransactionManager.save.mockResolvedValue(createdAddress);
+
+      // Act
+      await service.createAddress(user, dto);
+
+      // Assert
+      expect(mockTransactionManager.create).toHaveBeenCalledWith(
+        UserAddress,
+        expect.objectContaining({
+          roadAddress: '지번주소만존재',
+        }),
+      );
+    });
+
+    it('should suppress cache invalidation errors after creating address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const dto = {
+        selectedAddress: {
+          address: '서울특별시 강남구',
+          roadAddress: '서울특별시 강남구 테헤란로 123',
+          postalCode: '06234',
+          latitude: '37.5012345',
+          longitude: '127.0398765',
+        },
+        alias: undefined,
+        isDefault: undefined,
+        isSearchAddress: undefined,
+      };
+
+      userAddressRepository.count.mockResolvedValue(0);
+      const createdAddress = UserAddressFactory.create({
+        isDefault: true,
+        isSearchAddress: true,
+      });
+      mockTransactionManager.create.mockReturnValue(createdAddress);
+      mockTransactionManager.save.mockResolvedValue(createdAddress);
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(service.createAddress(user, dto)).resolves.toBeDefined();
+    });
+
     it('should parse latitude and longitude to numbers', async () => {
       // Arrange
       const user = UserFactory.create({ id: 1 });
@@ -343,6 +460,55 @@ describe('UserAddressService', () => {
       );
     });
 
+    it('should update search address flag when setting new search address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({
+        id: 1,
+        user,
+        isSearchAddress: false,
+      });
+      const dto = { isSearchAddress: true };
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({
+        ...address,
+        isSearchAddress: true,
+      });
+
+      // Act
+      await service.updateAddress(user, 1, dto);
+
+      // Assert
+      expect(mockTransactionManager.update).toHaveBeenCalledWith(
+        UserAddress,
+        expect.objectContaining({ isSearchAddress: true }),
+        { isSearchAddress: false },
+      );
+    });
+
+    it('should suppress cache invalidation errors after updating address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({ id: 1, user });
+      const dto = { roadAddress: '새 주소' };
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.save.mockResolvedValue({ ...address, ...dto });
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(service.updateAddress(user, 1, dto)).resolves.toBeDefined();
+    });
+
     it('should update all provided fields', async () => {
       // Arrange
       const user = UserFactory.create({ id: 1 });
@@ -430,6 +596,85 @@ describe('UserAddressService', () => {
       expect(mockTransactionManager.save).toHaveBeenCalledWith(
         expect.objectContaining({ isDefault: true }),
       );
+    });
+
+    it('should reassign both default and search address flags when deleting address with both flags', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({
+        id: 1,
+        user,
+        isDefault: true,
+        isSearchAddress: true,
+      });
+      const otherAddress = UserAddressFactory.create({
+        id: 2,
+        user,
+        isDefault: false,
+        isSearchAddress: false,
+      });
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.findOne.mockResolvedValue(otherAddress);
+      mockTransactionManager.save.mockResolvedValue({
+        ...otherAddress,
+        isDefault: true,
+        isSearchAddress: true,
+      });
+      mockTransactionManager.softRemove.mockResolvedValue(address);
+
+      // Act
+      await service.deleteAddress(user, 1);
+
+      // Assert
+      expect(mockTransactionManager.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isDefault: true, isSearchAddress: true }),
+      );
+    });
+
+    it('should not save when no other address exists to reassign flags to', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({
+        id: 1,
+        user,
+        isDefault: true,
+        isSearchAddress: true,
+      });
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.findOne.mockResolvedValue(null);
+      mockTransactionManager.softRemove.mockResolvedValue(address);
+
+      // Act
+      await service.deleteAddress(user, 1);
+
+      // Assert
+      expect(mockTransactionManager.save).not.toHaveBeenCalled();
+      expect(mockTransactionManager.softRemove).toHaveBeenCalledWith(address);
+    });
+
+    it('should suppress cache invalidation errors after deleting address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({
+        id: 1,
+        user,
+        isDefault: false,
+        isSearchAddress: false,
+      });
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.softRemove.mockResolvedValue(address);
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(service.deleteAddress(user, 1)).resolves.toBeUndefined();
     });
 
     it('should reassign search address flag when deleting search address', async () => {
@@ -522,6 +767,49 @@ describe('UserAddressService', () => {
       );
     });
 
+    it('should suppress cache invalidation errors after deleting multiple addresses', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const addresses = [
+        UserAddressFactory.create({ id: 1, user, isDefault: false }),
+      ];
+
+      userAddressRepository.find.mockResolvedValue(addresses);
+      mockTransactionManager.softRemove.mockResolvedValue({} as UserAddress);
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(service.deleteAddresses(user, [1])).resolves.toBeUndefined();
+    });
+
+    it('should not reassign search address when no remaining address exists after bulk delete', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const addresses = [
+        UserAddressFactory.create({
+          id: 1,
+          user,
+          isDefault: false,
+          isSearchAddress: true,
+        }),
+      ];
+
+      userAddressRepository.find.mockResolvedValue(addresses);
+      mockTransactionManager.softRemove.mockResolvedValue({} as UserAddress);
+      mockTransactionManager.findOne.mockResolvedValue(null);
+
+      // Act
+      await service.deleteAddresses(user, [1]);
+
+      // Assert
+      expect(mockTransactionManager.save).not.toHaveBeenCalled();
+    });
+
     it('should reassign search address when deleting search addresses', async () => {
       // Arrange
       const user = UserFactory.create({ id: 1 });
@@ -595,6 +883,34 @@ describe('UserAddressService', () => {
         NotFoundException,
       );
     });
+
+    it('should suppress cache invalidation errors after setting default address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({
+        id: 1,
+        user,
+        isDefault: false,
+      });
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({
+        ...address,
+        isDefault: true,
+      });
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(service.setDefaultAddress(user, 1)).resolves.toBeDefined();
+    });
   });
 
   describe('setSearchAddress', () => {
@@ -626,6 +942,45 @@ describe('UserAddressService', () => {
         expect.objectContaining({ isSearchAddress: true }),
         { isSearchAddress: false },
       );
+    });
+
+    it('should throw NotFoundException when address not found for setSearchAddress', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      userAddressRepository.findOne.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(service.setSearchAddress(user, 999)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should suppress cache invalidation errors after setting search address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const address = UserAddressFactory.create({
+        id: 1,
+        user,
+        isSearchAddress: false,
+      });
+
+      userAddressRepository.findOne.mockResolvedValue(address);
+      mockTransactionManager.update.mockResolvedValue(
+        createMockUpdateResult(1),
+      );
+      mockTransactionManager.save.mockResolvedValue({
+        ...address,
+        isSearchAddress: true,
+      });
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(service.setSearchAddress(user, 1)).resolves.toBeDefined();
     });
   });
 
@@ -672,6 +1027,18 @@ describe('UserAddressService', () => {
       // Assert
       expect(result).toEqual(address);
       expect(result?.isSearchAddress).toBe(true);
+    });
+
+    it('should return null if no search address exists', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      userAddressRepository.findOne.mockResolvedValue(null);
+
+      // Act
+      const result = await service.getSearchAddress(user);
+
+      // Assert
+      expect(result).toBeNull();
     });
   });
 
@@ -731,6 +1098,96 @@ describe('UserAddressService', () => {
       expect(userAddressRepository.save).toHaveBeenCalled();
     });
 
+    it('should fall back to address when roadAddress is not provided in updateSingleAddress', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const selectedAddress = {
+        address: '지번주소만',
+        roadAddress: '',
+        postalCode: '06234',
+        latitude: '37.5012345',
+        longitude: '127.0398765',
+      };
+      const existingSearchAddress =
+        UserAddressFactory.createSearchAddress(user);
+
+      userAddressRepository.count.mockResolvedValue(1);
+      userAddressRepository.findOne.mockResolvedValue(existingSearchAddress);
+      userAddressRepository.save.mockResolvedValue({
+        ...existingSearchAddress,
+        roadAddress: '지번주소만',
+      });
+
+      // Act
+      const result = await service.updateSingleAddress(user, selectedAddress);
+
+      // Assert
+      expect(userAddressRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ roadAddress: '지번주소만' }),
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('should set postalCode to null when postalCode is falsy when updating existing search address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const selectedAddress = {
+        address: '서울',
+        roadAddress: '서울 강남구',
+        postalCode: '',
+        latitude: '37.5012345',
+        longitude: '127.0398765',
+      };
+      const existingSearchAddress =
+        UserAddressFactory.createSearchAddress(user);
+
+      userAddressRepository.count.mockResolvedValue(1);
+      userAddressRepository.findOne.mockResolvedValue(existingSearchAddress);
+      userAddressRepository.save.mockResolvedValue({
+        ...existingSearchAddress,
+        postalCode: null,
+      });
+
+      // Act
+      await service.updateSingleAddress(user, selectedAddress);
+
+      // Assert
+      expect(userAddressRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ postalCode: null }),
+      );
+    });
+
+    it('should set postalCode to null when postalCode is falsy when updating first address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const selectedAddress = {
+        address: '서울',
+        roadAddress: '서울 강남구',
+        postalCode: '',
+        latitude: '37.5012345',
+        longitude: '127.0398765',
+      };
+      const firstAddress = UserAddressFactory.create({ id: 1, user });
+
+      userAddressRepository.count.mockResolvedValue(1);
+      userAddressRepository.findOne
+        .mockResolvedValueOnce(null) // getSearchAddress returns null
+        .mockResolvedValueOnce(firstAddress); // findOne for first address
+      userAddressRepository.save.mockResolvedValue({
+        ...firstAddress,
+        postalCode: null,
+        isSearchAddress: true,
+      });
+
+      // Act
+      await service.updateSingleAddress(user, selectedAddress);
+
+      // Assert
+      expect(userAddressRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ postalCode: null }),
+      );
+    });
+
     it('should throw error when latitude or longitude is missing', async () => {
       // Arrange
       const user = UserFactory.create({ id: 1 });
@@ -781,6 +1238,38 @@ describe('UserAddressService', () => {
 
       // Assert
       expect(result.isSearchAddress).toBe(true);
+    });
+
+    it('should suppress cache invalidation errors after updating single address', async () => {
+      // Arrange
+      const user = UserFactory.create({ id: 1 });
+      const selectedAddress = {
+        address: '서울',
+        roadAddress: '서울 강남구',
+        postalCode: '06234',
+        latitude: '37.5012345',
+        longitude: '127.0398765',
+      };
+      const existingSearchAddress =
+        UserAddressFactory.createSearchAddress(user);
+
+      userAddressRepository.count.mockResolvedValue(1);
+      userAddressRepository.findOne.mockResolvedValue(existingSearchAddress);
+      userAddressRepository.save.mockResolvedValue({
+        ...existingSearchAddress,
+        roadAddress: selectedAddress.roadAddress,
+      });
+      (mockCacheService.invalidateUserAddresses as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+      (mockCacheService.invalidateUserProfile as jest.Mock).mockRejectedValue(
+        new Error('Redis down'),
+      );
+
+      // Act & Assert - should not throw even if cache invalidation fails
+      await expect(
+        service.updateSingleAddress(user, selectedAddress),
+      ).resolves.toBeDefined();
     });
 
     it('should throw error when update fails', async () => {

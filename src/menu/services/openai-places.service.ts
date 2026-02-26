@@ -5,7 +5,7 @@ import {
   buildGooglePlacesUserPrompt,
   getGooglePlacesRecommendationsJsonSchema,
   getGooglePlacesSystemPrompt,
-} from '@/external/openai/prompts';
+} from '@/external/openai/prompts/google-places-recommendation.prompts';
 import { detectLanguage } from '@/common/utils/language.util';
 import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';

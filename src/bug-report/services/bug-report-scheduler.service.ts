@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import {
@@ -8,6 +9,7 @@ import {
 } from '@/common/constants/business.constants';
 import { withAdvisoryLock } from '@/common/utils/advisory-lock.util';
 import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook.client';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 import { BugReport } from '../entities/bug-report.entity';
 import { BugReportStatus } from '../enum/bug-report-status.enum';
 import { determineThreshold } from '../utils/threshold.util';
@@ -15,7 +17,7 @@ import { BugReportNotificationService } from './bug-report-notification.service'
 import { DiscordMessageBuilderService } from './discord-message-builder.service';
 
 @Injectable()
-export class BugReportSchedulerService {
+export class BugReportSchedulerService implements OnModuleInit {
   private readonly logger = new Logger(BugReportSchedulerService.name);
 
   constructor(
@@ -25,14 +27,40 @@ export class BugReportSchedulerService {
     private readonly notificationService: BugReportNotificationService,
     private readonly messageBuilder: DiscordMessageBuilderService,
     private readonly dataSource: DataSource,
+    private readonly schedulerAlertService: SchedulerAlertService,
+    private readonly configService: ConfigService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
+
+  onModuleInit(): void {
+    const intervalMs = parseInt(
+      this.configService.get<string>('BUG_REPORT_CHECK_INTERVAL_MS', '300000'),
+      10,
+    );
+
+    if (isNaN(intervalMs) || intervalMs <= 0) {
+      throw new Error(
+        `Invalid BUG_REPORT_CHECK_INTERVAL_MS: must be a positive integer`,
+      );
+    }
+
+    const interval = setInterval(
+      () => void this.checkAndNotifyUnconfirmedCount(),
+      intervalMs,
+    );
+
+    this.schedulerRegistry.addInterval('bug-report-check', interval);
+
+    this.logger.log(
+      `[버그 제보 알림 스케줄러] 등록 완료 - interval: ${intervalMs}ms`,
+    );
+  }
 
   /**
    * 5분마다 미확인 버그 제보 개수를 체크하고, 임계값 도달 시 Discord 알림 전송
    * - 중복 알림 방지: 임계값(10, 20, 30, 50, 100)이 상승할 때만 전송
    * - 향상된 메시지: 증가량, 최근 버그 리스트 포함
    */
-  @Interval(300000) // 5분 = 300000ms
   async checkAndNotifyUnconfirmedCount(): Promise<void> {
     const { acquired } = await withAdvisoryLock(
       this.dataSource,
@@ -97,6 +125,10 @@ export class BugReportSchedulerService {
           this.logger.error(
             `버그 제보 알림 전송 실패: ${err.message}`,
             err.stack,
+          );
+          await this.schedulerAlertService.alertFailure(
+            '버그 제보 알림 스케줄러',
+            err,
           );
           return { success: false };
         }

@@ -4,7 +4,7 @@ import { BugReportService } from '../bug-report.service';
 import { createMockService } from '../../../test/utils/test-helpers';
 import { BugReportFactory } from '../../../test/factories/entity.factory';
 import { CreateBugReportDto } from '../dto/create-bug-report.dto';
-import { AuthUserPayload } from '../../auth/decorators/current-user.decorator';
+import { AuthUserPayload } from '@/auth/decorators/current-user.decorator';
 
 describe('BugReportController', () => {
   let controller: BugReportController;
@@ -33,6 +33,7 @@ describe('BugReportController', () => {
 
   describe('createBugReport', () => {
     const authUser: AuthUserPayload = {
+      sub: 1,
       email: 'test@example.com',
       role: 'USER',
     };

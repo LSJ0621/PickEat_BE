@@ -9,7 +9,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '@/user/entities/user.entity';
 import { MenuSelection } from './menu-selection.entity';
 import { PlaceRecommendation } from './place-recommendation.entity';
 

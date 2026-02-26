@@ -5,8 +5,8 @@ import { ErrorCode } from '@/common/constants/error-codes';
 import {
   PageInfo,
   PaginatedResponse,
-} from '../common/interfaces/pagination.interface';
-import { User } from '../user/entities/user.entity';
+} from '@/common/interfaces/pagination.interface';
+import { User } from '@/user/entities/user.entity';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { NotificationListQueryDto } from './dto/notification-list-query.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';

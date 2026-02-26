@@ -3,11 +3,12 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '@/user/entities/user.entity';
 import { BugReport } from './bug-report.entity';
 
 @Entity('bug_report_status_history')
@@ -17,6 +18,7 @@ export class BugReportStatusHistory {
 
   @ManyToOne(() => BugReport, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'bug_report_id' })
+  @Index('idx_bug_report_status_history_bug_report')
   bugReport: BugReport;
 
   @Column({ type: 'varchar', length: 20, name: 'previous_status' })
@@ -27,6 +29,7 @@ export class BugReportStatusHistory {
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'changed_by_id' })
+  @Index('idx_bug_report_status_history_changed_by')
   changedBy: User | null;
 
   @CreateDateColumn({ name: 'changed_at' })

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 import { GoogleOAuthClient } from '../../../google/clients/google-oauth.client';
 import {
@@ -12,6 +13,8 @@ import {
 } from '../../../../../test/mocks/external-clients.mock';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
+import * as testModeUtil from '@/common/utils/test-mode.util';
+import { TEST_MODE } from '@/common/constants/test-mode.constants';
 
 describe('GoogleOAuthClient', () => {
   let client: GoogleOAuthClient;
@@ -146,6 +149,70 @@ describe('GoogleOAuthClient', () => {
     });
   });
 
+  describe('getAccessToken - test mode branches', () => {
+    beforeEach(() => {
+      jest.spyOn(testModeUtil, 'isTestMode').mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should return valid token response for VALID oauth code in test mode', async () => {
+      const result = await client.getAccessToken(TEST_MODE.OAUTH_CODES.VALID);
+
+      expect(result).toEqual({
+        access_token: 'test-google-valid-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+      });
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should return no-name token response for NO_NAME oauth code in test mode', async () => {
+      const result = await client.getAccessToken(TEST_MODE.OAUTH_CODES.NO_NAME);
+
+      expect(result).toEqual({
+        access_token: 'test-google-no-name-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+      });
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should return deleted-user token response for DELETED_USER oauth code in test mode', async () => {
+      const result = await client.getAccessToken(
+        TEST_MODE.OAUTH_CODES.DELETED_USER,
+      );
+
+      expect(result).toEqual({
+        access_token: 'test-google-deleted-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+      });
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException for INVALID oauth code in test mode', async () => {
+      await expect(
+        client.getAccessToken(TEST_MODE.OAUTH_CODES.INVALID),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should fall through to real HTTP call for unknown code in test mode', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGoogleOAuthResponses.tokenSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const result = await client.getAccessToken('unknown-code-in-test-mode');
+
+      expect(httpService.post).toHaveBeenCalled();
+      expect(result).toEqual(mockGoogleOAuthResponses.tokenSuccess);
+    });
+  });
+
   describe('getUserProfile', () => {
     const accessToken = 'test-access-token';
 
@@ -251,6 +318,64 @@ describe('GoogleOAuthClient', () => {
         expect(e).toBeInstanceOf(ExternalApiException);
         expect((e as ExternalApiException).provider).toBe('Google OAuth');
       }
+    });
+  });
+
+  describe('getUserProfile - test mode branches', () => {
+    beforeEach(() => {
+      jest.spyOn(testModeUtil, 'isTestMode').mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should return valid google profile for valid-token in test mode', async () => {
+      const result = await client.getUserProfile('test-google-valid-token');
+
+      expect(result).toEqual({
+        sub: TEST_MODE.SOCIAL_IDS.GOOGLE.VALID,
+        email: TEST_MODE.USERS.OAUTH_GOOGLE.email,
+        email_verified: true,
+        name: TEST_MODE.USERS.OAUTH_GOOGLE.name,
+      });
+      expect(httpService.get).not.toHaveBeenCalled();
+    });
+
+    it('should return no-name google profile for no-name-token in test mode', async () => {
+      const result = await client.getUserProfile('test-google-no-name-token');
+
+      expect(result).toEqual({
+        sub: TEST_MODE.SOCIAL_IDS.GOOGLE.NO_NAME,
+        email: 'noname-google@example.com',
+        email_verified: true,
+        name: undefined,
+      });
+      expect(httpService.get).not.toHaveBeenCalled();
+    });
+
+    it('should return deleted-user google profile for deleted-token in test mode', async () => {
+      const result = await client.getUserProfile('test-google-deleted-token');
+
+      expect(result).toEqual({
+        sub: TEST_MODE.SOCIAL_IDS.GOOGLE.DELETED,
+        email: TEST_MODE.USERS.DELETED.email,
+        email_verified: true,
+        name: TEST_MODE.USERS.DELETED.name,
+      });
+      expect(httpService.get).not.toHaveBeenCalled();
+    });
+
+    it('should fall through to real HTTP call for unknown token in test mode', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGoogleOAuthResponses.userProfileSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      const result = await client.getUserProfile('unknown-token-in-test-mode');
+
+      expect(httpService.get).toHaveBeenCalled();
+      expect(result).toEqual(mockGoogleOAuthResponses.userProfileSuccess);
     });
   });
 });

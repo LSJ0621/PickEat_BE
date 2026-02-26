@@ -73,13 +73,6 @@ export interface GeminiGroundingChunk {
     title?: string;
   };
   /**
-   * @deprecated Use chunk.maps instead. Kept for backward compatibility.
-   */
-  retrievedContext?: {
-    uri?: string;
-    title?: string;
-  };
-  /**
    * Gemini Maps Grounding data (official field)
    * @see https://ai.google.dev/gemini-api/docs/maps-grounding
    */

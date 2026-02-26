@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InvalidMenuRequestException } from '@/common/exceptions/invalid-menu-request.exception';
 import { streamingAsyncLocalStorage } from '@/common/utils/retry-context';
-import type { StructuredAnalysis } from '@/external/openai/prompts';
+import type { StructuredAnalysis } from '@/user/interfaces/user-taste-analysis.interface';
 import { Gpt4oMiniValidationService } from './gpt4o-mini-validation.service';
 import { Gpt51MenuService } from './gpt51-menu.service';
 import { GptWebSearchMenuService } from './gpt-web-search-menu.service';

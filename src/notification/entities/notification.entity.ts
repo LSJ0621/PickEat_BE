@@ -8,7 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { User } from '@/user/entities/user.entity';
 import { NotificationStatus } from '../enum/notification-status.enum';
 import { NotificationType } from '../enum/notification-type.enum';
 

@@ -996,6 +996,150 @@ describe('GptWebSearchMenuService', () => {
           expect.stringContaining('string error'),
         );
       });
+
+      it('should log Call A failure warning when WebSearchSummaryService throws', async () => {
+        const mockResponse = {
+          id: 'chatcmpl-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  intro: '추천 이유',
+                  recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                  closing: '마무리',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        };
+
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+        mockWebSearchSummaryService.getSummary.mockRejectedValue(
+          new Error('web search failed'),
+        );
+
+        const result = await service.generateMenuRecommendations(
+          prompt,
+          likes,
+          dislikes,
+          undefined,
+          undefined,
+          userAddress,
+          undefined,
+          undefined,
+          'ko',
+        );
+
+        expect(loggerWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[Call A 실패]'),
+        );
+        expect(result.recommendations).toHaveLength(1);
+      });
+
+      it('should log Call A completion with confidence when WebSearchSummaryService returns a result', async () => {
+        const mockResponse = {
+          id: 'chatcmpl-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  intro: '추천 이유',
+                  recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                  closing: '마무리',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        };
+
+        const mockSummary = {
+          localTrends: ['김치찌개', '된장찌개'],
+          demographicFavorites: ['비빔밥'],
+          seasonalItems: [],
+          confidence: 'high' as const,
+          summary: '강남 인기 메뉴',
+        };
+
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+        mockWebSearchSummaryService.getSummary.mockResolvedValue(mockSummary);
+
+        await service.generateMenuRecommendations(
+          prompt,
+          likes,
+          dislikes,
+          undefined,
+          undefined,
+          userAddress,
+          undefined,
+          undefined,
+          'ko',
+        );
+
+        expect(loggerLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[Call A 완료]'),
+        );
+        expect(loggerLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining('high'),
+        );
+      });
+
+      it('should log Call A completion with demographic favorites when present', async () => {
+        const mockResponse = {
+          id: 'chatcmpl-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  intro: '추천 이유',
+                  recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                  closing: '마무리',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        };
+
+        const mockSummaryWithDemographics = {
+          localTrends: [],
+          demographicFavorites: ['비빔밥', '불고기'],
+          seasonalItems: [],
+          confidence: 'medium' as const,
+          summary: '요약',
+        };
+
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+        mockWebSearchSummaryService.getSummary.mockResolvedValue(
+          mockSummaryWithDemographics,
+        );
+
+        await service.generateMenuRecommendations(
+          prompt,
+          likes,
+          dislikes,
+          undefined,
+          undefined,
+          userAddress,
+          undefined,
+          undefined,
+          'ko',
+        );
+
+        expect(loggerLogSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[Call A 완료]'),
+        );
+      });
     });
 
     describe('edge cases', () => {
@@ -1328,6 +1472,161 @@ describe('GptWebSearchMenuService', () => {
             model: WEB_SEARCH_CONFIG.MODEL,
           }),
         );
+      });
+
+      it('should call WebSearchSummaryService when only userBirthYear is provided (line 94 branch)', async () => {
+        const mockResponse = {
+          id: 'chatcmpl-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  intro: '추천 이유',
+                  recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                  closing: '마무리',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        };
+
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+        mockWebSearchSummaryService.getSummary.mockResolvedValue(null);
+
+        // Only userBirthYear provided (no address) - should trigger Call A
+        await service.generateMenuRecommendations(
+          prompt,
+          likes,
+          dislikes,
+          undefined,
+          undefined,
+          undefined, // no address
+          1990,      // userBirthYear provided
+          undefined,
+          'ko',
+        );
+
+        expect(mockWebSearchSummaryService.getSummary).toHaveBeenCalledWith(
+          undefined,
+          1990,
+          undefined,
+          'ko',
+        );
+      });
+
+      it('should call WebSearchSummaryService when only userGender is provided (line 94 branch)', async () => {
+        const mockResponse = {
+          id: 'chatcmpl-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  intro: '추천',
+                  recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                  closing: '마무리',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        };
+
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+        mockWebSearchSummaryService.getSummary.mockResolvedValue(null);
+
+        // Only userGender provided (no address, no birthYear) - should trigger Call A
+        await service.generateMenuRecommendations(
+          prompt,
+          likes,
+          dislikes,
+          undefined,
+          undefined,
+          undefined,  // no address
+          undefined,  // no birthYear
+          'female',   // userGender provided
+          'ko',
+        );
+
+        expect(mockWebSearchSummaryService.getSummary).toHaveBeenCalledWith(
+          undefined,
+          undefined,
+          'female',
+          'ko',
+        );
+      });
+
+      it('should log user profile debug message when userBirthYear is provided (line 94-96 branch)', async () => {
+        const mockResponse = {
+          id: 'chatcmpl-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  intro: '추천',
+                  recommendations: [{ condition: '조건', menu: '김치찌개' }],
+                  closing: '마무리',
+                }),
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        };
+
+        const debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation();
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+        mockWebSearchSummaryService.getSummary.mockResolvedValue(null);
+
+        await service.generateMenuRecommendations(
+          prompt,
+          likes,
+          dislikes,
+          undefined,
+          undefined,
+          userAddress,
+          1985,     // userBirthYear
+          'male',   // userGender
+          'ko',
+        );
+
+        expect(debugSpy).toHaveBeenCalledWith(
+          expect.stringContaining('사용자 프로필: 제공됨'),
+        );
+
+        debugSpy.mockRestore();
+      });
+
+      it('should throw OpenAIResponseException when fallback extraction also finds no menus (lines 333-334)', async () => {
+        // Provide a response that has no JSON and no recognizable menu patterns
+        const mockResponse = {
+          id: 'resp-123',
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: 'No menus here at all.',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        };
+
+        mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
+
+        await expect(
+          service.generateMenuRecommendations(prompt, likes, dislikes),
+        ).rejects.toThrow(ExternalApiException);
       });
     });
   });

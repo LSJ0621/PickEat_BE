@@ -9,7 +9,7 @@ import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { RedisCacheService } from '@/common/cache/cache.service';
 import { CachedUserAddresses } from '@/common/cache/cache.interface';
-import { USER_LIMITS } from '../../common/constants/business.constants';
+import { USER_LIMITS } from '@/common/constants/business.constants';
 import { CreateUserAddressDto } from '../dto/create-user-address.dto';
 import { UpdateUserAddressDto } from '../dto/update-user-address.dto';
 import { UserAddress } from '../entities/user-address.entity';

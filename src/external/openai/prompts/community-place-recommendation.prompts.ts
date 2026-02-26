@@ -1,4 +1,4 @@
-import { CommunityPlaceCandidate } from '../../../menu/interfaces/community-places.interface';
+import { CommunityPlaceCandidate } from '@/menu/interfaces/community-places.interface';
 
 /**
  * Community Place based restaurant recommendation prompts
@@ -75,12 +75,6 @@ export function getCommunityPlacesSystemPrompt(
     ? COMMUNITY_PLACES_SYSTEM_PROMPT_EN
     : COMMUNITY_PLACES_SYSTEM_PROMPT_KO;
 }
-
-/**
- * @deprecated Use getCommunityPlacesSystemPrompt() instead
- * Maintained for backward compatibility
- */
-export const COMMUNITY_PLACES_SYSTEM_PROMPT = COMMUNITY_PLACES_SYSTEM_PROMPT_KO;
 
 /**
  * Generate user prompt
@@ -211,10 +205,3 @@ export function getCommunityPlacesRecommendationsJsonSchema(
     additionalProperties: false,
   } as const;
 }
-
-/**
- * @deprecated Use getCommunityPlacesRecommendationsJsonSchema() instead
- * Maintained for backward compatibility
- */
-export const COMMUNITY_PLACES_RECOMMENDATIONS_JSON_SCHEMA =
-  getCommunityPlacesRecommendationsJsonSchema('ko');

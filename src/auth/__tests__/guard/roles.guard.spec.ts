@@ -3,6 +3,8 @@ import { Reflector } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesGuard } from '../../guard/roles.guard';
 import { ROLES_KEY } from '../../decorators/roles.decorator';
+import { SUPER_ADMIN_KEY } from '../../decorators/super-admin.decorator';
+import { ROLES } from '@/common/constants/roles.constants';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;
@@ -196,6 +198,82 @@ describe('RolesGuard', () => {
         context.getHandler(),
         context.getClass(),
       ]);
+    });
+
+    describe('superAdminOnly branch', () => {
+      it('should return true when superAdminOnly is set and user is SUPER_ADMIN', () => {
+        // Arrange - first call returns superAdminOnly=true, second call for requiredRoles is not reached
+        mockReflector.getAllAndOverride
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(undefined);
+        const context = createMockExecutionContext({ role: ROLES.SUPER_ADMIN });
+
+        // Act
+        const result = guard.canActivate(context);
+
+        // Assert
+        expect(result).toBe(true);
+        expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(
+          SUPER_ADMIN_KEY,
+          [context.getHandler(), context.getClass()],
+        );
+      });
+
+      it('should throw ForbiddenException when superAdminOnly is set but user has no role', () => {
+        // Arrange
+        mockReflector.getAllAndOverride.mockReturnValueOnce(true);
+        const context = createMockExecutionContext(undefined);
+
+        // Act & Assert
+        expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+        expect(() => {
+          mockReflector.getAllAndOverride.mockReturnValueOnce(true);
+          guard.canActivate(context);
+        }).toThrow('User role not found');
+      });
+
+      it('should throw ForbiddenException when superAdminOnly is set and user role is empty string', () => {
+        // Arrange - empty string is falsy, treated as missing role
+        mockReflector.getAllAndOverride
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(true);
+        const context = createMockExecutionContext({ role: '' });
+
+        // Act & Assert
+        expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+        expect(() => {
+          mockReflector.getAllAndOverride.mockReturnValueOnce(true);
+          guard.canActivate(createMockExecutionContext({ role: '' }));
+        }).toThrow('User role not found');
+      });
+
+      it('should throw ForbiddenException when superAdminOnly is set but user is regular ADMIN', () => {
+        // Arrange
+        mockReflector.getAllAndOverride
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(true);
+        const context = createMockExecutionContext({ role: ROLES.ADMIN });
+
+        // Act & Assert
+        expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+        expect(() => {
+          mockReflector.getAllAndOverride.mockReturnValueOnce(true);
+          guard.canActivate(createMockExecutionContext({ role: ROLES.ADMIN }));
+        }).toThrow('This action requires Super Admin privileges');
+      });
+
+      it('should throw ForbiddenException when superAdminOnly is set but user is USER role', () => {
+        // Arrange
+        mockReflector.getAllAndOverride
+          .mockReturnValueOnce(true)
+          .mockReturnValueOnce(true);
+        const context = createMockExecutionContext({ role: 'USER' });
+
+        // Act & Assert
+        expect(() => guard.canActivate(context)).toThrow(
+          'This action requires Super Admin privileges',
+        );
+      });
     });
   });
 });

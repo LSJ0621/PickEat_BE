@@ -1,9 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { RatingSchedulerService } from '../services/rating-scheduler.service';
 import { PlaceRating } from '../entities/place-rating.entity';
 import { UserPlace } from '@/user-place/entities/user-place.entity';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 import {
   createMockRepository,
   createMockQueryBuilder,
@@ -60,6 +63,18 @@ describe('RatingSchedulerService', () => {
         {
           provide: DataSource,
           useValue: dataSource,
+        },
+        {
+          provide: SchedulerAlertService,
+          useValue: { alertFailure: jest.fn() },
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('0 0 * * *') },
+        },
+        {
+          provide: SchedulerRegistry,
+          useValue: { addCronJob: jest.fn() },
         },
       ],
     }).compile();

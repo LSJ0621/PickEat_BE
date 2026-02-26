@@ -19,6 +19,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  // CSP 비활성화: REST API 전용 서버로 HTML을 제공하지 않으므로 CSP가 불필요.
+  // crossOriginEmbedderPolicy 비활성화: 프론트엔드에서 외부 리소스(Google Maps 등) 로드 시 COEP 충돌 방지.
   app.use(
     helmet({
       contentSecurityPolicy: false,

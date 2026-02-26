@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AwsModule } from '../external/aws/aws.module';
-import { DiscordModule } from '../external/discord/discord.module';
-import { UserModule } from '../user/user.module';
+import { AwsModule } from '@/external/aws/aws.module';
+import { DiscordModule } from '@/external/discord/discord.module';
+import { UserModule } from '@/user/user.module';
+import { SchedulerAlertModule } from '@/common/services/scheduler-alert.module';
 import { BugReport } from './entities/bug-report.entity';
 import { BugReportNotification } from './entities/bug-report-notification.entity';
 import { BugReportStatusHistory } from './entities/bug-report-status-history.entity';
@@ -23,6 +24,7 @@ import { DiscordMessageBuilderService } from './services/discord-message-builder
     UserModule,
     AwsModule,
     DiscordModule,
+    SchedulerAlertModule,
   ],
   controllers: [BugReportController, AdminBugReportController],
   providers: [

@@ -14,7 +14,7 @@ describe('OpenAiCommunityPlacesService', () => {
   beforeEach(async () => {
     mockConfigService = createMockConfigService({
       OPENAI_API_KEY: 'test-api-key',
-      OPENAI_PLACES_MODEL: 'gpt-5.1-community-places',
+      OPENAI_MODEL: 'gpt-5.1-community-places',
     }) as unknown as jest.Mocked<ConfigService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -47,7 +47,7 @@ describe('OpenAiCommunityPlacesService', () => {
   });
 
   describe('constructor', () => {
-    it('should use OPENAI_PLACES_MODEL if configured', () => {
+    it('should use OPENAI_MODEL if configured', () => {
       expect(service['model']).toBe('gpt-5.1-community-places');
     });
 

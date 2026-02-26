@@ -3,12 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { WEB_SEARCH_CONFIG } from '@/external/openai/openai.constants';
 import {
-  getSystemPrompt,
   buildUserPromptWithAddress,
   buildUserProfile,
   getMenuRecommendationsJsonSchema,
-  type StructuredAnalysis,
-} from '@/external/openai/prompts';
+} from '@/external/openai/prompts/menu-recommendation.prompts';
+import { getSystemPrompt } from '@/external/openai/prompts/menu-recommendation-system.prompts';
+import type { StructuredAnalysis } from '@/user/interfaces/user-taste-analysis.interface';
 import type { ValidationContext } from '@/menu/interfaces/menu-validation.interface';
 import type { WebSearchSummary } from '@/menu/interfaces/web-search-summary.interface';
 import { MenuRecommendationsResponse } from '../interfaces/menu-recommendation.interface';

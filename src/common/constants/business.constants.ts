@@ -19,16 +19,6 @@ export const SEARCH_DEFAULTS = {
 } as const;
 
 /**
- * 메뉴 추천 관련 상수
- */
-export const MENU_RECOMMENDATION = {
-  /** 최소 추천 개수 */
-  MIN_COUNT: 3,
-  /** 최대 추천 개수 */
-  MAX_COUNT: 10,
-} as const;
-
-/**
  * 인증 관련 쿠키 상수
  */
 export const AUTH_COOKIE = {
@@ -175,6 +165,14 @@ export const BATCH_CONFIG = {
   RESULT_CHUNK_SIZE: 100,
   /** 과거 데이터 조회 제한 (개월) */
   HISTORY_LIMIT_MONTHS: 6,
+} as const;
+
+/**
+ * SSE (Server-Sent Events) 설정
+ */
+export const SSE_CONFIG = {
+  /** 서버 사이드 타임아웃 (ms): 3분 */
+  SERVER_TIMEOUT_MS: 3 * 60 * 1000,
 } as const;
 
 /**

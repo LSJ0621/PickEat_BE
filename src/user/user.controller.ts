@@ -12,9 +12,9 @@ import {
 import {
   AuthUserPayload,
   CurrentUser,
-} from '../auth/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../auth/guard/jwt.guard';
-import { MessageCode } from '../common/constants/message-codes';
+} from '@/auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
+import { MessageCode } from '@/common/constants/message-codes';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { DeleteUserAddressesDto } from './dto/delete-user-addresses.dto';
 import { SearchAddressDto } from './dto/search-address.dto';
@@ -164,8 +164,8 @@ export class UserController {
     return this.toAddressResponseDto(address);
   }
 
-  @Delete('addresses')
-  async deleteUserAddresses(
+  @Post('addresses/batch-delete')
+  async batchDeleteUserAddresses(
     @Body() dto: DeleteUserAddressesDto,
     @CurrentUser() authUser: AuthUserPayload,
   ) {

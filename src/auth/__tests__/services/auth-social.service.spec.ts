@@ -305,7 +305,7 @@ describe('AuthSocialService', () => {
           error: string;
           email: string;
         };
-        expect(response.error).toBe('RE_REGISTER_REQUIRED');
+        expect(response.error).toBe('AUTH_RE_REGISTER_REQUIRED');
         expect(response.email).toBe(email);
       }
     });
@@ -604,7 +604,7 @@ describe('AuthSocialService', () => {
           error: string;
           email: string;
         };
-        expect(response.error).toBe('RE_REGISTER_REQUIRED');
+        expect(response.error).toBe('AUTH_RE_REGISTER_REQUIRED');
         expect(response.email).toBe(email);
       }
     });

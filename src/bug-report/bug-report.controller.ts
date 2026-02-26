@@ -11,10 +11,10 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   AuthUserPayload,
   CurrentUser,
-} from '../auth/decorators/current-user.decorator';
-import { JwtAuthGuard } from '../auth/guard/jwt.guard';
-import { MULTER_OPTIONS } from '../common/config/multer.config';
-import { ImageValidationPipe } from '../common/pipes/file-validation.pipe';
+} from '@/auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
+import { MULTER_OPTIONS } from '@/common/config/multer.config';
+import { ImageValidationPipe } from '@/common/pipes/file-validation.pipe';
 import { BugReportService } from './bug-report.service';
 import { CreateBugReportDto } from './dto/create-bug-report.dto';
 

@@ -36,6 +36,7 @@ describe('JwtStrategy', () => {
     it('should return payload when valid JWT payload is provided', () => {
       // Arrange
       const payload: AuthUserPayload = {
+        sub: 1,
         email: 'test@example.com',
         role: 'USER',
       };
@@ -50,6 +51,7 @@ describe('JwtStrategy', () => {
     it('should return payload for ADMIN role', () => {
       // Arrange
       const payload: AuthUserPayload = {
+        sub: 2,
         email: 'admin@example.com',
         role: 'ADMIN',
       };
@@ -71,7 +73,7 @@ describe('JwtStrategy', () => {
       // Act & Assert
       expect(() => strategy.validate(payload)).toThrow(UnauthorizedException);
       expect(() => strategy.validate(payload)).toThrow(
-        'Invalid token: missing email or role',
+        'Invalid token: missing sub, email or role',
       );
     });
 
@@ -84,7 +86,7 @@ describe('JwtStrategy', () => {
       // Act & Assert
       expect(() => strategy.validate(payload)).toThrow(UnauthorizedException);
       expect(() => strategy.validate(payload)).toThrow(
-        'Invalid token: missing email or role',
+        'Invalid token: missing sub, email or role',
       );
     });
 
@@ -98,7 +100,7 @@ describe('JwtStrategy', () => {
       // Act & Assert
       expect(() => strategy.validate(payload)).toThrow(UnauthorizedException);
       expect(() => strategy.validate(payload)).toThrow(
-        'Invalid token: missing email or role',
+        'Invalid token: missing sub, email or role',
       );
     });
 
@@ -111,7 +113,7 @@ describe('JwtStrategy', () => {
       // Act & Assert
       expect(() => strategy.validate(payload)).toThrow(UnauthorizedException);
       expect(() => strategy.validate(payload)).toThrow(
-        'Invalid token: missing email or role',
+        'Invalid token: missing sub, email or role',
       );
     });
 
@@ -122,13 +124,14 @@ describe('JwtStrategy', () => {
       // Act & Assert
       expect(() => strategy.validate(payload)).toThrow(UnauthorizedException);
       expect(() => strategy.validate(payload)).toThrow(
-        'Invalid token: missing email or role',
+        'Invalid token: missing sub, email or role',
       );
     });
 
     it('should accept payload with additional properties', () => {
       // Arrange
       const payload = {
+        sub: 1,
         email: 'test@example.com',
         role: 'USER',
         iat: 1234567890,

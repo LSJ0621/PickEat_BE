@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getMenuRecommendationsJsonSchema } from '@/external/openai/prompts';
+import { getMenuRecommendationsJsonSchema } from '@/external/openai/prompts/menu-recommendation.prompts';
 import { OPENAI_CONFIG } from '@/external/openai/openai.constants';
 import { OpenAIChatCompletionParams } from '@/external/openai/openai.types';
 import { BaseMenuService } from './base-menu.service';

@@ -147,12 +147,6 @@ export function getValidationSystemPrompt(
     : VALIDATION_SYSTEM_PROMPT_KO;
 }
 
-/**
- * @deprecated Use getValidationSystemPrompt() instead
- * Maintained for backward compatibility
- */
-export const VALIDATION_SYSTEM_PROMPT = VALIDATION_SYSTEM_PROMPT_KO;
-
 export function buildValidationUserPrompt(
   userPrompt: string,
   likes: string[],
@@ -259,9 +253,3 @@ export function getValidationJsonSchema(language: 'ko' | 'en' = 'ko') {
     additionalProperties: false,
   } as const;
 }
-
-/**
- * @deprecated Use getValidationJsonSchema() instead
- * Maintained for backward compatibility
- */
-export const VALIDATION_JSON_SCHEMA = getValidationJsonSchema('ko');

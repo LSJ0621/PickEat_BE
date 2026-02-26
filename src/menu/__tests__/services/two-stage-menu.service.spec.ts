@@ -580,6 +580,153 @@ describe('TwoStageMenuService', () => {
       );
     });
 
+    it('should log user profile when userBirthYear or userGender is provided (line 92) and use web search path (line 99)', async () => {
+      const validationResult = {
+        isValid: true,
+        invalidReason: '',
+        intent: 'preference' as const,
+        constraints: {
+          budget: 'medium' as const,
+          dietary: [],
+          urgency: 'normal' as const,
+        },
+        suggestedCategories: ['한식'],
+      };
+
+      const menuResult = {
+        intro: '추천 이유',
+        recommendations: [{ condition: '조건', menu: '비빔밥' }],
+        closing: '맛있게 드세요!',
+      };
+
+      mockValidationService.validateMenuRequest.mockResolvedValue(
+        validationResult,
+      );
+      mockGptWebSearchMenuService.generateMenuRecommendations.mockResolvedValue(
+        menuResult,
+      );
+
+      const loggerSpy = jest.spyOn(service['logger'], 'log');
+
+      const result = await service.generateMenuRecommendations(
+        prompt,
+        likes,
+        dislikes,
+        analysis,
+        'ko',
+        '서울시 강남구', // userAddress
+        1990,            // userBirthYear (triggers line 92 logging)
+        'female',        // userGender (triggers line 92 logging)
+      );
+
+      expect(result).toEqual(menuResult);
+      // line 92: userBirthYear || userGender → logs profile message
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('사용자 프로필: 제공됨'),
+      );
+      // line 99: userAddress || userBirthYear || userGender → uses gptWebSearchMenuService
+      expect(
+        mockGptWebSearchMenuService.generateMenuRecommendations,
+      ).toHaveBeenCalled();
+      expect(
+        mockMenuService.generateMenuRecommendations,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should use web search path when only userBirthYear is provided (line 99)', async () => {
+      const validationResult = {
+        isValid: true,
+        invalidReason: '',
+        intent: 'preference' as const,
+        constraints: {
+          budget: 'medium' as const,
+          dietary: [],
+          urgency: 'normal' as const,
+        },
+        suggestedCategories: ['한식'],
+      };
+
+      const menuResult = {
+        intro: '추천',
+        recommendations: [{ condition: '조건', menu: '김치찌개' }],
+        closing: '맛있게!',
+      };
+
+      mockValidationService.validateMenuRequest.mockResolvedValue(
+        validationResult,
+      );
+      mockGptWebSearchMenuService.generateMenuRecommendations.mockResolvedValue(
+        menuResult,
+      );
+
+      const result = await service.generateMenuRecommendations(
+        prompt,
+        likes,
+        dislikes,
+        undefined,
+        'ko',
+        undefined, // no userAddress
+        1985,      // only userBirthYear → triggers web search but not "프로필 제공됨" alone
+        undefined, // no userGender
+      );
+
+      expect(result).toEqual(menuResult);
+      // userBirthYear alone satisfies (userAddress || userBirthYear || userGender) at line 99
+      expect(
+        mockGptWebSearchMenuService.generateMenuRecommendations,
+      ).toHaveBeenCalled();
+    });
+
+    it('should use web search path when only userGender is provided (line 92 and 99)', async () => {
+      const validationResult = {
+        isValid: true,
+        invalidReason: '',
+        intent: 'preference' as const,
+        constraints: {
+          budget: 'medium' as const,
+          dietary: [],
+          urgency: 'normal' as const,
+        },
+        suggestedCategories: ['한식'],
+      };
+
+      const menuResult = {
+        intro: '추천',
+        recommendations: [{ condition: '조건', menu: '된장찌개' }],
+        closing: '맛있게!',
+      };
+
+      mockValidationService.validateMenuRequest.mockResolvedValue(
+        validationResult,
+      );
+      mockGptWebSearchMenuService.generateMenuRecommendations.mockResolvedValue(
+        menuResult,
+      );
+
+      const loggerSpy = jest.spyOn(service['logger'], 'log');
+
+      const result = await service.generateMenuRecommendations(
+        prompt,
+        likes,
+        dislikes,
+        undefined,
+        'ko',
+        undefined, // no userAddress
+        undefined, // no userBirthYear
+        'male',    // only userGender → triggers line 92 logging AND line 99 web search
+      );
+
+      expect(result).toEqual(menuResult);
+      // line 92: userGender truthy → log profile
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('사용자 프로필: 제공됨'),
+      );
+      // line 99: userGender → web search
+      expect(
+        mockGptWebSearchMenuService.generateMenuRecommendations,
+      ).toHaveBeenCalled();
+    });
+
     it('should use both default constraints and empty array when both fields are undefined', async () => {
       const validationResult = {
         isValid: true,

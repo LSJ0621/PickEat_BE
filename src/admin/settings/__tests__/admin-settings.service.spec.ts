@@ -247,6 +247,66 @@ describe('AdminSettingsService', () => {
       expect(userRepository.save).not.toHaveBeenCalled();
     });
 
+    it('should throw BadRequestException when neither userId nor email is provided (line 57)', async () => {
+      const currentAdmin = UserFactory.create({ id: 2, role: ROLES.SUPER_ADMIN });
+      const ipAddress = '127.0.0.1';
+
+      await expect(
+        service.promoteToAdmin(
+          undefined,
+          undefined,
+          ROLES.ADMIN,
+          currentAdmin,
+          ipAddress,
+        ),
+      ).rejects.toThrow(
+        new BadRequestException('Either userId or email must be provided'),
+      );
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when both userId and email are provided (line 61)', async () => {
+      const currentAdmin = UserFactory.create({ id: 2, role: ROLES.SUPER_ADMIN });
+      const ipAddress = '127.0.0.1';
+
+      await expect(
+        service.promoteToAdmin(
+          1,
+          'user@example.com',
+          ROLES.ADMIN,
+          currentAdmin,
+          ipAddress,
+        ),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Provide only one identifier: userId or email, not both',
+        ),
+      );
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should find user by email when userId is not provided', async () => {
+      const user = UserFactory.create({ id: 1, email: 'user@example.com', role: ROLES.USER });
+      const currentAdmin = UserFactory.create({ id: 2, role: ROLES.SUPER_ADMIN });
+      const ipAddress = '127.0.0.1';
+      userRepository.findOne.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, role: ROLES.ADMIN });
+      auditLogRepository.create.mockReturnValue({} as AdminAuditLog);
+      auditLogRepository.save.mockResolvedValue({} as AdminAuditLog);
+
+      await service.promoteToAdmin(
+        undefined,
+        'user@example.com',
+        ROLES.ADMIN,
+        currentAdmin,
+        ipAddress,
+      );
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { email: 'user@example.com' },
+      });
+    });
+
     it('should create audit log with correct data', async () => {
       // Arrange
       const user = UserFactory.create({ id: 1, role: ROLES.USER });

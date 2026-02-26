@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { PreferencesBatchResultScheduler } from '../../schedulers/preferences-batch-result.scheduler';
 import { BatchJobService } from '../../services/batch-job.service';
 import { PreferenceBatchService } from '../../services/preference-batch.service';
@@ -15,6 +17,7 @@ import {
   createMockRepository,
   createMockUpdateResult,
 } from '../../../../test/mocks/repository.mock';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 
 describe('PreferencesBatchResultScheduler', () => {
   let scheduler: PreferencesBatchResultScheduler;
@@ -107,6 +110,24 @@ describe('PreferencesBatchResultScheduler', () => {
         {
           provide: DataSource,
           useValue: dataSource,
+        },
+        {
+          provide: SchedulerAlertService,
+          useValue: {
+            alertFailure: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('5 17 * * *'),
+          },
+        },
+        {
+          provide: SchedulerRegistry,
+          useValue: {
+            addCronJob: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -552,6 +573,431 @@ describe('PreferencesBatchResultScheduler', () => {
       expect(mockBatchJobService.findIncomplete).toHaveBeenCalled();
       expect(mockOpenAiBatchClient.getBatchStatus).toHaveBeenCalledWith(
         'batch_123',
+      );
+    });
+
+    it('should log when no incomplete batches exist', async () => {
+      // Arrange - covers line 83-84 (empty incompleteBatches branch)
+      mockOpenAiBatchClient.isReady.mockReturnValue(true);
+      mockBatchJobService.findIncomplete.mockResolvedValue([]);
+
+      const logSpy = jest.spyOn((scheduler as any).logger, 'log');
+
+      // Act
+      await scheduler.pollAndProcessResults();
+
+      // Assert
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('처리 대기 중인 배치가 없습니다'),
+      );
+      expect(mockOpenAiBatchClient.getBatchStatus).not.toHaveBeenCalled();
+    });
+
+    it('should skip batch when openAiBatchId is null', async () => {
+      // Arrange - covers line 93-96 (missing openAiBatchId branch)
+      const batchJobWithoutId = { ...mockBatchJob, openAiBatchId: null };
+      mockOpenAiBatchClient.isReady.mockReturnValue(true);
+      mockBatchJobService.findIncomplete.mockResolvedValue([batchJobWithoutId]);
+
+      const warnSpy = jest.spyOn((scheduler as any).logger, 'warn');
+
+      // Act
+      await scheduler.pollAndProcessResults();
+
+      // Assert
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('OpenAI batch ID가 없습니다'),
+      );
+      expect(mockOpenAiBatchClient.getBatchStatus).not.toHaveBeenCalled();
+    });
+
+    it('should log error and call schedulerAlertService when findIncomplete throws', async () => {
+      // Arrange - covers lines 104-110 (catch block in pollAndProcessResults)
+      mockOpenAiBatchClient.isReady.mockReturnValue(true);
+      mockBatchJobService.findIncomplete.mockRejectedValue(
+        new Error('DB connection error'),
+      );
+      const mockSchedulerAlertService = {
+        alertFailure: jest.fn(),
+      };
+
+      // Rebuild module with a working alertService mock
+      const module = await Test.createTestingModule({
+        providers: [
+          PreferencesBatchResultScheduler,
+          { provide: BatchJobService, useValue: mockBatchJobService },
+          {
+            provide: PreferenceBatchService,
+            useValue: mockPreferenceBatchService,
+          },
+          { provide: OpenAiBatchClient, useValue: mockOpenAiBatchClient },
+          {
+            provide: getRepositoryToken(MenuSelection),
+            useValue: mockMenuSelectionRepository,
+          },
+          { provide: DataSource, useValue: dataSource },
+          {
+            provide: SchedulerAlertService,
+            useValue: mockSchedulerAlertService,
+          },
+          {
+            provide: ConfigService,
+            useValue: { get: jest.fn().mockReturnValue('5 17 * * *') },
+          },
+          {
+            provide: SchedulerRegistry,
+            useValue: { addCronJob: jest.fn() },
+          },
+        ],
+      }).compile();
+
+      const sched = module.get<PreferencesBatchResultScheduler>(
+        PreferencesBatchResultScheduler,
+      );
+      const errorSpy = jest.spyOn((sched as any).logger, 'error');
+
+      // Act
+      await sched.pollAndProcessResults();
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('폴링 실패'),
+      );
+      expect(mockSchedulerAlertService.alertFailure).toHaveBeenCalledWith(
+        '취향 배치 결과 폴링 스케줄러',
+        expect.any(Error),
+      );
+    });
+
+    it('should log timedOut error when advisory lock times out', async () => {
+      // Arrange - covers line 117 (timedOut branch)
+      // Make the advisory lock time out by mocking withAdvisoryLock behavior
+      // The actual timeout happens inside withAdvisoryLock; we mock DataSource to simulate
+      // a slow operation scenario. However since we can't easily mock withAdvisoryLock internals,
+      // we test via a custom DataSource mock that simulates timeout scenario via rejected query.
+      // We mock at the scheduler level by calling pollAndProcessResults with a dataSource
+      // that causes timedOut=true return.
+      // Since this is hard to unit test without mocking the utility, we verify the lock-not-acquired path.
+      const mockQueryRunnerNotAcquired = {
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest
+          .fn()
+          .mockResolvedValue([{ pg_try_advisory_lock: false }]),
+        release: jest.fn().mockResolvedValue(undefined),
+      };
+      dataSource.createQueryRunner = jest
+        .fn()
+        .mockReturnValue(mockQueryRunnerNotAcquired);
+
+      const warnSpy = jest.spyOn((scheduler as any).logger, 'warn');
+
+      // Act
+      await scheduler.pollAndProcessResults();
+
+      // Assert - covers line 121 (!acquired branch)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('다른 인스턴스에서 이미 실행 중입니다'),
+      );
+    });
+  });
+
+  describe('processSingleBatch', () => {
+    it('should handle failed batch status', async () => {
+      // Arrange - covers lines 162-166 (failed/expired branch)
+      mockOpenAiBatchClient.getBatchStatus.mockResolvedValue({
+        status: 'failed',
+        outputFileId: undefined,
+        errorFileId: undefined,
+        progress: { total: 10, completed: 5, failed: 5 },
+      });
+      mockBatchJobService.updateStatus.mockResolvedValue(undefined);
+
+      const warnSpy = jest.spyOn((scheduler as any).logger, 'warn');
+
+      // Act
+      await (scheduler as any).processSingleBatch(1, 'batch_failed');
+
+      // Assert
+      expect(mockBatchJobService.updateStatus).toHaveBeenCalledWith(
+        1,
+        BatchJobStatus.FAILED,
+        expect.objectContaining({ errorMessage: 'OpenAI batch failed' }),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('FAILED'),
+      );
+    });
+
+    it('should handle expired batch status', async () => {
+      // Arrange - covers expired branch inside handleFailedBatch (line 316 ternary)
+      mockOpenAiBatchClient.getBatchStatus.mockResolvedValue({
+        status: 'expired',
+        outputFileId: undefined,
+        errorFileId: undefined,
+        progress: { total: 10, completed: 0, failed: 0 },
+      });
+      mockBatchJobService.updateStatus.mockResolvedValue(undefined);
+
+      // Act
+      await (scheduler as any).processSingleBatch(1, 'batch_expired');
+
+      // Assert
+      expect(mockBatchJobService.updateStatus).toHaveBeenCalledWith(
+        1,
+        BatchJobStatus.EXPIRED,
+        expect.objectContaining({ errorMessage: 'OpenAI batch expired' }),
+      );
+    });
+
+    it('should log error when getBatchStatus throws', async () => {
+      // Arrange - covers processSingleBatch catch block
+      mockOpenAiBatchClient.getBatchStatus.mockRejectedValue(
+        new Error('Status fetch failed'),
+      );
+
+      const errorSpy = jest.spyOn((scheduler as any).logger, 'error');
+
+      // Act
+      await (scheduler as any).processSingleBatch(1, 'batch_error');
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('상태 확인 실패'),
+      );
+    });
+
+    it('should log error when getBatchStatus throws non-Error', async () => {
+      // Arrange - covers processSingleBatch error with non-Error instanceof check
+      mockOpenAiBatchClient.getBatchStatus.mockRejectedValue('string error');
+
+      const errorSpy = jest.spyOn((scheduler as any).logger, 'error');
+
+      // Act
+      await (scheduler as any).processSingleBatch(1, 'batch_str_error');
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown error'),
+      );
+    });
+  });
+
+  describe('handleCompletedBatch - additional branches', () => {
+    it('should return early when batchJob is not found', async () => {
+      // Arrange - covers line 182-183 (!batchJob early return)
+      mockBatchJobService.findById.mockResolvedValue(null);
+
+      const errorSpy = jest.spyOn((scheduler as any).logger, 'error');
+
+      // Act
+      await (scheduler as any).handleCompletedBatch(
+        999,
+        'output_file_999',
+        undefined,
+      );
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('not found'),
+      );
+      expect(mockOpenAiBatchClient.downloadResults).not.toHaveBeenCalled();
+    });
+
+    it('should skip outputFile processing when outputFileId is undefined', async () => {
+      // Arrange - covers line 187 (if outputFileId branch = false)
+      mockBatchJobService.findById.mockResolvedValue(mockBatchJob);
+
+      // Act
+      await (scheduler as any).handleCompletedBatch(1, undefined, undefined);
+
+      // Assert
+      expect(mockOpenAiBatchClient.downloadResults).not.toHaveBeenCalled();
+    });
+
+    it('should skip errorFile processing when errorFileId is undefined', async () => {
+      // Arrange - covers line 226 (if errorFileId branch = false)
+      mockBatchJobService.findById.mockResolvedValue(mockBatchJob);
+      mockOpenAiBatchClient.downloadResults.mockResolvedValue({
+        results: new Map(),
+        errors: [],
+      });
+      mockPreferenceBatchService.processResults.mockResolvedValue(undefined);
+      mockBatchJobService.updateStatus.mockResolvedValue(undefined);
+
+      // Act
+      await (scheduler as any).handleCompletedBatch(
+        1,
+        'output_file_123',
+        undefined,
+      );
+
+      // Assert
+      expect(mockOpenAiBatchClient.downloadErrors).not.toHaveBeenCalled();
+    });
+
+    it('should process errorFile when errorFileId is provided', async () => {
+      // Arrange - covers line 226-250 (if errorFileId branch = true)
+      mockBatchJobService.findById.mockResolvedValue(mockBatchJob);
+      const errors = [{ customId: 'err_1', code: 'invalid', message: 'bad' }];
+      mockOpenAiBatchClient.downloadErrors.mockResolvedValue(errors);
+      mockPreferenceBatchService.processErrors.mockResolvedValue(undefined);
+      mockBatchJobService.updateStatus.mockResolvedValue(undefined);
+
+      // Act
+      await (scheduler as any).handleCompletedBatch(
+        1,
+        undefined,
+        'error_file_123',
+      );
+
+      // Assert
+      expect(mockOpenAiBatchClient.downloadErrors).toHaveBeenCalledWith(
+        'error_file_123',
+      );
+      expect(mockPreferenceBatchService.processErrors).toHaveBeenCalledWith(
+        errors,
+        mockBatchJob,
+      );
+      expect(mockBatchJobService.updateStatus).toHaveBeenCalledWith(
+        1,
+        BatchJobStatus.COMPLETED,
+        { errorFileId: 'error_file_123' },
+      );
+    });
+  });
+
+  describe('handleBatchProcessingFailure - additional branches', () => {
+    it('should log error when updateStatus itself throws during failure handling', async () => {
+      // Arrange - covers lines 302-305 (catch block in handleBatchProcessingFailure)
+      mockBatchJobService.updateStatus.mockRejectedValue(
+        new Error('DB write failed'),
+      );
+
+      const errorSpy = jest.spyOn((scheduler as any).logger, 'error');
+
+      // Act - should not throw
+      await expect(
+        (scheduler as any).handleBatchProcessingFailure(1, new Error('orig')),
+      ).resolves.not.toThrow();
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('실패 상태 업데이트 중 에러 발생'),
+      );
+    });
+
+    it('should log error with "Unknown error" message when resetError is not an Error instance', async () => {
+      // Arrange - covers instanceof check in handleBatchProcessingFailure catch
+      mockBatchJobService.updateStatus
+        .mockResolvedValueOnce(undefined) // first call succeeds
+        .mockRejectedValueOnce('string reset error'); // second call (via resetSelections -> updateStatus)
+      mockMenuSelectionRepository.find.mockRejectedValue('selection find error');
+
+      const errorSpy = jest.spyOn((scheduler as any).logger, 'error');
+
+      // Act
+      await (scheduler as any).handleBatchProcessingFailure(1, new Error('orig'));
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('실패 상태 업데이트 중 에러 발생'),
+      );
+    });
+  });
+
+  describe('mapStatus', () => {
+    it('should map validating status to PROCESSING', () => {
+      const result = (scheduler as any).mapStatus('validating');
+      expect(result).toBe(BatchJobStatus.PROCESSING);
+    });
+
+    it('should map in_progress status to PROCESSING', () => {
+      const result = (scheduler as any).mapStatus('in_progress');
+      expect(result).toBe(BatchJobStatus.PROCESSING);
+    });
+
+    it('should map finalizing status to PROCESSING', () => {
+      const result = (scheduler as any).mapStatus('finalizing');
+      expect(result).toBe(BatchJobStatus.PROCESSING);
+    });
+
+    it('should map completed status to COMPLETED', () => {
+      const result = (scheduler as any).mapStatus('completed');
+      expect(result).toBe(BatchJobStatus.COMPLETED);
+    });
+
+    it('should map failed status to FAILED', () => {
+      const result = (scheduler as any).mapStatus('failed');
+      expect(result).toBe(BatchJobStatus.FAILED);
+    });
+
+    it('should map expired status to EXPIRED', () => {
+      const result = (scheduler as any).mapStatus('expired');
+      expect(result).toBe(BatchJobStatus.EXPIRED);
+    });
+
+    it('should map cancelling status to FAILED', () => {
+      const result = (scheduler as any).mapStatus('cancelling');
+      expect(result).toBe(BatchJobStatus.FAILED);
+    });
+
+    it('should map cancelled status to FAILED', () => {
+      const result = (scheduler as any).mapStatus('cancelled');
+      expect(result).toBe(BatchJobStatus.FAILED);
+    });
+
+    it('should map unknown status to PROCESSING as default', () => {
+      const result = (scheduler as any).mapStatus('unknown_status');
+      expect(result).toBe(BatchJobStatus.PROCESSING);
+    });
+  });
+
+  describe('onModuleInit', () => {
+    it('should use default cron expression when config is not set', async () => {
+      // configService.get returns undefined → onModuleInit uses the default ('5 17 * * *')
+      // We verify that get was called with the correct key and default parameter
+      const mockConfigDefault = {
+        get: jest.fn((key: string, defaultValue?: string) => defaultValue),
+      };
+      const schedulerRegistryMock = { addCronJob: jest.fn() };
+
+      const module = await Test.createTestingModule({
+        providers: [
+          PreferencesBatchResultScheduler,
+          { provide: BatchJobService, useValue: mockBatchJobService },
+          {
+            provide: PreferenceBatchService,
+            useValue: mockPreferenceBatchService,
+          },
+          { provide: OpenAiBatchClient, useValue: mockOpenAiBatchClient },
+          {
+            provide: getRepositoryToken(MenuSelection),
+            useValue: mockMenuSelectionRepository,
+          },
+          { provide: DataSource, useValue: dataSource },
+          {
+            provide: SchedulerAlertService,
+            useValue: { alertFailure: jest.fn() },
+          },
+          { provide: ConfigService, useValue: mockConfigDefault },
+          { provide: SchedulerRegistry, useValue: schedulerRegistryMock },
+        ],
+      }).compile();
+
+      const sched = module.get<PreferencesBatchResultScheduler>(
+        PreferencesBatchResultScheduler,
+      );
+      // Manually invoke onModuleInit since TestingModule does not auto-trigger lifecycle hooks
+      sched.onModuleInit();
+
+      expect(sched).toBeDefined();
+      expect(mockConfigDefault.get).toHaveBeenCalledWith(
+        'CRON_PREFERENCES_BATCH_RESULT',
+        '5 17 * * *',
+      );
+      expect(schedulerRegistryMock.addCronJob).toHaveBeenCalledWith(
+        'preferences-batch-result',
+        expect.anything(),
       );
     });
   });

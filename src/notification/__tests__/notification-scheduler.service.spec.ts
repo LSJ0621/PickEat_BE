@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { NotificationSchedulerService } from '../services/notification-scheduler.service';
 import { NotificationService } from '../notification.service';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 
 describe('NotificationSchedulerService', () => {
   let service: NotificationSchedulerService;
@@ -33,6 +36,24 @@ describe('NotificationSchedulerService', () => {
         {
           provide: DataSource,
           useValue: dataSource,
+        },
+        {
+          provide: SchedulerAlertService,
+          useValue: {
+            alertFailure: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('* * * * *'),
+          },
+        },
+        {
+          provide: SchedulerRegistry,
+          useValue: {
+            addCronJob: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -201,6 +222,125 @@ describe('NotificationSchedulerService', () => {
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('예약 공지사항 발행 실패:'),
         expect.any(String),
+      );
+    });
+
+    it('should warn when advisory lock is not acquired (another instance running)', async () => {
+      // Arrange - mock lock not acquired
+      const mockQueryRunnerNotAcquired = {
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest
+          .fn()
+          .mockResolvedValue([{ pg_try_advisory_lock: false }]),
+        release: jest.fn().mockResolvedValue(undefined),
+      };
+      dataSource.createQueryRunner = jest
+        .fn()
+        .mockReturnValue(mockQueryRunnerNotAcquired);
+
+      const warnSpy = jest.spyOn(service['logger'], 'warn');
+
+      // Act
+      await service.publishScheduledNotifications();
+
+      // Assert
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('다른 인스턴스에서 이미 실행 중입니다'),
+      );
+      expect(
+        notificationService.publishScheduledNotifications,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onModuleInit', () => {
+    it('should use default cron expression when CRON_NOTIFICATION_PUBLISH is not set', async () => {
+      // Arrange - configService.get returns the default value when env var is not set
+      const mockConfigServiceDefault = {
+        get: jest.fn((key: string, defaultValue?: string) => defaultValue),
+      };
+      const schedulerRegistryMock = { addCronJob: jest.fn() };
+
+      const { Test: TestUtil } = await import('@nestjs/testing');
+      const { NotificationSchedulerService: NSS } = await import(
+        '../services/notification-scheduler.service'
+      );
+      const { NotificationService: NS } = await import(
+        '../notification.service'
+      );
+      const { SchedulerAlertService: SAS } = await import(
+        '@/common/services/scheduler-alert.service'
+      );
+      const { ConfigService: CS } = await import('@nestjs/config');
+      const { SchedulerRegistry: SR } = await import('@nestjs/schedule');
+
+      const mod = await TestUtil.createTestingModule({
+        providers: [
+          NSS,
+          {
+            provide: NS,
+            useValue: { publishScheduledNotifications: jest.fn() },
+          },
+          { provide: DataSource, useValue: dataSource },
+          { provide: SAS, useValue: { alertFailure: jest.fn() } },
+          { provide: CS, useValue: mockConfigServiceDefault },
+          { provide: SR, useValue: schedulerRegistryMock },
+        ],
+      }).compile();
+
+      const svc = mod.get(NSS);
+      // Manually call onModuleInit since lifecycle hooks aren't called in compile()
+      svc.onModuleInit();
+
+      expect(svc).toBeDefined();
+      expect(mockConfigServiceDefault.get).toHaveBeenCalledWith(
+        'CRON_NOTIFICATION_PUBLISH',
+        '* * * * *',
+      );
+    });
+
+    it('should register cron job with custom expression when config provides it', async () => {
+      // Arrange
+      const mockConfigServiceCustom = {
+        get: jest.fn().mockReturnValue('0 * * * *'),
+      };
+      const schedulerRegistryMock = { addCronJob: jest.fn() };
+
+      const { Test: TestUtil } = await import('@nestjs/testing');
+      const { NotificationSchedulerService: NSS } = await import(
+        '../services/notification-scheduler.service'
+      );
+      const { NotificationService: NS } = await import(
+        '../notification.service'
+      );
+      const { SchedulerAlertService: SAS } = await import(
+        '@/common/services/scheduler-alert.service'
+      );
+      const { ConfigService: CS } = await import('@nestjs/config');
+      const { SchedulerRegistry: SR } = await import('@nestjs/schedule');
+
+      const mod = await TestUtil.createTestingModule({
+        providers: [
+          NSS,
+          {
+            provide: NS,
+            useValue: { publishScheduledNotifications: jest.fn() },
+          },
+          { provide: DataSource, useValue: dataSource },
+          { provide: SAS, useValue: { alertFailure: jest.fn() } },
+          { provide: CS, useValue: mockConfigServiceCustom },
+          { provide: SR, useValue: schedulerRegistryMock },
+        ],
+      }).compile();
+
+      const svc = mod.get(NSS);
+      // Manually call onModuleInit to test the lifecycle
+      svc.onModuleInit();
+
+      expect(svc).toBeDefined();
+      expect(schedulerRegistryMock.addCronJob).toHaveBeenCalledWith(
+        'notification-publish',
+        expect.anything(),
       );
     });
   });

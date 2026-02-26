@@ -76,7 +76,9 @@ describe('AdminUserPlaceStatsService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([mockPlaces, 1]),
       };
-      userPlaceRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      userPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder as any,
+      );
 
       // Act
       const result = await service.findAllForAdmin(query);
@@ -102,7 +104,9 @@ describe('AdminUserPlaceStatsService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       };
-      userPlaceRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      userPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder as any,
+      );
 
       // Act
       await service.findAllForAdmin(query);
@@ -125,7 +129,9 @@ describe('AdminUserPlaceStatsService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       };
-      userPlaceRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      userPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder as any,
+      );
 
       // Act
       await service.findAllForAdmin(query);
@@ -148,7 +154,9 @@ describe('AdminUserPlaceStatsService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       };
-      userPlaceRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      userPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder as any,
+      );
 
       // Act
       await service.findAllForAdmin(query);
@@ -174,7 +182,9 @@ describe('AdminUserPlaceStatsService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([mockPlaces, 12]),
       };
-      userPlaceRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      userPlaceRepository.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder as any,
+      );
 
       // Act
       const result = await service.findAllForAdmin(query);

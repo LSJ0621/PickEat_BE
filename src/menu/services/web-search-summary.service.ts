@@ -7,7 +7,10 @@ import {
   getWebSearchSummarySystemPrompt,
   buildWebSearchSummaryPrompt,
 } from '@/external/openai/prompts/web-search-summary.prompts';
-import { getAgeGroup, getAgeGroupEN } from '@/external/openai/prompts';
+import {
+  getAgeGroup,
+  getAgeGroupEN,
+} from '@/external/openai/prompts/menu-recommendation.prompts';
 import { RedisCacheService } from '@/common/cache/cache.service';
 import type { WebSearchSummary } from '@/menu/interfaces/web-search-summary.interface';
 

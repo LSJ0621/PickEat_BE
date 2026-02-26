@@ -567,6 +567,227 @@ describe('Gpt4oMiniValidationService', () => {
       );
     });
 
+    it('should throw ExternalApiException when parsed response is not an object - null (line 161)', async () => {
+      // GPT returns a JSON that is a primitive value (null), not an object
+      const mockResponse = {
+        id: 'chatcmpl-null',
+        object: 'chat.completion',
+        created: 1677652288,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              // JSON.parse('null') returns null → typeof null === 'object' but parsed === null
+              content: 'null',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 1,
+          total_tokens: 11,
+        },
+      };
+
+      mockOpenAI.chat.completions.create = jest
+        .fn()
+        .mockResolvedValue(mockResponse);
+
+      await expect(
+        service.validateMenuRequest(userPrompt, likes, dislikes),
+      ).rejects.toThrow(ExternalApiException);
+    });
+
+    it('should throw ExternalApiException when parsed response is a number primitive (line 161 - typeof !== object)', async () => {
+      // JSON.parse('42') returns 42, which is typeof 'number' not 'object'
+      const mockResponse = {
+        id: 'chatcmpl-number',
+        object: 'chat.completion',
+        created: 1677652288,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: '42',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 1,
+          total_tokens: 11,
+        },
+      };
+
+      mockOpenAI.chat.completions.create = jest
+        .fn()
+        .mockResolvedValue(mockResponse);
+
+      await expect(
+        service.validateMenuRequest(userPrompt, likes, dislikes),
+      ).rejects.toThrow(ExternalApiException);
+    });
+
+    it('should throw ExternalApiException when isValid field is missing (line 171)', async () => {
+      // isValid is missing from the response object
+      const mockResponse = {
+        id: 'chatcmpl-no-isvalid',
+        object: 'chat.completion',
+        created: 1677652288,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                // isValid is missing
+                invalidReason: '',
+                intent: 'preference',
+                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                suggestedCategories: ['한식'],
+              }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 30,
+          completion_tokens: 20,
+          total_tokens: 50,
+        },
+      };
+
+      mockOpenAI.chat.completions.create = jest
+        .fn()
+        .mockResolvedValue(mockResponse);
+
+      await expect(
+        service.validateMenuRequest(userPrompt, likes, dislikes),
+      ).rejects.toThrow(ExternalApiException);
+    });
+
+    it('should throw ExternalApiException when isValid is a string instead of boolean (line 171)', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-string-isvalid',
+        object: 'chat.completion',
+        created: 1677652288,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                isValid: 'true', // string instead of boolean
+                invalidReason: '',
+                intent: 'preference',
+                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                suggestedCategories: ['한식'],
+              }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 30,
+          completion_tokens: 20,
+          total_tokens: 50,
+        },
+      };
+
+      mockOpenAI.chat.completions.create = jest
+        .fn()
+        .mockResolvedValue(mockResponse);
+
+      await expect(
+        service.validateMenuRequest(userPrompt, likes, dislikes),
+      ).rejects.toThrow(ExternalApiException);
+    });
+
+    it('should throw ExternalApiException when intent field is missing (line 178)', async () => {
+      // intent is missing from the response object
+      const mockResponse = {
+        id: 'chatcmpl-no-intent',
+        object: 'chat.completion',
+        created: 1677652288,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                isValid: true,
+                invalidReason: '',
+                // intent is missing
+                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                suggestedCategories: ['한식'],
+              }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 30,
+          completion_tokens: 20,
+          total_tokens: 50,
+        },
+      };
+
+      mockOpenAI.chat.completions.create = jest
+        .fn()
+        .mockResolvedValue(mockResponse);
+
+      await expect(
+        service.validateMenuRequest(userPrompt, likes, dislikes),
+      ).rejects.toThrow(ExternalApiException);
+    });
+
+    it('should throw ExternalApiException when intent is a number instead of string (line 178)', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-number-intent',
+        object: 'chat.completion',
+        created: 1677652288,
+        model: 'gpt-4o-mini',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                isValid: true,
+                invalidReason: '',
+                intent: 42, // number instead of string
+                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                suggestedCategories: ['한식'],
+              }),
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 30,
+          completion_tokens: 20,
+          total_tokens: 50,
+        },
+      };
+
+      mockOpenAI.chat.completions.create = jest
+        .fn()
+        .mockResolvedValue(mockResponse);
+
+      await expect(
+        service.validateMenuRequest(userPrompt, likes, dislikes),
+      ).rejects.toThrow(ExternalApiException);
+    });
+
     it('should handle non-finite total tokens', async () => {
       const mockResponse = {
         id: 'chatcmpl-456',

@@ -203,6 +203,259 @@ describe('MenuRecommendationService', () => {
       );
     });
 
+    it('should continue recommendation when tasteAnalysis fetch fails (line 46 catch branch)', async () => {
+      const user = UserFactory.create({
+        id: 1,
+        email: 'test@example.com',
+        preferences: {
+          likes: ['한식'],
+          dislikes: [],
+          analysis: '매운 음식 좋아함',
+        },
+      });
+      const prompt = '오늘 점심 추천해줘';
+      const defaultAddress = UserAddressFactory.createDefault(user);
+
+      // tasteAnalysis fetch throws an error - recommendation should still proceed
+      mockUserTasteAnalysisService.getByUserId.mockRejectedValue(
+        new Error('DB connection failed'),
+      );
+
+      const aiResponse = {
+        intro: '한식 추천',
+        recommendations: [
+          { condition: '든든하게', menu: '김치찌개' },
+        ],
+        closing: '맛있게 드세요!',
+      };
+
+      mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
+        aiResponse,
+      );
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+
+      const savedRecommendation = MenuRecommendationFactory.create({
+        id: 2,
+        user,
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
+        prompt,
+        requestAddress: defaultAddress.roadAddress,
+      });
+
+      mockRecommendationRepository.create.mockReturnValue(savedRecommendation);
+      mockRecommendationRepository.save.mockResolvedValue(savedRecommendation);
+
+      // Should NOT throw even though tasteAnalysis fetch failed
+      const result = await service.recommend(user, prompt);
+
+      expect(result).toBeDefined();
+      // tasteAnalysis is null (error was swallowed), so analysis falls back to user.preferences.analysis
+      expect(
+        mockOpenAiMenuService.generateMenuRecommendations,
+      ).toHaveBeenCalledWith(
+        prompt,
+        ['한식'],
+        [],
+        '매운 음식 좋아함', // fallback from user.preferences.analysis
+        'ko',
+        defaultAddress.roadAddress,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should log warn with Unknown error string when tasteAnalysis fetch fails with non-Error (line 47 branch)', async () => {
+      const user = UserFactory.create({
+        id: 1,
+        email: 'test@example.com',
+        preferences: {
+          likes: ['한식'],
+          dislikes: [],
+          analysis: '매운 음식 좋아함',
+        },
+      });
+      const prompt = '오늘 점심 추천해줘';
+      const defaultAddress = UserAddressFactory.createDefault(user);
+
+      // Reject with a non-Error object to hit the 'Unknown error' branch (line 47)
+      mockUserTasteAnalysisService.getByUserId.mockRejectedValue(
+        { code: 'NON_ERROR_REJECTION' },
+      );
+
+      const aiResponse = {
+        intro: '한식 추천',
+        recommendations: [{ condition: '든든하게', menu: '김치찌개' }],
+        closing: '맛있게 드세요!',
+      };
+
+      mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
+        aiResponse,
+      );
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+
+      const savedRecommendation = MenuRecommendationFactory.create({
+        id: 3,
+        user,
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
+        prompt,
+        requestAddress: defaultAddress.roadAddress,
+      });
+
+      mockRecommendationRepository.create.mockReturnValue(savedRecommendation);
+      mockRecommendationRepository.save.mockResolvedValue(savedRecommendation);
+
+      const warnSpy = jest.spyOn(service['logger'], 'warn');
+
+      // Should NOT throw - error is swallowed
+      const result = await service.recommend(user, prompt);
+
+      expect(result).toBeDefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown error'),
+      );
+    });
+
+    it('should build structuredAnalysis from tasteAnalysis when tasteAnalysis is non-null (line 61 branch)', async () => {
+      const user = UserFactory.create({
+        id: 1,
+        email: 'test@example.com',
+        preferences: {
+          likes: ['한식'],
+          dislikes: [],
+          analysis: '매운 음식 좋아함',
+        },
+      });
+      const prompt = '오늘 점심 추천해줘';
+      const defaultAddress = UserAddressFactory.createDefault(user);
+
+      const tasteAnalysis = {
+        compactSummary: '한식 선호',
+        stablePatterns: { categories: ['한식'], flavors: [], cookingMethods: [], confidence: 'high' as const },
+        recentSignals: { trending: [], declining: [] },
+        diversityHints: { explorationAreas: [], rotationSuggestions: [] },
+      };
+
+      mockUserTasteAnalysisService.getByUserId.mockResolvedValue(tasteAnalysis);
+
+      const aiResponse = {
+        intro: '한식 추천',
+        recommendations: [{ condition: '든든하게', menu: '김치찌개' }],
+        closing: '맛있게 드세요!',
+      };
+
+      mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
+        aiResponse,
+      );
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+
+      const savedRecommendation = MenuRecommendationFactory.create({
+        id: 4,
+        user,
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
+        prompt,
+        requestAddress: defaultAddress.roadAddress,
+      });
+
+      mockRecommendationRepository.create.mockReturnValue(savedRecommendation);
+      mockRecommendationRepository.save.mockResolvedValue(savedRecommendation);
+
+      await service.recommend(user, prompt);
+
+      // Verify structuredAnalysis is passed to OpenAI service (line 61-67)
+      expect(
+        mockOpenAiMenuService.generateMenuRecommendations,
+      ).toHaveBeenCalledWith(
+        prompt,
+        ['한식'],
+        [],
+        '한식 선호', // compactSummary used as analysis (line 92)
+        'ko',
+        defaultAddress.roadAddress,
+        undefined,
+        undefined,
+        '한식 선호',
+        expect.objectContaining({
+          stablePatterns: tasteAnalysis.stablePatterns,
+          recentSignals: tasteAnalysis.recentSignals,
+          diversityHints: tasteAnalysis.diversityHints,
+        }),
+      );
+    });
+
+    it('should fall back to user preferences analysis when compactSummary is empty string (line 92 branch)', async () => {
+      const user = UserFactory.create({
+        id: 1,
+        email: 'test@example.com',
+        preferences: {
+          likes: [],
+          dislikes: [],
+          analysis: '저장된 분석',
+        },
+      });
+      const prompt = '추천해줘';
+      const defaultAddress = UserAddressFactory.createDefault(user);
+
+      const tasteAnalysis = {
+        compactSummary: '   ', // whitespace-only string trims to empty → falsy
+        stablePatterns: null,
+        recentSignals: null,
+        diversityHints: null,
+      };
+
+      mockUserTasteAnalysisService.getByUserId.mockResolvedValue(tasteAnalysis);
+
+      const aiResponse = {
+        intro: '추천',
+        recommendations: [{ condition: '든든하게', menu: '비빔밥' }],
+        closing: '맛있게!',
+      };
+
+      mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
+        aiResponse,
+      );
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+
+      const savedRecommendation = MenuRecommendationFactory.create({
+        id: 5,
+        user,
+        intro: aiResponse.intro,
+        recommendationDetails: aiResponse.recommendations,
+        closing: aiResponse.closing,
+        prompt,
+        requestAddress: defaultAddress.roadAddress,
+      });
+
+      mockRecommendationRepository.create.mockReturnValue(savedRecommendation);
+      mockRecommendationRepository.save.mockResolvedValue(savedRecommendation);
+
+      await service.recommend(user, prompt);
+
+      // Empty compactSummary.trim() is falsy, analysis falls back to user.preferences.analysis (line 92)
+      // But compactSummary itself ('   ') is still passed as 9th argument
+      expect(
+        mockOpenAiMenuService.generateMenuRecommendations,
+      ).toHaveBeenCalledWith(
+        prompt,
+        [],
+        [],
+        '저장된 분석', // analysis falls back to user.preferences.analysis
+        'ko',
+        defaultAddress.roadAddress,
+        undefined,
+        undefined,
+        '   ', // raw compactSummary is passed as-is
+        expect.anything(),
+      );
+    });
+
     it('should throw BadRequestException when no default address exists', async () => {
       const user = UserFactory.create({ id: 1 });
       const prompt = '오늘 점심 추천해줘';

@@ -329,9 +329,3 @@ export const SYSTEM_PROMPT_EN = [
 export function getSystemPrompt(language: 'ko' | 'en' = 'ko'): string {
   return language === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_KO;
 }
-
-/**
- * @deprecated Use getSystemPrompt() instead
- * Maintained for backward compatibility
- */
-export const SYSTEM_PROMPT = SYSTEM_PROMPT_KO;

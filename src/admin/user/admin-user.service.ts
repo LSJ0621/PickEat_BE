@@ -18,11 +18,9 @@ import { BugReport } from '@/bug-report/entities/bug-report.entity';
 import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity';
 import { AUDIT_ACTIONS } from '@/admin/settings/constants/audit-action.constants';
 import { PaginatedResponse } from '@/common/interfaces/pagination.interface';
-import {
-  AdminUserListQueryDto,
-  AdminUserListItemDto,
-  AdminUserDetailDto,
-} from './dto';
+import { AdminUserListQueryDto } from './dto/admin-user-list-query.dto';
+import { AdminUserListItemDto } from './dto/admin-user-list-item.dto';
+import { AdminUserDetailDto } from './dto/admin-user-detail.dto';
 
 @Injectable()
 export class AdminUserService {

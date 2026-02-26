@@ -5,7 +5,27 @@ import {
   GooglePlaceSearchResult,
   GooglePlacesAutocompleteSuggestion,
 } from '../google/google.types';
-import { mockGooglePlacesResponses } from './fixtures';
+
+const mockGooglePlacesResponses = {
+  searchSuccess: {
+    places: [
+      {
+        id: 'mock-place-id-1',
+        displayName: { text: 'Mock Restaurant 1' },
+        rating: 4.5,
+        userRatingCount: 100,
+        priceLevel: 'PRICE_LEVEL_MODERATE',
+      } as GooglePlaceSearchResult,
+    ],
+  },
+  placeDetailsSuccess: {
+    id: 'mock-place-id-1',
+    displayName: { text: 'Mock Restaurant 1' },
+    formattedAddress: '123 Mock Street, Seoul',
+    rating: 4.5,
+  } as GooglePlaceDetails,
+  photoUri: 'https://mock-photo-uri.example.com/photo.jpg',
+};
 
 /**
  * Google Places API Mock 클라이언트

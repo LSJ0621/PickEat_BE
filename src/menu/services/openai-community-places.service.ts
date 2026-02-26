@@ -7,7 +7,7 @@ import {
   buildCommunityPlacesUserPrompt,
   getCommunityPlacesRecommendationsJsonSchema,
   getCommunityPlacesSystemPrompt,
-} from '@/external/openai/prompts';
+} from '@/external/openai/prompts/community-place-recommendation.prompts';
 import {
   CommunityPlaceCandidate,
   CommunityPlacesRecommendationResponse,

@@ -10,8 +10,8 @@ import {
   UpdateDateColumn,
   VersionColumn,
 } from 'typeorm';
-import { MenuRecommendation } from '../../menu/entities/menu-recommendation.entity';
-import { MenuSelection } from '../../menu/entities/menu-selection.entity';
+import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
+import { MenuSelection } from '@/menu/entities/menu-selection.entity';
 import { UserPreferences } from '../interfaces/user-preferences.interface';
 import { UserAddress } from './user-address.entity';
 import { UserTasteAnalysis } from './user-taste-analysis.entity';

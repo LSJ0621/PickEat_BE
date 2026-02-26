@@ -154,6 +154,7 @@ describe('AuthTokenService', () => {
         refreshToken: expectedRefreshToken,
       });
       expect(mockJwtTokenProvider.createToken).toHaveBeenCalledWith(
+        user.id,
         'test@example.com',
         'USER',
       );

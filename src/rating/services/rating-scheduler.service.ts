@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
+import { CronJob } from 'cron';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { PlaceRating } from '../entities/place-rating.entity';
@@ -10,9 +12,10 @@ import {
   BATCH_CONFIG,
 } from '@/common/constants/business.constants';
 import { withAdvisoryLock } from '@/common/utils/advisory-lock.util';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 
 @Injectable()
-export class RatingSchedulerService {
+export class RatingSchedulerService implements OnModuleInit {
   private readonly logger = new Logger(RatingSchedulerService.name);
 
   constructor(
@@ -21,13 +24,35 @@ export class RatingSchedulerService {
     @InjectRepository(UserPlace)
     private readonly userPlaceRepository: Repository<UserPlace>,
     private readonly dataSource: DataSource,
+    private readonly schedulerAlertService: SchedulerAlertService,
+    private readonly configService: ConfigService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
+
+  onModuleInit(): void {
+    const cronExpression = this.configService.get<string>(
+      'CRON_RATING_AGGREGATE',
+      '0 0 * * *',
+    );
+
+    const job = new CronJob(
+      cronExpression,
+      () => void this.updateUserPlaceAggregates(),
+      null,
+      false,
+      'Asia/Seoul',
+    );
+
+    this.schedulerRegistry.addCronJob('rating-aggregate', job);
+    job.start();
+
+    this.logger.log(`[평점 집계 스케줄러] 등록 완료 - cron: ${cronExpression}`);
+  }
 
   /**
    * 매일 KST 자정 (UTC 15:00) 실행
    * 별점이 있는 PlaceRating에서 UserPlace별 평균/건수 집계 후 비정규화 업데이트
    */
-  @Cron('0 15 * * *')
   async updateUserPlaceAggregates(): Promise<void> {
     this.logger.log('Starting user_place aggregate update...');
 
@@ -114,6 +139,10 @@ export class RatingSchedulerService {
           this.logger.error(
             `User place aggregate update failed: ${err.message}`,
             err.stack,
+          );
+          await this.schedulerAlertService.alertFailure(
+            '평점 집계 스케줄러',
+            err,
           );
           return { success: false };
         }

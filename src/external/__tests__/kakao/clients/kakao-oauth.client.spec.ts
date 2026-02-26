@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 import { KakaoOAuthClient } from '../../../kakao/clients/kakao-oauth.client';
 import {
@@ -12,6 +13,8 @@ import {
 } from '../../../../../test/mocks/external-clients.mock';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { ConfigMissingException } from '@/common/exceptions/config-missing.exception';
+import * as testModeUtil from '@/common/utils/test-mode.util';
+import { TEST_MODE } from '@/common/constants/test-mode.constants';
 
 describe('KakaoOAuthClient', () => {
   let client: KakaoOAuthClient;
@@ -172,6 +175,70 @@ describe('KakaoOAuthClient', () => {
     });
   });
 
+  describe('getAccessToken - test mode branches', () => {
+    beforeEach(() => {
+      jest.spyOn(testModeUtil, 'isTestMode').mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should return valid token response for VALID oauth code in test mode', async () => {
+      const result = await client.getAccessToken(TEST_MODE.OAUTH_CODES.VALID);
+
+      expect(result).toEqual({
+        access_token: 'test-kakao-valid-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+      });
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should return no-name token response for NO_NAME oauth code in test mode', async () => {
+      const result = await client.getAccessToken(TEST_MODE.OAUTH_CODES.NO_NAME);
+
+      expect(result).toEqual({
+        access_token: 'test-kakao-no-name-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+      });
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should return deleted-user token response for DELETED_USER oauth code in test mode', async () => {
+      const result = await client.getAccessToken(
+        TEST_MODE.OAUTH_CODES.DELETED_USER,
+      );
+
+      expect(result).toEqual({
+        access_token: 'test-kakao-deleted-token',
+        token_type: 'bearer',
+        expires_in: 3600,
+      });
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should throw UnauthorizedException for INVALID oauth code in test mode', async () => {
+      await expect(
+        client.getAccessToken(TEST_MODE.OAUTH_CODES.INVALID),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(httpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should fall through to real HTTP call for unknown code in test mode', async () => {
+      const mockResponse = createAxiosResponse(
+        mockKakaoOAuthResponses.tokenSuccess,
+      );
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const result = await client.getAccessToken('unknown-code-in-test-mode');
+
+      expect(httpService.post).toHaveBeenCalled();
+      expect(result).toEqual(mockKakaoOAuthResponses.tokenSuccess);
+    });
+  });
+
   describe('getUserProfile', () => {
     const accessToken = 'test-access-token';
 
@@ -286,6 +353,70 @@ describe('KakaoOAuthClient', () => {
         expect(e).toBeInstanceOf(ExternalApiException);
         expect((e as ExternalApiException).provider).toBe('Kakao OAuth');
       }
+    });
+  });
+
+  describe('getUserProfile - test mode branches', () => {
+    beforeEach(() => {
+      jest.spyOn(testModeUtil, 'isTestMode').mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should return valid kakao profile for valid-token in test mode', async () => {
+      const result = await client.getUserProfile('test-kakao-valid-token');
+
+      expect(result).toEqual({
+        id: TEST_MODE.SOCIAL_IDS.KAKAO.VALID,
+        kakao_account: {
+          email: TEST_MODE.USERS.OAUTH_KAKAO.email,
+          profile: { nickname: TEST_MODE.USERS.OAUTH_KAKAO.name },
+        },
+        properties: { nickname: TEST_MODE.USERS.OAUTH_KAKAO.name },
+      });
+      expect(httpService.get).not.toHaveBeenCalled();
+    });
+
+    it('should return no-name kakao profile for no-name-token in test mode', async () => {
+      const result = await client.getUserProfile('test-kakao-no-name-token');
+
+      expect(result).toEqual({
+        id: TEST_MODE.SOCIAL_IDS.KAKAO.NO_NAME,
+        kakao_account: {
+          email: 'noname@example.com',
+          profile: { nickname: undefined },
+        },
+        properties: {},
+      });
+      expect(httpService.get).not.toHaveBeenCalled();
+    });
+
+    it('should return deleted-user kakao profile for deleted-token in test mode', async () => {
+      const result = await client.getUserProfile('test-kakao-deleted-token');
+
+      expect(result).toEqual({
+        id: TEST_MODE.SOCIAL_IDS.KAKAO.DELETED,
+        kakao_account: {
+          email: TEST_MODE.USERS.DELETED.email,
+          profile: { nickname: TEST_MODE.USERS.DELETED.name },
+        },
+        properties: { nickname: TEST_MODE.USERS.DELETED.name },
+      });
+      expect(httpService.get).not.toHaveBeenCalled();
+    });
+
+    it('should fall through to real HTTP call for unknown token in test mode', async () => {
+      const mockResponse = createAxiosResponse(
+        mockKakaoOAuthResponses.userInfoSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      const result = await client.getUserProfile('unknown-token-in-test-mode');
+
+      expect(httpService.get).toHaveBeenCalled();
+      expect(result).toEqual(mockKakaoOAuthResponses.userInfoSuccess);
     });
   });
 });

@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ErrorCode } from '../common/constants/error-codes';
-import { parseLanguage } from '../common/utils/language.util';
-import { RedisCacheService } from '../common/cache/cache.service';
-import { User } from '../user/entities/user.entity';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { parseLanguage } from '@/common/utils/language.util';
+import { RedisCacheService } from '@/common/cache/cache.service';
+import { User } from '@/user/entities/user.entity';
 import { RecommendPlacesV2Dto } from './dto/recommend-places-v2.dto';
 import { UpdateMenuSelectionDto } from './dto/update-menu-selection.dto';
 import { PlaceRecommendation } from './entities/place-recommendation.entity';

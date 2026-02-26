@@ -34,8 +34,9 @@ describe('JwtTokenProvider', () => {
   });
 
   describe('createToken', () => {
-    it('should create access token with email and role', () => {
+    it('should create access token with userId, email and role', () => {
       // Arrange
+      const userId = 1;
       const email = 'test@example.com';
       const role = 'USER';
       const expectedToken = 'access-token-123';
@@ -43,15 +44,16 @@ describe('JwtTokenProvider', () => {
       mockJwtService.sign.mockReturnValue(expectedToken);
 
       // Act
-      const result = provider.createToken(email, role);
+      const result = provider.createToken(userId, email, role);
 
       // Assert
       expect(result).toBe(expectedToken);
-      expect(mockJwtService.sign).toHaveBeenCalledWith({ email, role });
+      expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
     });
 
     it('should create access token for ADMIN role', () => {
       // Arrange
+      const userId = 2;
       const email = 'admin@example.com';
       const role = 'ADMIN';
       const expectedToken = 'admin-access-token';
@@ -59,46 +61,47 @@ describe('JwtTokenProvider', () => {
       mockJwtService.sign.mockReturnValue(expectedToken);
 
       // Act
-      const result = provider.createToken(email, role);
+      const result = provider.createToken(userId, email, role);
 
       // Assert
       expect(result).toBe(expectedToken);
-      expect(mockJwtService.sign).toHaveBeenCalledWith({ email, role });
+      expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
     });
 
     it('should create tokens with different emails', () => {
       // Arrange
-      const emails = [
-        'user1@example.com',
-        'user2@example.com',
-        'user3@example.com',
+      const users = [
+        { userId: 1, email: 'user1@example.com' },
+        { userId: 2, email: 'user2@example.com' },
+        { userId: 3, email: 'user3@example.com' },
       ];
       const role = 'USER';
 
-      emails.forEach((email, index) => {
+      users.forEach(({ userId, email }, index) => {
         mockJwtService.sign.mockReturnValue(`token-${index}`);
 
         // Act
-        const result = provider.createToken(email, role);
+        const result = provider.createToken(userId, email, role);
 
         // Assert
         expect(result).toBe(`token-${index}`);
-        expect(mockJwtService.sign).toHaveBeenCalledWith({ email, role });
+        expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
       });
     });
 
     it('should use JwtModule configuration for expiration and secret', () => {
       // Arrange
+      const userId = 1;
       const email = 'test@example.com';
       const role = 'USER';
       mockJwtService.sign.mockReturnValue('token');
 
       // Act
-      provider.createToken(email, role);
+      provider.createToken(userId, email, role);
 
       // Assert
       // JwtService.sign is called without options, so it uses module defaults
-      expect(mockJwtService.sign).toHaveBeenCalledWith({ email, role });
+      expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
     });
   });
 
@@ -226,6 +229,7 @@ describe('JwtTokenProvider', () => {
   describe('token differentiation', () => {
     it('should create different tokens for access and refresh', () => {
       // Arrange
+      const userId = 1;
       const email = 'test@example.com';
       const role = 'USER';
 
@@ -234,7 +238,7 @@ describe('JwtTokenProvider', () => {
         .mockReturnValueOnce('refresh-token');
 
       // Act
-      const accessToken = provider.createToken(email, role);
+      const accessToken = provider.createToken(userId, email, role);
       const refreshToken = provider.createRefreshToken(email, role);
 
       // Assert
@@ -243,7 +247,7 @@ describe('JwtTokenProvider', () => {
       expect(mockJwtService.sign).toHaveBeenCalledTimes(2);
 
       // Access token call (no extra options)
-      expect(mockJwtService.sign).toHaveBeenNthCalledWith(1, { email, role });
+      expect(mockJwtService.sign).toHaveBeenNthCalledWith(1, { sub: userId, email, role });
 
       // Refresh token call (with type, jti, and options)
       expect(mockJwtService.sign).toHaveBeenNthCalledWith(

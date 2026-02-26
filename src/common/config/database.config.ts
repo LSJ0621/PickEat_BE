@@ -12,8 +12,15 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     password: config.getOrThrow<string>('POSTGRES_PASSWORD'),
     database: config.getOrThrow<string>('POSTGRES_DB'),
     autoLoadEntities: true,
-    synchronize: config.getOrThrow<string>('POSTGRES_SYNCHRONIZE') === 'true',
-    dropSchema: false,
+    synchronize:
+      config.get<string>('NODE_ENV') === 'production'
+        ? false
+        : config.getOrThrow<string>('POSTGRES_SYNCHRONIZE') === 'true',
+    dropSchema: true,
+    ssl:
+      config.get<string>('NODE_ENV') === 'production'
+        ? { rejectUnauthorized: true }
+        : false,
     extra: {
       max: DATABASE_POOL.MAX,
       connectionTimeoutMillis: DATABASE_POOL.CONNECTION_TIMEOUT_MS,

@@ -1,6 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { mockGoogleCseResponses } from './fixtures';
 import type { BlogSearchResult } from '@/external/google/google.types';
+
+const mockGoogleCseResponses = {
+  searchSuccess: [
+    {
+      title: 'Mock Blog Post 1',
+      url: 'https://mock-blog.example.com/1',
+      snippet: 'This is a mock blog post about food.',
+      thumbnailUrl: null,
+      source: 'mock-blog.example.com',
+    } as BlogSearchResult,
+  ],
+};
 
 /**
  * Google CSE (Custom Search Engine) Mock 클라이언트

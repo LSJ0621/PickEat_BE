@@ -1,13 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, Between } from 'typeorm';
 import { RatingService } from '../rating.service';
 import { PlaceRating } from '../entities/place-rating.entity';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { SelectPlaceDto } from '../dto/select-place.dto';
 import { SubmitRatingDto } from '../dto/submit-rating.dto';
 import { SkipRatingDto } from '../dto/skip-rating.dto';
+import { DismissRatingDto } from '../dto/dismiss-rating.dto';
+import { GetRatingHistoryDto } from '../dto/get-rating-history.dto';
 import { UserFactory } from '../../../test/factories/entity.factory';
 import { createMockRepository } from '../../../test/mocks/repository.mock';
 import type { User } from '@/user/entities/user.entity';
@@ -531,6 +533,286 @@ describe('RatingService', () => {
           relations: ['user'],
         }),
       );
+    });
+  });
+
+  describe('dismissRating', () => {
+    const dismissRatingDto: DismissRatingDto = {
+      placeRatingId: 1,
+    };
+
+    const mockPlaceRating: Partial<PlaceRating> = {
+      id: 1,
+      placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+      placeName: '맛있는 식당',
+      user: mockUser,
+      rating: null,
+      skipped: false,
+      promptDismissed: false,
+    };
+
+    it('should dismiss rating prompt when valid', async () => {
+      // Arrange
+      placeRatingRepository.findOne.mockResolvedValue(
+        mockPlaceRating as PlaceRating,
+      );
+      const dismissedRating = { ...mockPlaceRating, promptDismissed: true };
+      placeRatingRepository.save.mockResolvedValue(
+        dismissedRating as PlaceRating,
+      );
+
+      // Act
+      await service.dismissRating(mockUser, dismissRatingDto);
+
+      // Assert
+      expect(placeRatingRepository.findOne).toHaveBeenCalledWith({
+        where: { id: dismissRatingDto.placeRatingId },
+        relations: ['user'],
+      });
+      expect(placeRatingRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptDismissed: true,
+        }),
+      );
+    });
+
+    it('should throw ForbiddenException when user is deactivated', async () => {
+      // Act & Assert
+      await expect(
+        service.dismissRating(mockDeactivatedUser, dismissRatingDto),
+      ).rejects.toThrow(new ForbiddenException(ErrorCode.FORBIDDEN));
+
+      expect(placeRatingRepository.findOne).not.toHaveBeenCalled();
+      expect(placeRatingRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when place rating does not exist', async () => {
+      // Arrange
+      placeRatingRepository.findOne.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.dismissRating(mockUser, dismissRatingDto),
+      ).rejects.toThrow(new NotFoundException(ErrorCode.PLACE_RATING_NOT_FOUND));
+
+      expect(placeRatingRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should throw ForbiddenException when user does not own the rating', async () => {
+      // Arrange
+      const otherUser = UserFactory.create({
+        id: 99,
+        email: 'other@example.com',
+      });
+      const otherUserRating = { ...mockPlaceRating, user: otherUser };
+      placeRatingRepository.findOne.mockResolvedValue(
+        otherUserRating as PlaceRating,
+      );
+
+      // Act & Assert
+      await expect(
+        service.dismissRating(mockUser, dismissRatingDto),
+      ).rejects.toThrow(new ForbiddenException(ErrorCode.FORBIDDEN));
+
+      expect(placeRatingRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should set promptDismissed to true without changing other fields', async () => {
+      // Arrange
+      const ratingWithSkipped = { ...mockPlaceRating, skipped: true, rating: 3 };
+      placeRatingRepository.findOne.mockResolvedValue(
+        ratingWithSkipped as PlaceRating,
+      );
+      placeRatingRepository.save.mockResolvedValue(
+        ratingWithSkipped as PlaceRating,
+      );
+
+      // Act
+      await service.dismissRating(mockUser, dismissRatingDto);
+
+      // Assert
+      expect(placeRatingRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          promptDismissed: true,
+          skipped: true,
+          rating: 3,
+        }),
+      );
+    });
+  });
+
+  describe('getRatingHistory', () => {
+    const mockRatings: Partial<PlaceRating>[] = [
+      {
+        id: 1,
+        placeId: 'ChIJ111',
+        placeName: '식당1',
+        rating: 5,
+        skipped: false,
+        promptDismissed: false,
+        createdAt: new Date('2026-02-15T10:00:00Z'),
+      },
+      {
+        id: 2,
+        placeId: 'ChIJ222',
+        placeName: '식당2',
+        rating: null,
+        skipped: true,
+        promptDismissed: false,
+        createdAt: new Date('2026-02-14T10:00:00Z'),
+      },
+    ];
+
+    it('should return paginated rating history', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = { page: 1, limit: 10 };
+      placeRatingRepository.findAndCount.mockResolvedValue([
+        mockRatings as PlaceRating[],
+        2,
+      ]);
+
+      // Act
+      const result = await service.getRatingHistory(mockUser, dto);
+
+      // Assert
+      expect(placeRatingRepository.findAndCount).toHaveBeenCalledWith({
+        where: { user: { id: mockUser.id } },
+        order: { createdAt: 'DESC' },
+        skip: 0,
+        take: 10,
+      });
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('should map ratings to RatingHistoryItem format with ISO dates', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = { page: 1, limit: 10 };
+      placeRatingRepository.findAndCount.mockResolvedValue([
+        mockRatings as PlaceRating[],
+        2,
+      ]);
+
+      // Act
+      const result = await service.getRatingHistory(mockUser, dto);
+
+      // Assert
+      expect(result.items[0]).toEqual({
+        id: 1,
+        placeId: 'ChIJ111',
+        placeName: '식당1',
+        rating: 5,
+        skipped: false,
+        promptDismissed: false,
+        createdAt: new Date('2026-02-15T10:00:00Z').toISOString(),
+      });
+    });
+
+    it('should use default page=1 and limit=10 when not provided', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = {};
+      placeRatingRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      // Act
+      const result = await service.getRatingHistory(mockUser, dto);
+
+      // Assert
+      expect(placeRatingRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 10 }),
+      );
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
+    });
+
+    it('should calculate correct skip value for page 2', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = { page: 2, limit: 5 };
+      placeRatingRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      // Act
+      await service.getRatingHistory(mockUser, dto);
+
+      // Assert
+      expect(placeRatingRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 5, take: 5 }),
+      );
+    });
+
+    it('should calculate correct totalPages', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = { page: 1, limit: 5 };
+      const mockPaginatedRatings: Partial<PlaceRating>[] = Array(5).fill(null).map((_, i) => ({
+        id: i + 1,
+        placeId: `ChIJ${i}`,
+        placeName: `식당${i}`,
+        rating: null,
+        skipped: false,
+        promptDismissed: false,
+        createdAt: new Date('2026-02-15T10:00:00Z'),
+      }));
+      placeRatingRepository.findAndCount.mockResolvedValue([
+        mockPaginatedRatings as PlaceRating[],
+        13,
+      ]);
+
+      // Act
+      const result = await service.getRatingHistory(mockUser, dto);
+
+      // Assert
+      expect(result.totalPages).toBe(3); // ceil(13/5)
+    });
+
+    it('should filter by selectedDate when provided', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = {
+        page: 1,
+        limit: 10,
+        selectedDate: '2026-02-15',
+      };
+      placeRatingRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      // Act
+      await service.getRatingHistory(mockUser, dto);
+
+      // Assert - should include a date range filter (Between)
+      expect(placeRatingRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ createdAt: expect.anything() }),
+        }),
+      );
+    });
+
+    it('should not filter by date when selectedDate is not provided', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = { page: 1, limit: 10 };
+      placeRatingRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      // Act
+      await service.getRatingHistory(mockUser, dto);
+
+      // Assert - no createdAt in where condition
+      expect(placeRatingRepository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { user: { id: mockUser.id } },
+        }),
+      );
+    });
+
+    it('should return empty items and total=0 when no ratings exist', async () => {
+      // Arrange
+      const dto: GetRatingHistoryDto = { page: 1, limit: 10 };
+      placeRatingRepository.findAndCount.mockResolvedValue([[], 0]);
+
+      // Act
+      const result = await service.getRatingHistory(mockUser, dto);
+
+      // Assert
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(0);
+      expect(result.totalPages).toBe(0);
     });
   });
 });

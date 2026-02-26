@@ -1,8 +1,8 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserPlace } from '../user-place/entities/user-place.entity';
-import { UserModule } from '../user/user.module';
+import { UserPlace } from '@/user-place/entities/user-place.entity';
+import { UserModule } from '@/user/user.module';
 import { MenuRecommendation } from './entities/menu-recommendation.entity';
 import { MenuSelection } from './entities/menu-selection.entity';
 import { PlaceRecommendation } from './entities/place-recommendation.entity';

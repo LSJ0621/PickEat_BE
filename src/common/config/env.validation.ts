@@ -126,10 +126,6 @@ class EnvironmentVariables {
   // Kakao API
   @IsString()
   @IsNotEmpty()
-  KAKAO_REST_API_KEY: string;
-
-  @IsString()
-  @IsNotEmpty()
   OAUTH_KAKAO_CLIENT_ID: string;
 
   @IsString()
@@ -220,6 +216,36 @@ class EnvironmentVariables {
 
   // Address Search Provider (optional, defaults to 'kakao')
   ADDRESS_SEARCH_PROVIDER?: string;
+
+  // Discord Scheduler Webhook (optional, falls back to DISCORD_BUG_REPORT_WEBHOOK_URL)
+  @IsOptional()
+  @IsString()
+  DISCORD_SCHEDULER_WEBHOOK_URL?: string;
+
+  // Scheduler Cron Expressions (optional, defaults are production values)
+  @IsOptional()
+  @IsString()
+  CRON_PREFERENCES_BATCH_SUBMIT?: string;
+
+  @IsOptional()
+  @IsString()
+  CRON_PREFERENCES_RETRY_BATCH?: string;
+
+  @IsOptional()
+  @IsString()
+  CRON_PREFERENCES_BATCH_RESULT?: string;
+
+  @IsOptional()
+  @IsString()
+  CRON_RATING_AGGREGATE?: string;
+
+  @IsOptional()
+  @IsString()
+  CRON_NOTIFICATION_PUBLISH?: string;
+
+  @IsOptional()
+  @IsString()
+  BUG_REPORT_CHECK_INTERVAL_MS?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

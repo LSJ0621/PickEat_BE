@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GooglePlacesClient } from '../../external/google/clients/google-places.client';
+import { GooglePlacesClient } from '@/external/google/clients/google-places.client';
 import { SearchAddressDto } from '../dto/search-address.dto';
 import {
   AddressSearchResponse,

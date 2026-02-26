@@ -14,7 +14,12 @@ import { MenuRecommendation } from '@/menu/entities/menu-recommendation.entity';
 import { MenuSelection } from '@/menu/entities/menu-selection.entity';
 import { BugReport } from '@/bug-report/entities/bug-report.entity';
 import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity';
-import { UserFactory } from '../../../../test/factories/entity.factory';
+import {
+  UserFactory,
+  UserAddressFactory,
+  MenuRecommendationFactory,
+  BugReportFactory,
+} from '../../../../test/factories/entity.factory';
 import { ROLES } from '@/common/constants/roles.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
 
@@ -223,6 +228,318 @@ describe('AdminUserService', () => {
           { role: ROLES.USER },
         );
       });
+    });
+
+    describe('Search and Filter Conditions', () => {
+      let mockQueryBuilder: jest.Mocked<SelectQueryBuilder<User>>;
+
+      beforeEach(() => {
+        mockQueryBuilder = {
+          withDeleted: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          skip: jest.fn().mockReturnThis(),
+          take: jest.fn().mockReturnThis(),
+          getManyAndCount: jest
+            .fn()
+            .mockResolvedValue([
+              [UserFactory.create({ id: 1, role: ROLES.USER })],
+              1,
+            ]),
+        } as unknown as jest.Mocked<SelectQueryBuilder<User>>;
+
+        userRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      });
+
+      it('should apply search filter when search query is provided', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, search: 'test' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          '(user.email ILIKE :search OR user.name ILIKE :search)',
+          { search: '%test%' },
+        );
+      });
+
+      it('should apply status filter for "active" status', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, status: 'active' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          'user.deletedAt IS NULL AND user.isDeactivated = false',
+        );
+      });
+
+      it('should apply status filter for "deleted" status', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, status: 'deleted' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          'user.deletedAt IS NOT NULL',
+        );
+      });
+
+      it('should apply status filter for "deactivated" status', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, status: 'deactivated' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          'user.isDeactivated = true AND user.deletedAt IS NULL',
+        );
+      });
+
+      it('should apply socialType filter when socialType is provided', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, socialType: 'KAKAO' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          'user.socialType = :socialType',
+          { socialType: 'KAKAO' },
+        );
+      });
+
+      it('should apply startDate filter when startDate is provided', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, startDate: '2024-01-01' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          'user.createdAt >= :startDate',
+          { startDate: '2024-01-01' },
+        );
+      });
+
+      it('should apply endDate filter when endDate is provided', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, endDate: '2024-12-31' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+          'user.createdAt <= :endDate',
+          { endDate: '2024-12-31 23:59:59' },
+        );
+      });
+
+      it('should use custom sortBy and sortOrder when provided', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, sortBy: 'email', sortOrder: 'ASC' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith(
+          'user.email',
+          'ASC',
+        );
+      });
+
+      it('should fall back to createdAt for unknown sortBy column', async () => {
+        await service.findAll(
+          { page: 1, limit: 20, sortBy: 'unknownColumn' as 'email' },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith(
+          'user.createdAt',
+          'DESC',
+        );
+      });
+
+      it('should use default page and limit when not provided', async () => {
+        await service.findAll({}, ROLES.SUPER_ADMIN);
+
+        expect(mockQueryBuilder.skip).toHaveBeenCalledWith(0);
+        expect(mockQueryBuilder.take).toHaveBeenCalledWith(20);
+      });
+
+      it('should return correct pageInfo with hasNext true when more items exist', async () => {
+        mockQueryBuilder.getManyAndCount.mockResolvedValue([
+          [UserFactory.create({ id: 1, role: ROLES.USER })],
+          100,
+        ]);
+
+        const result = await service.findAll(
+          { page: 1, limit: 10 },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(result.pageInfo.hasNext).toBe(true);
+      });
+
+      it('should return hasNext false when no more items', async () => {
+        mockQueryBuilder.getManyAndCount.mockResolvedValue([
+          [UserFactory.create({ id: 1, role: ROLES.USER })],
+          1,
+        ]);
+
+        const result = await service.findAll(
+          { page: 1, limit: 10 },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(result.pageInfo.hasNext).toBe(false);
+      });
+
+      it('should map users to AdminUserListItemDto correctly for active user', async () => {
+        const activeUser = UserFactory.create({
+          id: 1,
+          role: ROLES.USER,
+          isDeactivated: false,
+          deletedAt: null,
+        });
+        mockQueryBuilder.getManyAndCount.mockResolvedValue([[activeUser], 1]);
+
+        const result = await service.findAll(
+          { page: 1, limit: 10 },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(result.items[0].id).toBe(1);
+      });
+
+      it('should map user with deletedAt to "deleted" status', async () => {
+        const deletedUser = UserFactory.create({
+          id: 2,
+          role: ROLES.USER,
+          deletedAt: new Date(),
+        });
+        mockQueryBuilder.getManyAndCount.mockResolvedValue([[deletedUser], 1]);
+
+        const result = await service.findAll(
+          { page: 1, limit: 10 },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(result.items[0].id).toBe(2);
+      });
+
+      it('should map deactivated user to "deactivated" status', async () => {
+        const deactivatedUser = UserFactory.create({
+          id: 3,
+          role: ROLES.USER,
+          isDeactivated: true,
+          deletedAt: null,
+        });
+        mockQueryBuilder.getManyAndCount.mockResolvedValue([
+          [deactivatedUser],
+          1,
+        ]);
+
+        const result = await service.findAll(
+          { page: 1, limit: 10 },
+          ROLES.SUPER_ADMIN,
+        );
+
+        expect(result.items[0].id).toBe(3);
+      });
+    });
+  });
+
+  describe('findOne', () => {
+    it('should return user detail dto when user exists', async () => {
+      const userId = 1;
+      const user = UserFactory.create({
+        id: userId,
+        role: ROLES.USER,
+        preferences: { likes: ['한식'], dislikes: ['양식'] },
+      });
+      const addresses = [
+        UserAddressFactory.create({ id: 1, user, isDefault: true }),
+      ];
+      const recommendations = [
+        MenuRecommendationFactory.create({ id: 1, user }),
+      ];
+      const bugReports = [
+        BugReportFactory.create({ id: 1, user, createdAt: new Date() }),
+      ];
+
+      userRepository.findOne.mockResolvedValue(user);
+      addressRepository.find.mockResolvedValue(addresses);
+      menuRecommendationRepository.count.mockResolvedValue(5);
+      menuSelectionRepository.count.mockResolvedValue(3);
+      bugReportRepository.count.mockResolvedValue(2);
+      menuRecommendationRepository.find.mockResolvedValue(recommendations);
+      bugReportRepository.find.mockResolvedValue(bugReports);
+
+      const result = await service.findOne(userId);
+
+      expect(result.id).toBe(userId);
+      expect(result.addresses).toHaveLength(1);
+      expect(result.stats.menuRecommendations).toBe(5);
+      expect(result.stats.menuSelections).toBe(3);
+      expect(result.stats.bugReports).toBe(2);
+      expect(result.preferences).not.toBeNull();
+    });
+
+    it('should throw NotFoundException when user does not exist', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.findOne(999)).rejects.toThrow(
+        new NotFoundException({ errorCode: ErrorCode.ADMIN_USER_NOT_FOUND }),
+      );
+    });
+
+    it('should return preferences as null when user has no preferences', async () => {
+      const userId = 1;
+      const user = UserFactory.create({ id: userId, preferences: null });
+
+      userRepository.findOne.mockResolvedValue(user);
+      addressRepository.find.mockResolvedValue([]);
+      menuRecommendationRepository.count.mockResolvedValue(0);
+      menuSelectionRepository.count.mockResolvedValue(0);
+      bugReportRepository.count.mockResolvedValue(0);
+      menuRecommendationRepository.find.mockResolvedValue([]);
+      bugReportRepository.find.mockResolvedValue([]);
+
+      const result = await service.findOne(userId);
+
+      expect(result.preferences).toBeNull();
+    });
+
+    it('should return deletedAt as null when user is not deleted', async () => {
+      const userId = 1;
+      const user = UserFactory.create({ id: userId, deletedAt: null });
+
+      userRepository.findOne.mockResolvedValue(user);
+      addressRepository.find.mockResolvedValue([]);
+      menuRecommendationRepository.count.mockResolvedValue(0);
+      menuSelectionRepository.count.mockResolvedValue(0);
+      bugReportRepository.count.mockResolvedValue(0);
+      menuRecommendationRepository.find.mockResolvedValue([]);
+      bugReportRepository.find.mockResolvedValue([]);
+
+      const result = await service.findOne(userId);
+
+      expect(result.deletedAt).toBeNull();
+    });
+
+    it('should return deletedAt as ISO string when user is deleted', async () => {
+      const userId = 1;
+      const deletedAt = new Date('2024-01-01T12:00:00.000Z');
+      const user = UserFactory.create({ id: userId, deletedAt });
+
+      userRepository.findOne.mockResolvedValue(user);
+      addressRepository.find.mockResolvedValue([]);
+      menuRecommendationRepository.count.mockResolvedValue(0);
+      menuSelectionRepository.count.mockResolvedValue(0);
+      bugReportRepository.count.mockResolvedValue(0);
+      menuRecommendationRepository.find.mockResolvedValue([]);
+      bugReportRepository.find.mockResolvedValue([]);
+
+      const result = await service.findOne(userId);
+
+      expect(result.deletedAt).toBe(deletedAt.toISOString());
     });
   });
 
@@ -634,6 +951,80 @@ describe('AdminUserService', () => {
     });
   });
 
+  describe('activate - missing branch coverage', () => {
+    it('should throw BadRequestException when trying to activate self', async () => {
+      const userId = 1;
+      const requestUserId = 1;
+
+      await expect(
+        service.activate(userId, requestUserId, ROLES.ADMIN, '127.0.0.1'),
+      ).rejects.toThrow(
+        new BadRequestException('자기 자신을 활성화할 수 없습니다'),
+      );
+      expect(userRepository.findOneBy).not.toHaveBeenCalled();
+    });
+
+    it('should throw ForbiddenException when trying to activate SUPER_ADMIN', async () => {
+      const targetUserId = 1;
+      const requestUserId = 2;
+      const targetUser = UserFactory.create({
+        id: targetUserId,
+        role: ROLES.SUPER_ADMIN,
+        isDeactivated: true,
+      });
+
+      userRepository.findOneBy.mockResolvedValue(targetUser);
+
+      await expect(
+        service.activate(targetUserId, requestUserId, ROLES.SUPER_ADMIN, '127.0.0.1'),
+      ).rejects.toThrow(
+        new ForbiddenException('SUPER_ADMIN은 활성화할 수 없습니다'),
+      );
+    });
+
+    it('should throw ForbiddenException when ADMIN tries to activate ADMIN', async () => {
+      const targetUserId = 1;
+      const requestUserId = 2;
+      const targetUser = UserFactory.create({
+        id: targetUserId,
+        role: ROLES.ADMIN,
+        isDeactivated: true,
+      });
+
+      userRepository.findOneBy.mockResolvedValue(targetUser);
+
+      await expect(
+        service.activate(targetUserId, requestUserId, ROLES.ADMIN, '127.0.0.1'),
+      ).rejects.toThrow(
+        new ForbiddenException('ADMIN은 USER만 활성화할 수 있습니다'),
+      );
+    });
+
+    it('should save audit log when activation succeeds', async () => {
+      const userId = 1;
+      const requestUserId = 2;
+      const targetUser = UserFactory.create({
+        id: userId,
+        role: ROLES.USER,
+        isDeactivated: true,
+      });
+      const updateResult = { affected: 1, raw: [], generatedMaps: [] };
+
+      userRepository.findOneBy.mockResolvedValue(targetUser);
+      userRepository.update.mockResolvedValue(updateResult);
+      auditLogRepository.save.mockResolvedValue({} as AdminAuditLog);
+
+      await service.activate(userId, requestUserId, ROLES.ADMIN, '10.0.0.1');
+
+      expect(auditLogRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminId: requestUserId,
+          ipAddress: '10.0.0.1',
+        }),
+      );
+    });
+  });
+
   describe('activate', () => {
     it('should activate deactivated user using atomic update', async () => {
       // Arrange
@@ -776,6 +1167,32 @@ describe('AdminUserService', () => {
       await expect(
         service.activate(userId, 2, ROLES.ADMIN, '127.0.0.1'),
       ).rejects.toThrow(dbError);
+    });
+  });
+
+  describe('deactivate - audit log', () => {
+    it('should save audit log when deactivation succeeds', async () => {
+      const userId = 1;
+      const requestUserId = 2;
+      const targetUser = UserFactory.create({
+        id: userId,
+        role: ROLES.USER,
+        isDeactivated: false,
+      });
+      const updateResult = { affected: 1, raw: [], generatedMaps: [] };
+
+      userRepository.findOneBy.mockResolvedValue(targetUser);
+      userRepository.update.mockResolvedValue(updateResult);
+      auditLogRepository.save.mockResolvedValue({} as AdminAuditLog);
+
+      await service.deactivate(userId, requestUserId, ROLES.ADMIN, '192.168.0.1');
+
+      expect(auditLogRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminId: requestUserId,
+          ipAddress: '192.168.0.1',
+        }),
+      );
     });
   });
 

@@ -633,6 +633,316 @@ And some more text.`;
     });
   });
 
+  describe('isEnabled (line 45) - disabled path', () => {
+    it('should return empty restaurants and log warn when genAI is null (no API key)', async () => {
+      const noKeyConfigService = createMockConfigService({
+        GOOGLE_GEMINI_API_KEY: '',
+      });
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          GeminiClient,
+          { provide: ConfigService, useValue: noKeyConfigService },
+        ],
+      }).compile();
+
+      const disabledClient = module.get<GeminiClient>(GeminiClient);
+
+      const result = await disabledClient.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.restaurants).toHaveLength(0);
+      expect(mockGenerateContent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('nameLocal-based placeId matching (lines 189-192)', () => {
+    it('should match placeId via nameLocal when groundingChunk title matches nameLocal', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '스시 야마모토',
+            nameEn: 'Sushi Yamamoto',
+            nameLocal: '寿司 山本',
+            reason: '신선한 스시',
+            addressKo: '서울시 강남구',
+            addressEn: 'Gangnam-gu, Seoul',
+            addressLocal: '東京都 渋谷区',
+            latitude: 37.5,
+            longitude: 127.0,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    // title matches nameLocal '寿司 山本' - key.includes(nameLocalLower) test
+                    title: '寿司 山本',
+                    placeId: 'places/ChIJNameLocalMatch',
+                  },
+                },
+              ],
+              googleMapsWidgetContextToken: 'token-local',
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 200,
+          totalTokenCount: 300,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants).toHaveLength(1);
+      // placeId starts with 'places/' → slice(7) applied (line 294)
+      expect(result.restaurants[0].placeId).toBe('ChIJNameLocalMatch');
+    });
+
+    it('should match placeId via nameLocal partial match (nameLocalLower.includes(key))', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '야마모토 레스토랑',
+            nameEn: 'Yamamoto Restaurant',
+            nameLocal: '山本レストラン 渋谷店',
+            reason: '좋음',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            addressLocal: '渋谷区',
+            latitude: 37.5,
+            longitude: 127.0,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    // key '山本レストラン' is included in nameLocal '山本レストラン 渋谷店'
+                    title: '山本レストラン',
+                    placeId: 'ChIJPartialLocalMatch',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 200,
+          totalTokenCount: 300,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants).toHaveLength(1);
+      expect(result.restaurants[0].placeId).toBe('ChIJPartialLocalMatch');
+    });
+  });
+
+  describe('placeId with places/ prefix stripping (line 294)', () => {
+    it('should strip places/ prefix from placeId in groundingChunk', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '테스트 식당',
+            nameEn: 'Test Restaurant',
+            nameLocal: null,
+            reason: '맛있음',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            addressLocal: null,
+            latitude: 37.5,
+            longitude: 127.0,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    title: '테스트 식당',
+                    placeId: 'places/ChIJStripped123',
+                  },
+                },
+              ],
+              googleMapsWidgetContextToken: 'token-xyz',
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 50,
+          candidatesTokenCount: 100,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants).toHaveLength(1);
+      // 'places/ChIJStripped123' → slice(7) → 'ChIJStripped123'
+      expect(result.restaurants[0].placeId).toBe('ChIJStripped123');
+    });
+  });
+
+  describe('extractJsonFromText multiple code blocks - recovery paths (lines 345, 352-363)', () => {
+    it('should recover JSON from second code block when first code block is invalid (line 345 - recovered path)', async () => {
+      // Two code blocks: first is truncated/invalid, second is valid after recovery
+      const multipleBlocksWithRecoverable = `\`\`\`json
+{
+  "restaurants": [
+    {"nameKo": "첫번째식당", "nameEn": "First", "reason": "맛있음", "addressKo": "서울", "addressEn": "Seoul", "latitude": 37.5, "longitude": 127.0, "nameLocal": null, "addressLocal": null},
+    {"nameKo": "잘린식당", "nameEn": "Truncated
+\`\`\`
+
+\`\`\`json
+{"not": "a restaurant response"
+\`\`\``;
+
+      const mockResponse: GeminiApiResponse = {
+        text: multipleBlocksWithRecoverable,
+        candidates: [
+          {
+            content: {
+              parts: [{ text: multipleBlocksWithRecoverable }],
+              role: 'model',
+            },
+            finishReason: 'MAX_TOKENS',
+            groundingMetadata: {
+              groundingChunks: [],
+              googleMapsWidgetContextToken: undefined,
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 2000,
+          totalTokenCount: 2100,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      // The first block is truncated but recoverTruncatedJson should rescue '첫번째식당'
+      expect(result.restaurants).toHaveLength(1);
+      expect(result.restaurants[0].nameKo).toBe('첫번째식당');
+    });
+
+    it('should fall back to longest block when all code blocks fail recovery (lines 352-363)', async () => {
+      // Two code blocks: both fail JSON.parse and recoverTruncatedJson returns null
+      // The longest block should be returned as raw text, causing parse error → empty restaurants
+      const allInvalidBlocks = `\`\`\`json
+not valid json at all - no restaurants key here
+\`\`\`
+
+\`\`\`json
+also invalid json - this is the longest block with more text to be the longest one selected
+\`\`\``;
+
+      const mockResponse: GeminiApiResponse = {
+        text: allInvalidBlocks,
+        candidates: [
+          {
+            content: {
+              parts: [{ text: allInvalidBlocks }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [],
+              googleMapsWidgetContextToken: undefined,
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      // Both blocks are invalid JSON, recovery fails → returns longest block raw → parse fails → empty
+      expect(result.success).toBe(false);
+      expect(result.restaurants).toHaveLength(0);
+    });
+  });
+
   describe('Grounding Metadata Extraction', () => {
     it('should extract blog URLs and placeIds from grounding metadata', async () => {
       const jsonData = {
@@ -882,6 +1192,567 @@ And some more text.`;
       );
 
       expect(result.restaurants).toHaveLength(1);
+    });
+  });
+
+  describe('Disabled State', () => {
+    it('should return empty result when API key is not configured', async () => {
+      const emptyConfigService = createMockConfigService({});
+
+      const module = await Test.createTestingModule({
+        providers: [
+          GeminiClient,
+          { provide: ConfigService, useValue: emptyConfigService },
+        ],
+      }).compile();
+
+      const disabledClient = module.get<GeminiClient>(GeminiClient);
+
+      const result = await disabledClient.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.restaurants).toEqual([]);
+      expect(mockGenerateContent).not.toHaveBeenCalled();
+    });
+
+    it('should return success false and empty restaurants when API key is empty string', async () => {
+      const emptyKeyConfigService = createMockConfigService({
+        GOOGLE_GEMINI_API_KEY: '',
+      });
+
+      const module = await Test.createTestingModule({
+        providers: [
+          GeminiClient,
+          { provide: ConfigService, useValue: emptyKeyConfigService },
+        ],
+      }).compile();
+
+      const disabledClient = module.get<GeminiClient>(GeminiClient);
+
+      const result = await disabledClient.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'en',
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.restaurants).toEqual([]);
+    });
+  });
+
+  describe('placeId prefix stripping', () => {
+    it('should strip "places/" prefix from placeId in grounding chunks', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '식당1',
+            nameEn: 'Restaurant 1',
+            reason: '맛있음',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    title: '식당1',
+                    placeId: 'places/ChIJTest123',
+                  },
+                },
+              ],
+              googleMapsWidgetContextToken: 'test-token',
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      // "places/" prefix should be stripped
+      expect(result.restaurants[0].placeId).toBe('ChIJTest123');
+    });
+
+    it('should not strip prefix when placeId does not start with "places/"', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '식당1',
+            nameEn: 'Restaurant 1',
+            reason: '맛있음',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    title: '식당1',
+                    placeId: 'ChIJRaw456',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants[0].placeId).toBe('ChIJRaw456');
+    });
+  });
+
+  describe('placeId deduplication within batch', () => {
+    it('should deduplicate restaurants with the same placeId', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '식당A',
+            nameEn: 'Restaurant A',
+            reason: '이유1',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+          {
+            nameKo: '식당A duplicate',
+            nameEn: 'Restaurant A2',
+            reason: '이유2',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    title: '식당A',
+                    placeId: 'ChIJSamePlaceId',
+                  },
+                },
+                {
+                  maps: {
+                    title: '식당A duplicate',
+                    placeId: 'ChIJSamePlaceId',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 100,
+          totalTokenCount: 200,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      // Duplicate placeId should be removed, keeping only the first
+      expect(result.restaurants).toHaveLength(1);
+      expect(result.restaurants[0].nameKo).toBe('식당A');
+    });
+
+    it('should keep restaurants with null placeId (not deduplicated)', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '식당X',
+            nameEn: 'Restaurant X',
+            reason: '이유',
+            addressKo: '주소',
+            addressEn: 'Address',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+          {
+            nameKo: '식당Y',
+            nameEn: 'Restaurant Y',
+            reason: '이유',
+            addressKo: '주소',
+            addressEn: 'Address',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 100,
+          totalTokenCount: 200,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      // Both have null placeId, both should be kept
+      expect(result.restaurants).toHaveLength(2);
+      expect(result.restaurants[0].placeId).toBeNull();
+      expect(result.restaurants[1].placeId).toBeNull();
+    });
+  });
+
+  describe('text extraction from candidates fallback', () => {
+    it('should use candidate content text when response.text is null', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '후보텍스트식당',
+            nameEn: 'Candidate Text Restaurant',
+            reason: '이유',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const textContent = JSON.stringify(jsonData);
+
+      const mockResponse: GeminiApiResponse = {
+        text: null as unknown as string,
+        candidates: [
+          {
+            content: {
+              parts: [{ text: textContent }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.restaurants).toHaveLength(1);
+      expect(result.restaurants[0].nameKo).toBe('후보텍스트식당');
+    });
+
+    it('should return empty result when both response.text and candidate text are null', async () => {
+      const mockResponse: GeminiApiResponse = {
+        text: null as unknown as string,
+        candidates: [
+          {
+            content: {
+              parts: [{ text: null as unknown as string }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 0,
+          totalTokenCount: 100,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.restaurants).toEqual([]);
+    });
+  });
+
+  describe('placeId matching via nameEn fallback', () => {
+    it('should match placeId via nameEn when nameLocal and nameKo do not match', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '레스토랑',
+            nameEn: 'SushiPlace',
+            reason: '이유',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: {
+              groundingChunks: [
+                {
+                  maps: {
+                    title: 'sushiplace', // lowercase in map, matches nameEn
+                    placeId: 'ChIJEnMatch',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants[0].placeId).toBe('ChIJEnMatch');
+    });
+  });
+
+  describe('reasonTags handling', () => {
+    it('should default reasonTags to empty array when not an array', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '식당1',
+            nameEn: 'Restaurant 1',
+            reason: '이유',
+            reasonTags: 'not-an-array',
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: { groundingChunks: [] },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants[0].reasonTags).toEqual([]);
+    });
+
+    it('should preserve reasonTags array when it is a valid array', async () => {
+      const jsonData = {
+        restaurants: [
+          {
+            nameKo: '식당1',
+            nameEn: 'Restaurant 1',
+            reason: '이유',
+            reasonTags: ['맛집', '분위기 좋음'],
+            addressKo: '서울시',
+            addressEn: 'Seoul',
+            latitude: 37.5,
+            longitude: 127.0,
+            nameLocal: null,
+            addressLocal: null,
+          },
+        ],
+      };
+
+      const mockResponse: GeminiApiResponse = {
+        text: JSON.stringify(jsonData),
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify(jsonData) }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            groundingMetadata: { groundingChunks: [] },
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 100,
+          candidatesTokenCount: 50,
+          totalTokenCount: 150,
+        },
+      };
+
+      mockGenerateContent.mockResolvedValue(mockResponse);
+
+      const result = await client.searchRestaurantsUnified(
+        'test prompt',
+        37.5,
+        127.0,
+        'ko',
+      );
+
+      expect(result.restaurants[0].reasonTags).toEqual(['맛집', '분위기 좋음']);
     });
   });
 });

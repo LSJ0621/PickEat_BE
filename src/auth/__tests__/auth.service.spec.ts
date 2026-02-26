@@ -5,8 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { MessageCode } from '@/common/constants/message-codes';
 import { ErrorCode } from '@/common/constants/error-codes';
-import { User } from '../../user/entities/user.entity';
-import { UserService } from '../../user/user.service';
+import { User } from '@/user/entities/user.entity';
+import { UserService } from '@/user/user.service';
 import { AuthService } from '../auth.service';
 import { EmailPurpose } from '../dto/send-email-code.dto';
 import { AuthPasswordService } from '../services/auth-password.service';
@@ -81,12 +81,11 @@ describe('AuthService', () => {
       reRegisterSocial: jest.fn(),
     };
 
-    const mockAuthPasswordService: jest.Mocked<Partial<AuthPasswordService>> =
-      {
-        sendResetPasswordCode: jest.fn(),
-        verifyResetPasswordCode: jest.fn(),
-        resetPassword: jest.fn(),
-      };
+    const mockAuthPasswordService: jest.Mocked<Partial<AuthPasswordService>> = {
+      sendResetPasswordCode: jest.fn(),
+      verifyResetPasswordCode: jest.fn(),
+      resetPassword: jest.fn(),
+    };
 
     const mockEmailVerificationService: jest.Mocked<
       Partial<EmailVerificationService>
@@ -881,7 +880,6 @@ describe('AuthService', () => {
       expect(result.longitude).toBe(127.0);
     });
   });
-
 
   describe('reRegister - error branches', () => {
     it('should throw BadRequestException when re-register update fails to restore user', async () => {

@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { MenuSelection } from '../menu/entities/menu-selection.entity';
-import { User } from '../user/entities/user.entity';
-import { OpenAiModule } from '../external/openai/openai.module';
-import { UserModule } from '../user/user.module';
+import { MenuSelection } from '@/menu/entities/menu-selection.entity';
+import { User } from '@/user/entities/user.entity';
+import { OpenAiModule } from '@/external/openai/openai.module';
+import { UserModule } from '@/user/user.module';
+import { SchedulerAlertModule } from '@/common/services/scheduler-alert.module';
 import { BatchJob } from './entities/batch-job.entity';
 import { BatchJobService } from './services/batch-job.service';
 import { PreferenceBatchService } from './services/preference-batch.service';
@@ -20,6 +21,7 @@ import { PreferencesRetryBatchScheduler } from './schedulers/preferences-retry-b
     TypeOrmModule.forFeature([BatchJob, MenuSelection, User]),
     OpenAiModule,
     UserModule,
+    SchedulerAlertModule,
   ],
   providers: [
     // Services

@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
+import { CronJob } from 'cron';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import {
@@ -19,9 +21,10 @@ import {
   MenuSelectionStatus,
 } from '@/menu/entities/menu-selection.entity';
 import { BatchJob } from '../entities/batch-job.entity';
+import { SchedulerAlertService } from '@/common/services/scheduler-alert.service';
 
 @Injectable()
-export class PreferencesBatchResultScheduler {
+export class PreferencesBatchResultScheduler implements OnModuleInit {
   private readonly logger = new Logger(PreferencesBatchResultScheduler.name);
 
   constructor(
@@ -31,13 +34,35 @@ export class PreferencesBatchResultScheduler {
     @InjectRepository(MenuSelection)
     private readonly menuSelectionRepository: Repository<MenuSelection>,
     private readonly dataSource: DataSource,
+    private readonly schedulerAlertService: SchedulerAlertService,
+    private readonly configService: ConfigService,
+    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
+
+  onModuleInit(): void {
+    const cronExpression = this.configService.get<string>(
+      'CRON_PREFERENCES_BATCH_RESULT',
+      '5 17 * * *',
+    );
+
+    const job = new CronJob(
+      cronExpression,
+      () => void this.pollAndProcessResults(),
+      null,
+      false,
+      'Asia/Seoul',
+    );
+
+    this.schedulerRegistry.addCronJob('preferences-batch-result', job);
+    job.start();
+
+    this.logger.log(`[배치 결과 스케줄러] 등록 완료 - cron: ${cronExpression}`);
+  }
 
   /**
    * Poll for batch results daily at 14:40 KST
    * This window covers the batch submission time (14:35) and typical 4-12 hour processing time
    */
-  @Cron('5 17 * * *', { timeZone: 'Asia/Seoul' })
   async pollAndProcessResults(): Promise<void> {
     this.logger.log('[결과 폴링 스케줄러] 시작 - 매일 14시 40분');
 
@@ -76,8 +101,11 @@ export class PreferencesBatchResultScheduler {
 
           return { success: true };
         } catch (error) {
-          this.logger.error(
-            `❌ [폴링 실패] ${error instanceof Error ? error.message : 'Unknown error'}`,
+          const err = error instanceof Error ? error : new Error(String(error));
+          this.logger.error(`❌ [폴링 실패] ${err.message}`);
+          await this.schedulerAlertService.alertFailure(
+            '취향 배치 결과 폴링 스케줄러',
+            err,
           );
           return { success: false };
         }

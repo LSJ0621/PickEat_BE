@@ -273,5 +273,205 @@ describe('HttpExceptionFilter', () => {
         }),
       );
     });
+
+    it('should use VALIDATION_ERROR errorCode for 400 with custom message object', () => {
+      // Arrange - 400 status maps to VALIDATION_ERROR via fallback
+      const exception = new HttpException(
+        { message: 'Custom validation message' },
+        HttpStatus.BAD_REQUEST,
+      );
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert - errorCode comes from getErrorCodeFallback, then returned as message
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 400,
+          errorCode: 'VALIDATION_ERROR',
+          message: 'VALIDATION_ERROR',
+        }),
+      );
+    });
+
+    it('should use UNAUTHORIZED errorCode for 401 exceptions', () => {
+      // Arrange
+      const exception = new HttpException(
+        { message: 'Token expired' },
+        HttpStatus.UNAUTHORIZED,
+      );
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 401,
+          errorCode: 'UNAUTHORIZED',
+          message: 'UNAUTHORIZED',
+        }),
+      );
+    });
+
+    it('should use FORBIDDEN errorCode for 403 exceptions', () => {
+      // Arrange
+      const exception = new HttpException(
+        { message: 'Access denied' },
+        HttpStatus.FORBIDDEN,
+      );
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 403,
+          errorCode: 'FORBIDDEN',
+          message: 'FORBIDDEN',
+        }),
+      );
+    });
+
+    it('should extract errorCode directly from response object when provided', () => {
+      // Arrange - errorCode is directly on the exception response object
+      const exception = new HttpException(
+        { errorCode: 'CUSTOM_ERROR_CODE', message: 'Custom message' },
+        HttpStatus.BAD_REQUEST,
+      );
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert - uses the custom errorCode directly, skips fallback
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 400,
+          errorCode: 'CUSTOM_ERROR_CODE',
+          message: 'CUSTOM_ERROR_CODE',
+        }),
+      );
+    });
+
+    it('should use production error message when NODE_ENV is production', () => {
+      // Arrange
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      const exception = new Error('Sensitive internal error');
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Internal Server Error',
+        }),
+      );
+
+      // Cleanup
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should expose error message when NODE_ENV is not production', () => {
+      // Arrange
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      const exception = new Error('Detailed error for dev');
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Detailed error for dev',
+        }),
+      );
+
+      // Cleanup
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should convert non-Error unknown exceptions using String() when not production', () => {
+      // Arrange
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+      const exception = { code: 500 };
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '[object Object]',
+        }),
+      );
+
+      // Cleanup
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should log ExternalApiException with provider info', () => {
+      // Arrange
+      const originalError = new Error('Upstream error');
+      const exception = new ExternalApiException(
+        'Google',
+        originalError,
+        'Google API Error',
+      );
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Google]'),
+        originalError.stack,
+        expect.any(Object),
+      );
+    });
+
+    it('should log unknown Error instances as unexpected errors', () => {
+      // Arrange
+      const exception = new Error('Unexpected runtime failure');
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Unexpected Error:'),
+        exception.stack,
+        expect.any(Object),
+      );
+    });
+
+    it('should log completely unknown non-Error exceptions', () => {
+      // Arrange
+      const exception = 42;
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+
+      // Act
+      filter.catch(exception, mockArgumentsHost);
+
+      // Assert
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown Error:'),
+        '',
+        expect.any(Object),
+      );
+    });
   });
 });

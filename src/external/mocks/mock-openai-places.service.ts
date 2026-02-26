@@ -3,7 +3,17 @@ import {
   PlaceCandidate,
   PlaceRecommendationsResponse,
 } from '@/menu/interfaces/openai-places.interface';
-import { mockGooglePlacesResponses } from './fixtures';
+
+const mockGooglePlacesResponses = {
+  searchSuccess: {
+    places: [
+      {
+        id: 'mock-place-id-1',
+        displayName: { text: 'Mock Restaurant 1' },
+      },
+    ],
+  },
+};
 
 /**
  * OpenAiPlacesService Mock 구현

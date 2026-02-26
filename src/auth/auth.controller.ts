@@ -16,11 +16,11 @@ import { Request, Response } from 'express';
 import {
   AUTH_COOKIE,
   AUTH_TIMING,
-} from '../common/constants/business.constants';
-import { ErrorCode } from '../common/constants/error-codes';
-import { MessageCode } from '../common/constants/message-codes';
-import { User } from '../user/entities/user.entity';
-import { UserService } from '../user/user.service';
+} from '@/common/constants/business.constants';
+import { ErrorCode } from '@/common/constants/error-codes';
+import { MessageCode } from '@/common/constants/message-codes';
+import { User } from '@/user/entities/user.entity';
+import { UserService } from '@/user/user.service';
 import { AuthService } from './auth.service';
 import {
   AuthUserPayload,
@@ -111,10 +111,11 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   @UseGuards(LocalAuthGuard)
-  async login(
-    @CurrentUser() user: User,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async login(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const user = (req as Request & { user: User }).user;
+    if (!user?.id) {
+      throw new UnauthorizedException();
+    }
     const result = await this.authService.buildAuthResult(user);
     return this.handleAuthSuccess(res, result);
   }

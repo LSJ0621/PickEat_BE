@@ -560,6 +560,278 @@ describe('GooglePlacesClient', () => {
     });
   });
 
+  describe('autocomplete', () => {
+    const input = '강남역';
+
+    it('should return suggestions when API call succeeds', async () => {
+      const mockSuggestions = [
+        {
+          placePrediction: {
+            placeId: 'ChIJ123',
+            text: { text: '강남역 2호선', matches: [] },
+          },
+        },
+      ];
+      const mockResponse = createAxiosResponse({ suggestions: mockSuggestions });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const result = await client.autocomplete(input);
+
+      expect(result).toEqual(mockSuggestions);
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.stringContaining('/places:autocomplete'),
+        expect.objectContaining({ input }),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Goog-Api-Key': 'test-api-key',
+          }),
+        }),
+      );
+    });
+
+    it('should return empty array when no suggestions are returned', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const result = await client.autocomplete(input);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return empty array when suggestions field is missing', async () => {
+      const mockResponse = createAxiosResponse({});
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const result = await client.autocomplete(input);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should throw ConfigMissingException when API key is missing', async () => {
+      const emptyConfigService = createMockConfigService({
+        APP_URL: 'http://localhost:3000',
+      });
+      const testModule = await Test.createTestingModule({
+        providers: [
+          GooglePlacesClient,
+          { provide: HttpService, useValue: httpService },
+          { provide: ConfigService, useValue: emptyConfigService },
+        ],
+      }).compile();
+
+      const testClient =
+        testModule.get<GooglePlacesClient>(GooglePlacesClient);
+
+      await expect(testClient.autocomplete(input)).rejects.toThrow(
+        ConfigMissingException,
+      );
+    });
+
+    it('should return empty array on HTTP error (graceful degradation)', async () => {
+      const error = createAxiosError(500, 'Internal Server Error');
+      httpService.post.mockReturnValue(throwError(() => error));
+
+      const result = await client.autocomplete(input);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return empty array on 429 rate limit (graceful degradation)', async () => {
+      const error = createAxiosError(429, 'Too Many Requests');
+      httpService.post.mockReturnValue(throwError(() => error));
+
+      const result = await client.autocomplete(input);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should include includedRegionCodes when provided in options', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.autocomplete(input, { includedRegionCodes: ['KR'] });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ includedRegionCodes: ['KR'] }),
+        expect.any(Object),
+      );
+    });
+
+    it('should include locationBias when provided in options', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const locationBias = {
+        circle: {
+          center: { latitude: 37.5, longitude: 127.0 },
+          radius: 1000,
+        },
+      };
+
+      await client.autocomplete(input, { locationBias });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ locationBias }),
+        expect.any(Object),
+      );
+    });
+
+    it('should include sessionToken when provided in options', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      const sessionToken = 'test-session-token';
+      await client.autocomplete(input, { sessionToken });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ sessionToken }),
+        expect.any(Object),
+      );
+    });
+
+    it('should use default languageCode when not provided', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.autocomplete(input);
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ languageCode: 'ko' }),
+        expect.any(Object),
+      );
+    });
+
+    it('should use provided languageCode when specified', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.autocomplete(input, { languageCode: 'en' });
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ languageCode: 'en' }),
+        expect.any(Object),
+      );
+    });
+
+    it('should not include optional fields when not provided', async () => {
+      const mockResponse = createAxiosResponse({ suggestions: [] });
+      httpService.post.mockReturnValue(of(mockResponse));
+
+      await client.autocomplete(input);
+
+      const callArgs = httpService.post.mock.calls[0];
+      const requestBody = callArgs[1];
+      expect(requestBody).not.toHaveProperty('includedRegionCodes');
+      expect(requestBody).not.toHaveProperty('locationBias');
+      expect(requestBody).not.toHaveProperty('sessionToken');
+    });
+  });
+
+  describe('getDetails - additional branch coverage', () => {
+    const placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+
+    it('should use minimal field mask when useMinimalFields is true', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      await client.getDetails(placeId, { useMinimalFields: true });
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Goog-FieldMask': expect.stringContaining('formattedAddress'),
+          }),
+        }),
+      );
+    });
+
+    it('should include session token header when sessionToken is provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      const sessionToken = 'my-session-token-abc';
+      await client.getDetails(placeId, { sessionToken });
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Goog-SessionToken': sessionToken,
+          }),
+        }),
+      );
+    });
+
+    it('should not include X-Goog-SessionToken header when sessionToken is not provided', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      await client.getDetails(placeId);
+
+      const callArgs = httpService.get.mock.calls[0];
+      const config = callArgs[1];
+      expect(config.headers).not.toHaveProperty('X-Goog-SessionToken');
+    });
+
+    it('should use DETAILS field mask as default when no special options given', async () => {
+      const mockResponse = createAxiosResponse(
+        mockGooglePlacesResponses.placeDetailsSuccess,
+      );
+      httpService.get.mockReturnValue(of(mockResponse));
+
+      await client.getDetails(placeId);
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'X-Goog-FieldMask': expect.any(String),
+          }),
+        }),
+      );
+    });
+
+    it('should return null on network error (graceful degradation)', async () => {
+      const networkError = new Error('Network Error');
+      httpService.get.mockReturnValue(throwError(() => networkError));
+
+      const result = await client.getDetails(placeId);
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('createSessionToken', () => {
+    it('should return a non-empty UUID string', () => {
+      const token = client.createSessionToken();
+
+      expect(typeof token).toBe('string');
+      expect(token).toHaveLength(36);
+      expect(token).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+    });
+
+    it('should return unique tokens on each call', () => {
+      const token1 = client.createSessionToken();
+      const token2 = client.createSessionToken();
+
+      expect(token1).not.toBe(token2);
+    });
+  });
+
   describe('resolvePhotoUris', () => {
     it('should resolve multiple photo URIs', async () => {
       const photos = [

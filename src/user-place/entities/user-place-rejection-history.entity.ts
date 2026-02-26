@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -14,9 +15,11 @@ export class UserPlaceRejectionHistory {
   id: number;
 
   @ManyToOne(() => UserPlace, { nullable: false, onDelete: 'CASCADE' })
+  @Index('idx_user_place_rejection_history_user_place')
   userPlace: UserPlace;
 
   @ManyToOne(() => User, { nullable: false, onDelete: 'RESTRICT' })
+  @Index('idx_user_place_rejection_history_admin')
   admin: User;
 
   @Column({ type: 'text' })

@@ -1,14 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminBugReportController } from '../../controllers/admin-bug-report.controller';
 import { BugReportService } from '../../bug-report.service';
-import { UserService } from '../../../user/user.service';
+import { UserService } from '@/user/user.service';
 import { createMockService } from '../../../../test/utils/test-helpers';
 import { BugReportFactory } from '../../../../test/factories/entity.factory';
 import { BugReportListQueryDto } from '../../dto/bug-report-list-query.dto';
 import { UpdateBugReportStatusDto } from '../../dto/update-bug-report-status.dto';
 import { BugReportStatus } from '../../enum/bug-report-status.enum';
-import { User } from '../../../user/entities/user.entity';
-import { AuthUserPayload } from '../../../auth/decorators/current-user.decorator';
+import { User } from '@/user/entities/user.entity';
+import { AuthUserPayload } from '@/auth/decorators/current-user.decorator';
 
 describe('AdminBugReportController', () => {
   let controller: AdminBugReportController;
@@ -16,6 +16,7 @@ describe('AdminBugReportController', () => {
   let userService: jest.Mocked<UserService>;
 
   const mockUser: AuthUserPayload = {
+    sub: 1,
     email: 'admin@test.com',
     role: 'ADMIN',
   };

@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { ErrorCode } from '@/common/constants/error-codes';
-import { User } from '../../user/entities/user.entity';
+import { User } from '@/user/entities/user.entity';
 import { UpdateMenuSelectionDto } from '../dto/update-menu-selection.dto';
 import {
   MenuSelection,
