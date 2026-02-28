@@ -19,7 +19,7 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     dropSchema: config.get<string>('NODE_ENV') === 'test',
     ssl:
       config.get<string>('NODE_ENV') === 'production'
-        ? { rejectUnauthorized: true }
+        ? { rejectUnauthorized: false }
         : false,
     extra: {
       max: DATABASE_POOL.MAX,
