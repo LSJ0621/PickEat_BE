@@ -8,6 +8,8 @@ import { BugReportStatusHistory } from '../entities/bug-report-status-history.en
 import { BugReportStatus } from '../enum/bug-report-status.enum';
 import { UserService } from '@/user/user.service';
 import { S3Client } from '@/external/aws/clients/s3.client';
+import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook.client';
+import { DiscordMessageBuilderService } from '../services/discord-message-builder.service';
 import { createMockRepository } from '../../../test/mocks/repository.mock';
 import { createMockService } from '../../../test/utils/test-helpers';
 import { createMockS3Client } from '../../../test/mocks/external-clients.mock';
@@ -27,6 +29,8 @@ describe('BugReportService', () => {
   let userService: jest.Mocked<UserService>;
   let s3Client: ReturnType<typeof createMockS3Client>;
   let dataSource: jest.Mocked<DataSource>;
+  let discordWebhookClient: { sendMessage: jest.Mock };
+  let discordMessageBuilderService: { buildImmediateAlertEmbed: jest.Mock };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -34,6 +38,17 @@ describe('BugReportService', () => {
     statusHistoryRepository = createMockRepository<BugReportStatusHistory>();
     userService = createMockService<UserService>(['getAuthenticatedEntity']);
     s3Client = createMockS3Client();
+    discordWebhookClient = {
+      sendMessage: jest.fn().mockResolvedValue(undefined),
+    };
+    discordMessageBuilderService = {
+      buildImmediateAlertEmbed: jest.fn().mockReturnValue({
+        title: 'test',
+        color: 0xff0000,
+        fields: [],
+        timestamp: new Date().toISOString(),
+      }),
+    };
     dataSource = {
       transaction: jest.fn().mockImplementation(async (runInTransaction) => {
         const manager = {
@@ -72,6 +87,14 @@ describe('BugReportService', () => {
         {
           provide: DataSource,
           useValue: dataSource,
+        },
+        {
+          provide: DiscordWebhookClient,
+          useValue: discordWebhookClient,
+        },
+        {
+          provide: DiscordMessageBuilderService,
+          useValue: discordMessageBuilderService,
         },
       ],
     }).compile();
@@ -198,6 +221,80 @@ describe('BugReportService', () => {
 
       // Should only upload first 5 images
       expect(s3Client.uploadBugReportImage).toHaveBeenCalledTimes(5);
+    });
+
+    it('버그 생성 후 Discord 알림을 전송해야 한다', async () => {
+      const user = UserFactory.create();
+      const bugReport = BugReportFactory.create({ user, images: null });
+
+      userService.getAuthenticatedEntity.mockResolvedValue(user);
+      bugReportRepository.create.mockReturnValue(bugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport);
+
+      await service.createBugReport(authUser, dto, []);
+
+      // Flush the void promise so the async notification runs
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(discordMessageBuilderService.buildImmediateAlertEmbed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bugReport: expect.objectContaining({
+            user: expect.objectContaining({ email: authUser.email }),
+          }),
+        }),
+      );
+      expect(discordWebhookClient.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          embeds: expect.arrayContaining([expect.any(Object)]),
+        }),
+      );
+    });
+
+    it('Discord 알림 실패 시에도 버그를 정상 반환해야 한다', async () => {
+      const user = UserFactory.create();
+      const bugReport = BugReportFactory.create({ user, images: null });
+
+      userService.getAuthenticatedEntity.mockResolvedValue(user);
+      bugReportRepository.create.mockReturnValue(bugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport);
+      discordWebhookClient.sendMessage.mockRejectedValue(
+        new Error('Discord 연결 실패'),
+      );
+
+      const result = await service.createBugReport(authUser, dto, []);
+
+      // Flush the void promise so the async notification runs
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(result).toEqual(bugReport);
+    });
+
+    it('Discord 알림 실패 시 에러를 로그에 기록해야 한다', async () => {
+      const user = UserFactory.create();
+      const bugReport = BugReportFactory.create({ user, images: null });
+
+      userService.getAuthenticatedEntity.mockResolvedValue(user);
+      bugReportRepository.create.mockReturnValue(bugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport);
+      discordWebhookClient.sendMessage.mockRejectedValue(
+        new Error('Discord 연결 실패'),
+      );
+
+      const loggerErrorSpy = jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation();
+
+      await service.createBugReport(authUser, dto, []);
+
+      // Flush the void promise so the async notification runs
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Discord 버그리포트 알림 전송 실패'),
+        expect.any(String),
+      );
+
+      loggerErrorSpy.mockRestore();
     });
   });
 
@@ -490,7 +587,7 @@ describe('BugReportService', () => {
 
       await service.updateStatusWithHistory(
         1,
-        BugReportStatus.CLOSED,
+        BugReportStatus.FIXED,
         adminUser,
       );
 

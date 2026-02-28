@@ -8,6 +8,7 @@ import {
   PaginatedResponse,
 } from '@/common/interfaces/pagination.interface';
 import { S3Client } from '@/external/aws/clients/s3.client';
+import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook.client';
 import { User } from '@/user/entities/user.entity';
 import { UserService } from '@/user/user.service';
 import { AdminBugReportDetailDto } from './dto/admin-bug-report-detail.dto';
@@ -16,6 +17,7 @@ import { CreateBugReportDto } from './dto/create-bug-report.dto';
 import { BugReportStatusHistory } from './entities/bug-report-status-history.entity';
 import { BugReport } from './entities/bug-report.entity';
 import { BugReportStatus } from './enum/bug-report-status.enum';
+import { DiscordMessageBuilderService } from './services/discord-message-builder.service';
 
 @Injectable()
 export class BugReportService {
@@ -29,6 +31,8 @@ export class BugReportService {
     private readonly userService: UserService,
     private readonly s3Client: S3Client,
     private readonly dataSource: DataSource,
+    private readonly discordWebhookClient: DiscordWebhookClient,
+    private readonly discordMessageBuilderService: DiscordMessageBuilderService,
   ) {}
 
   async createBugReport(
@@ -66,7 +70,27 @@ export class BugReportService {
       images: imageUrls,
     });
 
-    return await this.bugReportRepository.save(bugReport);
+    const savedBugReport = await this.bugReportRepository.save(bugReport);
+
+    void this.sendDiscordNotification(savedBugReport, authUser.email);
+
+    return savedBugReport;
+  }
+
+  private async sendDiscordNotification(bugReport: BugReport, userEmail: string): Promise<void> {
+    try {
+      const bugReportWithUser = {
+        ...bugReport,
+        user: { email: userEmail },
+      } as BugReport;
+
+      const embed = this.discordMessageBuilderService.buildImmediateAlertEmbed({
+        bugReport: bugReportWithUser,
+      });
+      await this.discordWebhookClient.sendMessage({ embeds: [embed] });
+    } catch (error) {
+      this.logger.error(`Discord 버그리포트 알림 전송 실패 (bugReportId: ${bugReport.id})`, error instanceof Error ? error.stack : String(error));
+    }
   }
 
   /**

@@ -3,36 +3,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AwsModule } from '@/external/aws/aws.module';
 import { DiscordModule } from '@/external/discord/discord.module';
 import { UserModule } from '@/user/user.module';
-import { SchedulerAlertModule } from '@/common/services/scheduler-alert.module';
 import { BugReport } from './entities/bug-report.entity';
-import { BugReportNotification } from './entities/bug-report-notification.entity';
 import { BugReportStatusHistory } from './entities/bug-report-status-history.entity';
 import { BugReportController } from './bug-report.controller';
 import { BugReportService } from './bug-report.service';
 import { AdminBugReportController } from './controllers/admin-bug-report.controller';
-import { BugReportSchedulerService } from './services/bug-report-scheduler.service';
-import { BugReportNotificationService } from './services/bug-report-notification.service';
 import { DiscordMessageBuilderService } from './services/discord-message-builder.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      BugReport,
-      BugReportNotification,
-      BugReportStatusHistory,
-    ]),
+    TypeOrmModule.forFeature([BugReport, BugReportStatusHistory]),
     UserModule,
     AwsModule,
     DiscordModule,
-    SchedulerAlertModule,
   ],
   controllers: [BugReportController, AdminBugReportController],
-  providers: [
-    BugReportService,
-    BugReportSchedulerService,
-    BugReportNotificationService,
-    DiscordMessageBuilderService,
-  ],
+  providers: [BugReportService, DiscordMessageBuilderService],
   exports: [BugReportService, TypeOrmModule],
 })
 export class BugReportModule {}

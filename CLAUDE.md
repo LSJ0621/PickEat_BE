@@ -188,8 +188,7 @@ Each provider has: `{provider}.constants.ts` (URLs, versions), `{provider}.types
 - **MenuSelection**: Daily menu choices (PENDING/IN_PROGRESS/SUCCEEDED/FAILED/CANCELLED)
 - **PlaceRecommendation**: Google Places results
 - **EmailVerification**: Time-limited codes (SIGNUP, RE_REGISTER, PASSWORD_RESET)
-- **BugReport**: Bug reports with file uploads (UNCONFIRMED/CONFIRMED/FIXED/CLOSED)
-- **BugReportNotification**: Bug report notification tracking for Discord webhooks
+- **BugReport**: Bug reports with file uploads (UNCONFIRMED/CONFIRMED/FIXED), immediate Discord notification on creation
 
 ## Path Aliases
 
@@ -244,7 +243,6 @@ import { AuthUserPayload } from '@/auth/interfaces/auth-user-payload.interface';
 - **AI Prompts**: Located in `src/external/openai/prompts/` (menu-recommendation, menu-validation, preference-update, google-places-recommendation)
 - **Scheduled Tasks**: Uses `@nestjs/schedule` with `@Cron()` decorators
   - `BatchSchedulerService` (batch module) - OpenAI Batch API operations for menu recommendations
-  - `BugReportSchedulerService` (bug-report module) - Bug report processing
   - `NotificationSchedulerService` (notification module) - Notification delivery
   - `RatingSchedulerService` (rating/services/) - Place rating updates
 - **Email**: NestJS Mailer with Handlebars templates in `src/auth/templates/`

@@ -7,15 +7,20 @@ import { DiscordWebhookPayload } from '../discord.types';
 @Injectable()
 export class DiscordWebhookClient {
   private readonly logger = new Logger(DiscordWebhookClient.name);
-  private readonly webhookUrl: string;
+  private readonly webhookUrl: string | null;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.webhookUrl = this.configService.getOrThrow<string>(
-      'DISCORD_BUG_REPORT_WEBHOOK_URL',
-    );
+    this.webhookUrl =
+      this.configService.get<string>('DISCORD_BUG_REPORT_WEBHOOK_URL') ?? null;
+
+    if (!this.webhookUrl) {
+      this.logger.warn(
+        'DISCORD_BUG_REPORT_WEBHOOK_URL 환경변수가 설정되지 않았습니다. Discord 알림이 비활성화됩니다.',
+      );
+    }
   }
 
   /**
@@ -23,6 +28,13 @@ export class DiscordWebhookClient {
    * Discord는 부가 기능이므로 실패 시 에러를 throw하지 않고 로깅만 수행
    */
   async sendMessage(payload: DiscordWebhookPayload): Promise<void> {
+    if (!this.webhookUrl) {
+      this.logger.debug(
+        'Discord webhook URL이 설정되지 않아 메시지 전송을 건너뜁니다.',
+      );
+      return;
+    }
+
     try {
       const response = await firstValueFrom(
         this.httpService.post(this.webhookUrl, payload),

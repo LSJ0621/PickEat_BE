@@ -107,6 +107,21 @@ export class UserAddressService {
     const shouldSetSearchAddress =
       activeCount === 0 || isSearchAddress === true;
 
+    const latitude =
+      selectedAddress.latitude && selectedAddress.latitude !== ''
+        ? parseFloat(selectedAddress.latitude)
+        : null;
+    const longitude =
+      selectedAddress.longitude && selectedAddress.longitude !== ''
+        ? parseFloat(selectedAddress.longitude)
+        : null;
+
+    if (latitude === null || longitude === null || isNaN(latitude) || isNaN(longitude)) {
+      throw new BadRequestException({
+        errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
+      });
+    }
+
     const saved = await this.dataSource.transaction(async (manager) => {
       if (shouldSetDefault) {
         await manager.update(
@@ -128,8 +143,8 @@ export class UserAddressService {
         user: entity,
         roadAddress: selectedAddress.roadAddress || selectedAddress.address,
         postalCode: selectedAddress.postalCode,
-        latitude: parseFloat(selectedAddress.latitude),
-        longitude: parseFloat(selectedAddress.longitude),
+        latitude,
+        longitude,
         alias: alias || null,
         isDefault: shouldSetDefault,
         isSearchAddress: shouldSetSearchAddress,
@@ -415,7 +430,7 @@ export class UserAddressService {
         ? parseFloat(selectedAddress.longitude)
         : null;
 
-    if (!latitude || !longitude) {
+    if (latitude === null || longitude === null || isNaN(latitude) || isNaN(longitude)) {
       throw new BadRequestException({
         errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
       });

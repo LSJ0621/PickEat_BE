@@ -61,10 +61,6 @@ export const OPENAI_SETTINGS = {
  * 버그 리포트 알림 관련 상수
  */
 export const BUG_REPORT_NOTIFICATION = {
-  /** 알림 임계값 배열 */
-  THRESHOLDS: [10, 20, 30, 50, 100] as const,
-  /** 스케줄러 알림에 포함할 최근 버그 개수 */
-  RECENT_BUGS_COUNT: 5,
   /** 설명 미리보기 최대 길이 */
   DESCRIPTION_PREVIEW_LENGTH: 100,
 } as const;
@@ -183,6 +179,5 @@ export const SCHEDULER_LOCKS = {
   PREFERENCES_BATCH_RESULT: 'preferences_batch_result',
   PREFERENCES_RETRY: 'preferences_retry_batch',
   NOTIFICATION_PUBLISH: 'notification_publish',
-  BUG_REPORT_CHECK: 'bug_report_check',
   RATING_AGGREGATE_UPDATE: 'rating_aggregate_update',
 } as const;

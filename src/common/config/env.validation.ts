@@ -234,9 +234,6 @@ class EnvironmentVariables {
   @IsString()
   CRON_NOTIFICATION_PUBLISH?: string;
 
-  @IsOptional()
-  @IsString()
-  BUG_REPORT_CHECK_INTERVAL_MS?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

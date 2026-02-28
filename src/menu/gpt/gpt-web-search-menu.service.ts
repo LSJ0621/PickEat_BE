@@ -3,15 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { WEB_SEARCH_CONFIG } from '@/external/openai/openai.constants';
 import {
+  getSystemPrompt,
   buildUserPromptWithAddress,
   buildUserProfile,
   getMenuRecommendationsJsonSchema,
-} from '@/external/openai/prompts/menu-recommendation.prompts';
-import { getSystemPrompt } from '@/external/openai/prompts/menu-recommendation-system.prompts';
-import type { StructuredAnalysis } from '@/user/interfaces/user-taste-analysis.interface';
+  type StructuredAnalysis,
+} from '@/external/openai/prompts';
 import type { ValidationContext } from '@/menu/interfaces/menu-validation.interface';
 import type { WebSearchSummary } from '@/menu/interfaces/web-search-summary.interface';
-import { MenuRecommendationsResponse } from '../interfaces/menu-recommendation.interface';
+import { MenuRecommendationsResponse } from '../interface/menu-recommendation.interface';
 import { ExternalApiException } from '@/common/exceptions/external-api.exception';
 import { OpenAIResponseException } from '@/common/exceptions/openai-response.exception';
 import {
@@ -19,7 +19,6 @@ import {
   removeUrlsFromText,
 } from '@/common/utils/ai-response.util';
 import { retryWithExponentialBackoff } from '@/common/utils/retry.util';
-import { streamingAsyncLocalStorage } from '@/common/utils/retry-context';
 import { WebSearchSummaryService } from './web-search-summary.service';
 
 /**
@@ -86,14 +85,14 @@ export class GptWebSearchMenuService {
     structuredAnalysis?: StructuredAnalysis,
   ): Promise<MenuRecommendationsResponse> {
     // 1. Request start log
-    this.logger.log(`[메뉴 추천 시작] 2-Call 아키텍처`);
-    this.logger.log(`   사용자 주소: ${userAddress || '없음'}`);
-    this.logger.log(`   언어: ${language}`);
-    this.logger.debug(`   사용자 요청: ${prompt.substring(0, 100)}...`);
-    this.logger.debug(`   선호: ${likes.join(', ') || '없음'}`);
-    this.logger.debug(`   비선호: ${dislikes.join(', ') || '없음'}`);
+    this.logger.log(`🚀 [메뉴 추천 시작] 2-Call 아키텍처`);
+    this.logger.log(`   📍 사용자 주소: ${userAddress || '없음'}`);
+    this.logger.log(`   🌐 언어: ${language}`);
+    this.logger.debug(`   💬 사용자 요청: ${prompt.substring(0, 100)}...`);
+    this.logger.debug(`   👍 선호: ${likes.join(', ') || '없음'}`);
+    this.logger.debug(`   👎 비선호: ${dislikes.join(', ') || '없음'}`);
     if (userBirthYear || userGender) {
-      this.logger.debug(`   사용자 프로필: 제공됨`);
+      this.logger.debug(`   👤 사용자 프로필: 제공됨`);
     }
 
     // ============================================================
@@ -112,7 +111,7 @@ export class GptWebSearchMenuService {
 
         if (webSearchSummary) {
           this.logger.log(
-            `[Call A 완료] confidence: ${webSearchSummary.confidence}`,
+            `✅ [Call A 완료] confidence: ${webSearchSummary.confidence}`,
           );
           if (webSearchSummary.localTrends.length > 0) {
             this.logger.debug(
@@ -125,27 +124,22 @@ export class GptWebSearchMenuService {
             );
           }
         } else {
-          this.logger.log(`[Call A 스킵] 웹 검색 조건 불충분`);
+          this.logger.log(`ℹ️ [Call A 스킵] 웹 검색 조건 불충분`);
         }
       } catch (error) {
         this.logger.warn(
-          `[Call A 실패] ${error instanceof Error ? error.message : String(error)} - Call B만 진행`,
+          `⚠️ [Call A 실패] ${error instanceof Error ? error.message : String(error)} - Call B만 진행`,
         );
         // Call A 실패 시 null로 계속 진행
       }
     } else {
-      this.logger.log(`[Call A 스킵] 주소/프로필 정보 없음`);
+      this.logger.log(`ℹ️ [Call A 스킵] 주소/프로필 정보 없음`);
     }
 
     // ============================================================
     // Step 2: Call B - 메뉴 추천 (web_search OFF)
     // ============================================================
-
-    // Notify client that web search is done, now recommending
-    const context = streamingAsyncLocalStorage.getStore();
-    context?.onStatus?.('recommending');
-
-    this.logger.log(`[Call B 시작] 메뉴 추천 생성`);
+    this.logger.log(`🍽️ [Call B 시작] 메뉴 추천 생성`);
 
     const systemPrompt = getSystemPrompt(language);
 
@@ -202,10 +196,10 @@ export class GptWebSearchMenuService {
       const duration = Date.now() - startTime;
 
       // Response success log
-      this.logger.log(`[Call B 완료] 소요 시간: ${duration}ms`);
+      this.logger.log(`✅ [Call B 완료] 소요 시간: ${duration}ms`);
 
       const outputText = response.choices[0]?.message?.content || '';
-      this.logger.debug(`[응답 원문] ${outputText.substring(0, 200)}...`);
+      this.logger.debug(`📝 [응답 원문] ${outputText.substring(0, 200)}...`);
 
       // Parse recommendations
       const parsed = this.parseRecommendationsFromResponse(outputText);
@@ -225,14 +219,14 @@ export class GptWebSearchMenuService {
 
       // Recommendation result log
       const menuNames = parsed.recommendations.map((item) => item.menu);
-      this.logger.log(`[추천 결과]`);
+      this.logger.log(`🍽️ [추천 결과]`);
       this.logger.log(`   메뉴 수: ${parsed.recommendations.length}`);
       this.logger.log(`   추천 메뉴: ${menuNames.join(', ')}`);
       this.logger.log(`   첫 설명: ${parsed.intro.substring(0, 100)}...`);
 
       // Token usage log
       if (response.usage) {
-        this.logger.log(`[Call B 토큰 사용량]`);
+        this.logger.log(`🧮 [Call B 토큰 사용량]`);
         this.logger.log(`   입력: ${response.usage.prompt_tokens}`);
         this.logger.log(`   출력: ${response.usage.completion_tokens}`);
         this.logger.log(`   총계: ${response.usage.total_tokens}`);
@@ -242,7 +236,7 @@ export class GptWebSearchMenuService {
     } catch (error) {
       const duration = Date.now() - startTime;
       // Error log
-      this.logger.error(`[Call B 실패] 소요 시간: ${duration}ms`);
+      this.logger.error(`❌ [Call B 실패] 소요 시간: ${duration}ms`);
       this.logger.error(
         `   에러: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -266,9 +260,48 @@ export class GptWebSearchMenuService {
     try {
       // Try to find JSON in the response
       const jsonMatch = outputText.match(/\{[\s\S]*\}/);
-      const jsonText = jsonMatch ? jsonMatch[0] : outputText;
-      const parsed = JSON.parse(jsonText);
-      return this.buildResponseFromParsed(parsed);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+
+        // Parse structured response format
+        const intro = removeUrlsFromText(parsed.intro || '');
+        const closing = removeUrlsFromText(parsed.closing || '');
+        const recommendationItems = parsed.recommendations || [];
+
+        // Normalize menu names in recommendations
+        const normalizedRecommendations = recommendationItems.map(
+          (item: { condition: string; menu: string }) => ({
+            condition: item.condition,
+            menu: normalizeMenuNames([item.menu])[0],
+          }),
+        );
+
+        return {
+          intro,
+          recommendations: normalizedRecommendations,
+          closing,
+        };
+      }
+
+      // Fallback: try to parse entire response as JSON
+      const parsed = JSON.parse(outputText);
+
+      const intro = removeUrlsFromText(parsed.intro || '');
+      const closing = removeUrlsFromText(parsed.closing || '');
+      const recommendationItems = parsed.recommendations || [];
+
+      const normalizedRecommendations = recommendationItems.map(
+        (item: { condition: string; menu: string }) => ({
+          condition: item.condition,
+          menu: normalizeMenuNames([item.menu])[0],
+        }),
+      );
+
+      return {
+        intro,
+        recommendations: normalizedRecommendations,
+        closing,
+      };
     } catch (error) {
       this.logger.warn(
         `JSON 파싱 실패, 텍스트에서 추출 시도: ${error instanceof Error ? error.message : String(error)}`,
@@ -276,32 +309,6 @@ export class GptWebSearchMenuService {
       // Fallback: extract menus from text
       return this.extractMenusFromText(outputText);
     }
-  }
-
-  /**
-   * 파싱된 JSON 객체에서 MenuRecommendationsResponse 생성
-   */
-  private buildResponseFromParsed(parsed: {
-    intro?: string;
-    closing?: string;
-    recommendations?: Array<{ condition: string; menu: string }>;
-  }): MenuRecommendationsResponse {
-    const intro = removeUrlsFromText(parsed.intro || '');
-    const closing = removeUrlsFromText(parsed.closing || '');
-    const recommendationItems = parsed.recommendations || [];
-
-    const normalizedRecommendations = recommendationItems.map(
-      (item: { condition: string; menu: string }) => ({
-        condition: item.condition,
-        menu: normalizeMenuNames([item.menu])[0],
-      }),
-    );
-
-    return {
-      intro,
-      recommendations: normalizedRecommendations,
-      closing,
-    };
   }
 
   /**
