@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { isTestMode } from '@/common/utils/test-mode.util';
 import { EMAIL_CONTENT } from '../constants/email-content.constants';
 import { UserService } from '@/user/user.service';
@@ -41,7 +42,9 @@ export class EmailNotificationService {
       !emailPassword
     ) {
       this.logger.error('Email configuration is missing');
-      throw new InternalServerErrorException('Email configuration error');
+      throw new InternalServerErrorException({
+        errorCode: ErrorCode.AUTH_EMAIL_CONFIG_ERROR,
+      });
     }
   }
 
@@ -86,9 +89,9 @@ export class EmailNotificationService {
       this.logger.error(
         `Failed to send verification email to ${email}: ${message}`,
       );
-      throw new InternalServerErrorException(
-        'Failed to send verification email',
-      );
+      throw new InternalServerErrorException({
+        errorCode: ErrorCode.AUTH_EMAIL_CONFIG_ERROR,
+      });
     }
   }
 

@@ -1,3 +1,5 @@
+import { Role } from '@/common/constants/roles.constants';
+
 export class AdminUserDetailDto {
   id: number;
   email: string;
@@ -8,6 +10,7 @@ export class AdminUserDetailDto {
   updatedAt: string;
   deletedAt: string | null;
   isDeactivated: boolean;
+  role: Role;
   preferences: {
     likes: string[];
     dislikes: string[];

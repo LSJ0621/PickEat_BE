@@ -175,7 +175,9 @@ export class AdminUserService {
   ): Promise<void> {
     // 자기 자신 비활성화 방지
     if (id === requestUserId) {
-      throw new BadRequestException('자기 자신을 비활성화할 수 없습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.ADMIN_SELF_DEACTIVATION,
+      });
     }
 
     // 대상 사용자 조회
@@ -188,12 +190,16 @@ export class AdminUserService {
 
     // SUPER_ADMIN 비활성화 방지
     if (targetUser.role === ROLES.SUPER_ADMIN) {
-      throw new ForbiddenException('SUPER_ADMIN은 비활성화할 수 없습니다');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ADMIN_CANNOT_MODIFY_SUPER_ADMIN,
+      });
     }
 
     // ADMIN은 USER만 비활성화 가능
     if (requestUserRole === ROLES.ADMIN && targetUser.role !== ROLES.USER) {
-      throw new ForbiddenException('ADMIN은 USER만 비활성화할 수 있습니다');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS,
+      });
     }
 
     const result = await this.userRepository.update(
@@ -226,7 +232,9 @@ export class AdminUserService {
   ): Promise<void> {
     // 자기 자신 활성화 방지
     if (id === requestUserId) {
-      throw new BadRequestException('자기 자신을 활성화할 수 없습니다');
+      throw new BadRequestException({
+        errorCode: ErrorCode.ADMIN_SELF_ACTIVATION,
+      });
     }
 
     // 대상 사용자 조회
@@ -239,12 +247,16 @@ export class AdminUserService {
 
     // SUPER_ADMIN 활성화 방지
     if (targetUser.role === ROLES.SUPER_ADMIN) {
-      throw new ForbiddenException('SUPER_ADMIN은 활성화할 수 없습니다');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ADMIN_CANNOT_MODIFY_SUPER_ADMIN,
+      });
     }
 
     // ADMIN은 USER만 활성화 가능
     if (requestUserRole === ROLES.ADMIN && targetUser.role !== ROLES.USER) {
-      throw new ForbiddenException('ADMIN은 USER만 활성화할 수 있습니다');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS,
+      });
     }
 
     const result = await this.userRepository.update(
@@ -330,6 +342,7 @@ export class AdminUserService {
       updatedAt: user.updatedAt.toISOString(),
       deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
       isDeactivated: user.isDeactivated,
+      role: user.role as Role,
       preferences: user.preferences
         ? {
             likes: user.preferences.likes,

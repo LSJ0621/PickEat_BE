@@ -111,6 +111,25 @@ export class UserService {
       .execute();
   }
 
+  async updateLoginTimestamps(userId: number): Promise<void> {
+    const now = new Date();
+    await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ lastLoginAt: now, lastActiveAt: now })
+      .where('id = :id', { id: userId })
+      .execute();
+  }
+
+  async updateLastActiveAt(userId: number): Promise<void> {
+    await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ lastActiveAt: new Date() })
+      .where('id = :id', { id: userId })
+      .execute();
+  }
+
   async restoreSocialUser(email: string): Promise<void> {
     await this.userRepository.update(
       { email },

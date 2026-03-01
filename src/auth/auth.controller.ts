@@ -114,7 +114,9 @@ export class AuthController {
   async login(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const user = (req as Request & { user: User }).user;
     if (!user?.id) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException({
+        errorCode: ErrorCode.UNAUTHORIZED,
+      });
     }
     const result = await this.authService.buildAuthResult(user);
     return this.handleAuthSuccess(res, result);
@@ -235,9 +237,9 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH_TOKEN_NAME];
     if (!refreshToken) {
-      throw new UnauthorizedException(
-        ErrorCode.AUTH_REFRESH_TOKEN_COOKIE_MISSING,
-      );
+      throw new UnauthorizedException({
+        errorCode: ErrorCode.AUTH_REFRESH_TOKEN_COOKIE_MISSING,
+      });
     }
     const tokens = await this.authService.refreshAccessToken(refreshToken);
     this.setRefreshTokenCookie(res, tokens.refreshToken);

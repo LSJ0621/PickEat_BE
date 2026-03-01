@@ -366,6 +366,9 @@ export class AuthService {
     const { token, refreshToken } =
       await this.authTokenService.issueTokens(entity);
 
+    // 로그인 시점 기록 (lastLoginAt + lastActiveAt)
+    await this.userService.updateLoginTimestamps(entity.id);
+
     const defaultAddress =
       await this.userService.getEntityDefaultAddress(entity);
     const addressResponse = this.buildAddressResponse(entity, defaultAddress);

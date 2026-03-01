@@ -59,9 +59,9 @@ export class S3Client {
       originalName.includes('\0') ||
       originalName.includes('\\')
     ) {
-      throw new BadRequestException(
-        'Invalid filename: path traversal detected',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.EXTERNAL_S3_INVALID_FILENAME,
+      });
     }
 
     // 디렉토리 경로 제거 (basename만 추출)
@@ -69,7 +69,9 @@ export class S3Client {
 
     // 파일명이 비어있거나 점(.)만 있는 경우 차단
     if (!safeFilename || safeFilename === '.' || safeFilename === '..') {
-      throw new BadRequestException('Invalid filename');
+      throw new BadRequestException({
+        errorCode: ErrorCode.EXTERNAL_S3_INVALID_FILENAME,
+      });
     }
 
     // 확장자 추출
@@ -83,9 +85,9 @@ export class S3Client {
     // 허용된 이미지 확장자만 허용 (whitelist)
     const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'];
     if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
-      throw new BadRequestException(
-        `Invalid file extension. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.EXTERNAL_S3_INVALID_FILENAME,
+      });
     }
 
     return fileExtension;

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { User } from '@/user/entities/user.entity';
 import { ADMIN_ROLES, Role, ROLES } from '@/common/constants/roles.constants';
 import { AdminAuditLog } from './entities/admin-audit-log.entity';
@@ -54,13 +55,15 @@ export class AdminSettingsService {
     ipAddress: string,
   ): Promise<void> {
     if (!userId && !email) {
-      throw new BadRequestException('Either userId or email must be provided');
+      throw new BadRequestException({
+        errorCode: ErrorCode.VALIDATION_ERROR,
+      });
     }
 
     if (userId && email) {
-      throw new BadRequestException(
-        'Provide only one identifier: userId or email, not both',
-      );
+      throw new BadRequestException({
+        errorCode: ErrorCode.VALIDATION_ERROR,
+      });
     }
 
     const user = await this.userRepository.findOne({
@@ -68,11 +71,22 @@ export class AdminSettingsService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
+    }
+
+    // SUPER_ADMIN으로의 승격 방지
+    if (role === ROLES.SUPER_ADMIN) {
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ADMIN_CANNOT_MODIFY_SUPER_ADMIN,
+      });
     }
 
     if (user.role === role) {
-      throw new BadRequestException(`User is already ${role}`);
+      throw new BadRequestException({
+        errorCode: ErrorCode.ADMIN_UPDATE_NO_FIELDS,
+      });
     }
 
     const previousRole = user.role;
@@ -102,21 +116,29 @@ export class AdminSettingsService {
     ipAddress: string,
   ): Promise<void> {
     if (userId === currentAdmin.id) {
-      throw new ForbiddenException('Cannot remove your own admin role');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ADMIN_SELF_ROLE_CHANGE,
+      });
     }
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     if (user.role === ROLES.USER) {
-      throw new BadRequestException('User is not an admin');
+      throw new BadRequestException({
+        errorCode: ErrorCode.VALIDATION_ERROR,
+      });
     }
 
     if (user.role === ROLES.SUPER_ADMIN) {
-      throw new ForbiddenException('SUPER_ADMIN 역할은 강등할 수 없습니다');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.ADMIN_CANNOT_MODIFY_SUPER_ADMIN,
+      });
     }
 
     const previousRole = user.role;

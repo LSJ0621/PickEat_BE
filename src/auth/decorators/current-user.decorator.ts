@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 
 export interface AuthUserPayload {
   sub: number;
@@ -14,7 +15,9 @@ export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthUserPayload => {
     const request = ctx.switchToHttp().getRequest<{ user?: AuthUserPayload }>();
     if (!request.user || !request.user.sub || !request.user.email) {
-      throw new UnauthorizedException('Invalid authentication payload');
+      throw new UnauthorizedException({
+        errorCode: ErrorCode.AUTH_INVALID_PAYLOAD,
+      });
     }
     return request.user;
   },

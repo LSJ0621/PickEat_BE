@@ -10,6 +10,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -56,7 +57,9 @@ export class AdminSettingsController {
   ): Promise<{ message: string }> {
     const adminUser = await this.userService.findByEmail(user.email);
     if (!adminUser) {
-      throw new NotFoundException('Admin user not found');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     const ipAddress = this.getClientIp(req);
@@ -83,7 +86,9 @@ export class AdminSettingsController {
   ): Promise<{ message: string }> {
     const adminUser = await this.userService.findByEmail(user.email);
     if (!adminUser) {
-      throw new NotFoundException('Admin user not found');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     const ipAddress = this.getClientIp(req);

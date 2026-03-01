@@ -13,7 +13,7 @@ import {
 } from 'class-validator';
 import { ROLES } from '@/common/constants/roles.constants';
 
-const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN] as const;
+const ADMIN_ROLES = [ROLES.ADMIN] as const;
 type AdminRole = (typeof ADMIN_ROLES)[number];
 
 @ValidatorConstraint({ name: 'atLeastOneIdentifier', async: false })

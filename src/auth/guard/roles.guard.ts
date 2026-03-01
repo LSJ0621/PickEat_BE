@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { SUPER_ADMIN_KEY } from '../decorators/super-admin.decorator';
 import { ROLES } from '@/common/constants/roles.constants';
@@ -32,13 +33,15 @@ export class RolesGuard implements CanActivate {
     // Check super admin only restriction first
     if (superAdminOnly) {
       if (!user || !user.role) {
-        throw new ForbiddenException('User role not found');
+        throw new ForbiddenException({
+          errorCode: ErrorCode.AUTH_ROLE_NOT_FOUND,
+        });
       }
 
       if (user.role !== ROLES.SUPER_ADMIN) {
-        throw new ForbiddenException(
-          'This action requires Super Admin privileges',
-        );
+        throw new ForbiddenException({
+          errorCode: ErrorCode.ADMIN_SUPER_ADMIN_REQUIRED,
+        });
       }
 
       return true;
@@ -49,12 +52,16 @@ export class RolesGuard implements CanActivate {
     }
 
     if (!user || !user.role) {
-      throw new ForbiddenException('User role not found');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.AUTH_ROLE_NOT_FOUND,
+      });
     }
 
     const hasRole = requiredRoles.some((role) => user.role === role);
     if (!hasRole) {
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenException({
+        errorCode: ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS,
+      });
     }
 
     return true;

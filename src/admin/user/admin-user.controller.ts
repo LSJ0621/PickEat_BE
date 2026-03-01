@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { ErrorCode } from '@/common/constants/error-codes';
 import { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { MessageCode } from '@/common/constants/message-codes';
@@ -44,7 +45,9 @@ export class AdminUserController {
   ): Promise<PaginatedResponse<AdminUserListItemDto>> {
     const requestUser = await this.userService.findByEmail(user.email);
     if (!requestUser) {
-      throw new NotFoundException('요청자를 찾을 수 없습니다');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     return this.adminUserService.findAll(query, requestUser.role as Role);
@@ -65,7 +68,9 @@ export class AdminUserController {
   ): Promise<{ success: boolean; messageCode: string }> {
     const requestUser = await this.userService.findByEmail(user.email);
     if (!requestUser) {
-      throw new NotFoundException('요청자를 찾을 수 없습니다');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     const ipAddress = this.getClientIp(req);
@@ -89,7 +94,9 @@ export class AdminUserController {
   ): Promise<{ success: boolean; messageCode: string }> {
     const requestUser = await this.userService.findByEmail(user.email);
     if (!requestUser) {
-      throw new NotFoundException('요청자를 찾을 수 없습니다');
+      throw new NotFoundException({
+        errorCode: ErrorCode.ADMIN_USER_NOT_FOUND,
+      });
     }
 
     const ipAddress = this.getClientIp(req);

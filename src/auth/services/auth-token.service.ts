@@ -150,7 +150,7 @@ export class AuthTokenService {
       await queryRunner.manager
         .createQueryBuilder()
         .update(User)
-        .set({ refreshToken: hashedNewToken })
+        .set({ refreshToken: hashedNewToken, lastActiveAt: new Date() })
         .where('id = :id', { id: user.id })
         .execute();
 
@@ -171,7 +171,9 @@ export class AuthTokenService {
       if (error instanceof Error && error.message === 'jwt expired') {
         this.logger.warn('Refresh token 만료');
       }
-      throw new UnauthorizedException('유효하지 않은 refresh token입니다.');
+      throw new UnauthorizedException({
+        errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
+      });
     } finally {
       // Release the query runner
       await queryRunner.release();

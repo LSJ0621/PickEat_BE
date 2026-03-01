@@ -145,7 +145,9 @@ export class GoogleOAuthClient {
           token_type: 'bearer',
         };
       case OAUTH_CODES.INVALID:
-        throw new UnauthorizedException('Invalid authorization code');
+        throw new UnauthorizedException({
+          errorCode: ErrorCode.AUTH_INVALID_AUTHORIZATION_CODE,
+        });
       default:
         return null;
     }

@@ -296,7 +296,9 @@ export class AdminUserPlaceService {
       files.length > 0;
 
     if (!hasAnyField) {
-      throw new BadRequestException('No fields provided for update');
+      throw new BadRequestException({
+        errorCode: ErrorCode.ADMIN_UPDATE_NO_FIELDS,
+      });
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
