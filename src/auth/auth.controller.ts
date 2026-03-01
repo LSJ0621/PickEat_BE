@@ -121,6 +121,7 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Get('check-email')
   async checkEmail(@Query() checkEmailDto: CheckEmailDto) {
     return this.authService.checkEmail(checkEmailDto.email);
@@ -143,6 +144,7 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('email/verify-code')
   async verifyEmailCode(@Body() verifyEmailCodeDto: VerifyEmailCodeDto) {
     const purpose = verifyEmailCodeDto.purpose ?? EmailPurpose.SIGNUP;
@@ -195,6 +197,7 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('password/reset/verify-code')
   async verifyResetPasswordCode(
     @Body() verifyResetPasswordCodeDto: VerifyResetPasswordCodeDto,
@@ -207,6 +210,7 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('password/reset')
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     await this.authService.resetPassword(resetPasswordDto);
@@ -223,6 +227,7 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
   async refreshToken(
     @Req() req: Request,
@@ -240,6 +245,7 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('logout')
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(
@@ -252,12 +258,14 @@ export class AuthController {
   }
 
   /** @public */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('re-register')
   async reRegister(@Body() reRegisterDto: ReRegisterDto) {
     return this.authService.reRegister(reRegisterDto);
   }
 
   /** @public */
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('re-register/social')
   async reRegisterSocial(@Body() reRegisterSocialDto: ReRegisterSocialDto) {
     return this.authService.reRegisterSocial(reRegisterSocialDto);
@@ -273,8 +281,8 @@ export class AuthController {
   private setRefreshTokenCookie(res: Response, refreshToken: string) {
     res.cookie(AUTH_COOKIE.REFRESH_TOKEN_NAME, refreshToken, {
       httpOnly: true,
-      secure: this.configService.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
+      secure: true,
+      sameSite: 'none',
       path: '/',
       maxAge: AUTH_TIMING.COOKIE_MAX_AGE_MS,
     });
@@ -283,8 +291,8 @@ export class AuthController {
   private clearRefreshTokenCookie(res: Response) {
     res.clearCookie(AUTH_COOKIE.REFRESH_TOKEN_NAME, {
       httpOnly: true,
-      secure: this.configService.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
+      secure: true,
+      sameSite: 'none',
       path: '/',
     });
   }
