@@ -51,6 +51,8 @@ export class UserService {
     role?: string;
     name?: string | null;
     preferredLanguage?: 'ko' | 'en';
+    birthDate?: string;
+    gender?: 'male' | 'female' | 'other';
   }): Promise<User> {
     const user = this.userRepository.create({
       email: userData.email,
@@ -58,6 +60,8 @@ export class UserService {
       role: userData.role,
       name: userData.name ?? undefined,
       preferredLanguage: userData.preferredLanguage ?? 'ko',
+      birthDate: userData.birthDate ?? undefined,
+      gender: userData.gender ?? undefined,
     });
     return this.userRepository.save(user);
   }

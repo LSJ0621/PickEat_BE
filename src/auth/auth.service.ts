@@ -16,6 +16,8 @@ import { UserAddress } from '@/user/entities/user-address.entity';
 import { User } from '@/user/entities/user.entity';
 import { EmailVerification } from './entities/email-verification.entity';
 import { UserService } from '@/user/user.service';
+import { UserPreferenceService } from '@/user/services/user-preference.service';
+import { UserAddressService } from '@/user/services/user-address.service';
 import { LoginDto } from './dto/login.dto';
 import { ReRegisterSocialDto } from './dto/re-register-social.dto';
 import { ReRegisterDto } from './dto/re-register.dto';
@@ -44,6 +46,8 @@ export class AuthService {
     private readonly authPasswordService: AuthPasswordService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly cacheService: RedisCacheService,
+    private readonly userPreferenceService: UserPreferenceService,
+    private readonly userAddressService: UserAddressService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
@@ -127,6 +131,8 @@ export class AuthService {
       role: 'USER',
       name: registerDto.name,
       preferredLanguage: lang || 'ko',
+      birthDate: registerDto.birthDate,
+      gender: registerDto.gender,
     });
 
     await this.userService.markEmailVerified(registerDto.email);
@@ -374,16 +380,45 @@ export class AuthService {
       await this.userService.getEntityDefaultAddress(entity);
     const addressResponse = this.buildAddressResponse(entity, defaultAddress);
 
-    return {
+    const profileData = {
       email: entity.email,
-      token,
-      ...addressResponse,
       name: this.nullableString(entity.name),
-      preferences: entity.preferences ?? null,
+      address: addressResponse.address,
+      latitude: addressResponse.latitude,
+      longitude: addressResponse.longitude,
       birthDate: entity.birthDate ?? null,
       gender: entity.gender ?? null,
       preferredLanguage: entity.preferredLanguage,
     };
+
+    const authResult: AuthResult = {
+      ...profileData,
+      token,
+      preferences: entity.preferences ?? null,
+    };
+
+    // Eager Cache Warming (fire-and-forget, 로그인 응답 지연 없음)
+    this.cacheService
+      .setUserProfile(entity.id, profileData)
+      .catch((err) =>
+        this.logger.warn(`로그인 프로필 캐시 실패: ${err.message}`),
+      );
+
+    // getPreferences()는 UserTasteAnalysis DB 조회를 포함하며,
+    // 로그인 시 전체 취향 캐시를 warm하기 위해 이 비용을 수용한다.
+    this.userPreferenceService
+      .getPreferences(entity)
+      .catch((err) =>
+        this.logger.warn(`로그인 취향 캐시 실패: ${err.message}`),
+      );
+
+    this.userAddressService
+      .getAddresses(entity)
+      .catch((err) =>
+        this.logger.warn(`로그인 주소 캐시 실패: ${err.message}`),
+      );
+
+    return authResult;
   }
 
   // ========== Private Helper ==========
