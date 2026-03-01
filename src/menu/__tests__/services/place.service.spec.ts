@@ -924,10 +924,10 @@ describe('PlaceService', () => {
       };
 
       mockMenuRecommendationService.findById.mockResolvedValue(menuRecord);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (mockGeminiPlacesService.recommendRestaurants as jest.Mock).mockResolvedValue(
-        geminiRecommendationsWithNullPlaceIds,
-      );
+
+      (
+        mockGeminiPlacesService.recommendRestaurants as jest.Mock
+      ).mockResolvedValue(geminiRecommendationsWithNullPlaceIds);
       mockPlaceRecommendationRepository.save.mockResolvedValue(
         [] as unknown as PlaceRecommendation & PlaceRecommendation[],
       );
@@ -1103,7 +1103,9 @@ describe('PlaceService', () => {
         (data) => data as PlaceRecommendation,
       );
       // Reject with a non-Error object to hit the String(error) branch
-      mockPlaceRecommendationRepository.save.mockRejectedValue({ code: 'DB_ERROR' });
+      mockPlaceRecommendationRepository.save.mockRejectedValue({
+        code: 'DB_ERROR',
+      });
 
       await expect(
         service.recommendRestaurants(
@@ -1398,8 +1400,10 @@ describe('PlaceService', () => {
         placeRecommendations: undefined,
       });
 
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation, 'ko');
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'ko',
+      );
 
       expect(result.history.hasPlaceRecommendations).toBe(false);
       expect(result.places).toEqual([]);
@@ -1430,8 +1434,10 @@ describe('PlaceService', () => {
 
       mockUserPlaceRepository.find.mockResolvedValue([userPlace as UserPlace]);
 
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation, 'ko');
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'ko',
+      );
 
       expect(result.places[0].reasonTags).toEqual([]);
     });
@@ -1455,8 +1461,10 @@ describe('PlaceService', () => {
 
       mockUserPlaceRepository.find.mockResolvedValue([]);
 
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation, 'en');
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'en',
+      );
 
       expect(result.places[0].name).toBe('Korean Restaurant');
       expect(result.places[0].address).toBe('Gangnam-gu, Seoul');
@@ -1485,8 +1493,10 @@ describe('PlaceService', () => {
 
       mockUserPlaceRepository.find.mockResolvedValue([]);
 
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation, 'ko');
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'ko',
+      );
 
       // nameLocal takes precedence over fallback
       expect(result.places[0].localizedName).toBe('すし屋');
@@ -1509,8 +1519,10 @@ describe('PlaceService', () => {
 
       mockUserPlaceRepository.find.mockResolvedValue([]);
 
-      const result =
-        await service.buildRecommendationDetailResponse(recommendation, 'ko');
+      const result = await service.buildRecommendationDetailResponse(
+        recommendation,
+        'ko',
+      );
 
       expect(result.places[0].source).toBe(PlaceRecommendationSource.GEMINI);
     });

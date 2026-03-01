@@ -248,7 +248,10 @@ describe('AdminSettingsService', () => {
     });
 
     it('should throw BadRequestException when neither userId nor email is provided (line 57)', async () => {
-      const currentAdmin = UserFactory.create({ id: 2, role: ROLES.SUPER_ADMIN });
+      const currentAdmin = UserFactory.create({
+        id: 2,
+        role: ROLES.SUPER_ADMIN,
+      });
       const ipAddress = '127.0.0.1';
 
       await expect(
@@ -266,7 +269,10 @@ describe('AdminSettingsService', () => {
     });
 
     it('should throw BadRequestException when both userId and email are provided (line 61)', async () => {
-      const currentAdmin = UserFactory.create({ id: 2, role: ROLES.SUPER_ADMIN });
+      const currentAdmin = UserFactory.create({
+        id: 2,
+        role: ROLES.SUPER_ADMIN,
+      });
       const ipAddress = '127.0.0.1';
 
       await expect(
@@ -286,8 +292,15 @@ describe('AdminSettingsService', () => {
     });
 
     it('should find user by email when userId is not provided', async () => {
-      const user = UserFactory.create({ id: 1, email: 'user@example.com', role: ROLES.USER });
-      const currentAdmin = UserFactory.create({ id: 2, role: ROLES.SUPER_ADMIN });
+      const user = UserFactory.create({
+        id: 1,
+        email: 'user@example.com',
+        role: ROLES.USER,
+      });
+      const currentAdmin = UserFactory.create({
+        id: 2,
+        role: ROLES.SUPER_ADMIN,
+      });
       const ipAddress = '127.0.0.1';
       userRepository.findOne.mockResolvedValue(user);
       userRepository.save.mockResolvedValue({ ...user, role: ROLES.ADMIN });

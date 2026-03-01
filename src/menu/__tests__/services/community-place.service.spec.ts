@@ -1084,11 +1084,14 @@ describe('CommunityPlaceService', () => {
         savedRecommendation,
       );
       // Reject with a non-Error object to hit the String(error) branch (line 186)
-      mockPlaceRecommendationRepository.save.mockRejectedValue(
-        { code: 'DB_CONSTRAINT_ERROR', errno: 1062 },
-      );
+      mockPlaceRecommendationRepository.save.mockRejectedValue({
+        code: 'DB_CONSTRAINT_ERROR',
+        errno: 1062,
+      });
 
-      const { BadRequestException: BadRequestExc } = await import('@nestjs/common');
+      const { BadRequestException: BadRequestExc } = await import(
+        '@nestjs/common'
+      );
       await expect(
         service.recommendCommunityPlaces(
           user,

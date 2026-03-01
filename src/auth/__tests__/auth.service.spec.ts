@@ -38,7 +38,6 @@ describe('AuthService', () => {
     reRegisterEmailVerified: false,
     preferences: null,
     tasteAnalysis: null,
-    refreshToken: null,
     socialId: null,
     socialType: null,
     isDeactivated: false,

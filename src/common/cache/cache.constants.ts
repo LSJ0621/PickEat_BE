@@ -10,6 +10,8 @@ export const CACHE_TTL = {
   WEB_SEARCH_SUMMARY: 7 * 24 * 60 * 60,
   /** 사용자 프로필 - 30분 */
   USER_PROFILE: 30 * 60,
+  /** Refresh Token - 7일 */
+  REFRESH_TOKEN: 7 * 24 * 60 * 60,
 } as const;
 
 /**
@@ -29,4 +31,6 @@ export const CACHE_KEY = {
     gender: string,
     month: string,
   ) => `ai:websearch:${region}:${ageGroup}:${gender}:${month}`,
+  /** Refresh Token 키 */
+  refreshToken: (userId: number) => `auth:refresh:${userId}`,
 } as const;

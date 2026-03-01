@@ -615,8 +615,8 @@ describe('TwoStageMenuService', () => {
         analysis,
         'ko',
         '서울시 강남구', // userAddress
-        1990,            // userBirthYear (triggers line 92 logging)
-        'female',        // userGender (triggers line 92 logging)
+        1990, // userBirthYear (triggers line 92 logging)
+        'female', // userGender (triggers line 92 logging)
       );
 
       expect(result).toEqual(menuResult);
@@ -666,7 +666,7 @@ describe('TwoStageMenuService', () => {
         undefined,
         'ko',
         undefined, // no userAddress
-        1985,      // only userBirthYear → triggers web search but not "프로필 제공됨" alone
+        1985, // only userBirthYear → triggers web search but not "프로필 제공됨" alone
         undefined, // no userGender
       );
 
@@ -713,7 +713,7 @@ describe('TwoStageMenuService', () => {
         'ko',
         undefined, // no userAddress
         undefined, // no userBirthYear
-        'male',    // only userGender → triggers line 92 logging AND line 99 web search
+        'male', // only userGender → triggers line 92 logging AND line 99 web search
       );
 
       expect(result).toEqual(menuResult);

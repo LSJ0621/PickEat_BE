@@ -39,7 +39,6 @@ describe('AdminUserController', () => {
     reRegisterEmailVerified: false,
     preferences: null,
     preferredLanguage: 'ko',
-    refreshToken: null,
     socialId: null,
     socialType: null,
     lastPasswordChangedAt: null,
@@ -155,9 +154,9 @@ describe('AdminUserController', () => {
       const query: AdminUserListQueryDto = {};
       mockUserService.findByEmail.mockResolvedValue(null);
 
-      await expect(
-        controller.findAll(query, mockAdminPayload),
-      ).rejects.toThrow(NotFoundException);
+      await expect(controller.findAll(query, mockAdminPayload)).rejects.toThrow(
+        NotFoundException,
+      );
 
       expect(mockAdminUserService.findAll).not.toHaveBeenCalled();
     });

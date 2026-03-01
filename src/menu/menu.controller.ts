@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Body,
   Controller,
   Get,
@@ -43,6 +44,8 @@ import { PlaceService } from './services/place.service';
 @Controller('menu')
 @UseGuards(JwtAuthGuard)
 export class MenuController {
+  private readonly logger = new Logger(MenuController.name);
+
   constructor(
     private readonly menuService: MenuService,
     private readonly userService: UserService,
@@ -293,23 +296,23 @@ export class MenuController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const logger = new Logger('MenuController');
-    const sendEvent = (event: Record<string, unknown>) => {
-      logger.debug(`[SSE-DEBUG] sendEvent: ${JSON.stringify(event)}`);
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    let clientDisconnected = false;
+    const abortController = new AbortController();
+
+    const safeSendEvent = (event: Record<string, unknown>) => {
+      if (!clientDisconnected && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
     };
 
-    const abortController = new AbortController();
     const closeHandler = () => {
-      if (!res.writableEnded) {
-        abortController.abort();
-      }
+      clientDisconnected = true;
     };
     req.on('close', closeHandler);
 
     const timeout = setTimeout(() => {
       if (!res.writableEnded) {
-        sendEvent({ type: 'error', message: 'Server timeout' });
+        safeSendEvent({ type: 'error', message: 'Server timeout' });
         abortController.abort();
       }
     }, SSE_CONFIG.SERVER_TIMEOUT_MS);
@@ -322,18 +325,26 @@ export class MenuController {
       if (abortController.signal.aborted) return;
       const result = await streamingAsyncLocalStorage.run(
         {
-          onRetry: (attempt) => sendEvent({ type: 'retrying', attempt }),
-          onStatus: (status) => sendEvent({ type: 'status', status }),
+          onRetry: (attempt) => safeSendEvent({ type: 'retrying', attempt }),
+          onStatus: (status) => safeSendEvent({ type: 'status', status }),
           signal: abortController.signal,
         },
         () => this.menuService.recommend(entity, recommendMenuDto.prompt),
       );
-      sendEvent({ type: 'result', data: result });
+      safeSendEvent({ type: 'result', data: result });
     } catch (error) {
       if (!isAbortError(error) && !res.writableEnded) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';
-        sendEvent({ type: 'error', message });
+        const errorCode =
+          error instanceof HttpException
+            ? ((error.getResponse() as Record<string, unknown>)?.errorCode as string | undefined)
+            : undefined;
+        safeSendEvent({
+          type: 'error',
+          message,
+          ...(errorCode && { errorCode }),
+        });
       }
     } finally {
       clearTimeout(timeout);
@@ -357,20 +368,23 @@ export class MenuController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const sendEvent = (event: Record<string, unknown>) =>
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-
+    let clientDisconnected = false;
     const abortController = new AbortController();
-    const closeHandler = () => {
-      if (!res.writableEnded) {
-        abortController.abort();
+
+    const safeSendEvent = (event: Record<string, unknown>) => {
+      if (!clientDisconnected && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
+    };
+
+    const closeHandler = () => {
+      clientDisconnected = true;
     };
     req.on('close', closeHandler);
 
     const timeout = setTimeout(() => {
       if (!res.writableEnded) {
-        sendEvent({ type: 'error', message: 'Server timeout' });
+        safeSendEvent({ type: 'error', message: 'Server timeout' });
         abortController.abort();
       }
     }, SSE_CONFIG.SERVER_TIMEOUT_MS);
@@ -392,12 +406,12 @@ export class MenuController {
 
       const result = await streamingAsyncLocalStorage.run(
         {
-          onRetry: (attempt) => sendEvent({ type: 'retrying', attempt }),
-          onStatus: (status) => sendEvent({ type: 'status', status }),
+          onRetry: (attempt) => safeSendEvent({ type: 'retrying', attempt }),
+          onStatus: (status) => safeSendEvent({ type: 'status', status }),
           signal: abortController.signal,
         },
         async () => {
-          sendEvent({ type: 'status', status: 'searching' });
+          safeSendEvent({ type: 'status', status: 'searching' });
           return this.placeService.recommendRestaurants(
             entity,
             textQuery,
@@ -412,12 +426,20 @@ export class MenuController {
       const language = parseLanguage(entity.preferredLanguage);
       const response: PlaceRecommendationResponse =
         this.mapGeminiRecommendationResponse(result, language);
-      sendEvent({ type: 'result', data: response });
+      safeSendEvent({ type: 'result', data: response });
     } catch (error) {
       if (!isAbortError(error) && !res.writableEnded) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';
-        sendEvent({ type: 'error', message });
+        const errorCode =
+          error instanceof HttpException
+            ? ((error.getResponse() as Record<string, unknown>)?.errorCode as string | undefined)
+            : undefined;
+        safeSendEvent({
+          type: 'error',
+          message,
+          ...(errorCode && { errorCode }),
+        });
       }
     } finally {
       clearTimeout(timeout);
@@ -440,20 +462,23 @@ export class MenuController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    const sendEvent = (event: Record<string, unknown>) =>
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-
+    let clientDisconnected = false;
     const abortController = new AbortController();
-    const closeHandler = () => {
-      if (!res.writableEnded) {
-        abortController.abort();
+
+    const safeSendEvent = (event: Record<string, unknown>) => {
+      if (!clientDisconnected && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
+    };
+
+    const closeHandler = () => {
+      clientDisconnected = true;
     };
     req.on('close', closeHandler);
 
     const timeout = setTimeout(() => {
       if (!res.writableEnded) {
-        sendEvent({ type: 'error', message: 'Server timeout' });
+        safeSendEvent({ type: 'error', message: 'Server timeout' });
         abortController.abort();
       }
     }, SSE_CONFIG.SERVER_TIMEOUT_MS);
@@ -476,12 +501,12 @@ export class MenuController {
 
       const placeRecommendations = await streamingAsyncLocalStorage.run(
         {
-          onRetry: (attempt) => sendEvent({ type: 'retrying', attempt }),
-          onStatus: (status) => sendEvent({ type: 'status', status }),
+          onRetry: (attempt) => safeSendEvent({ type: 'retrying', attempt }),
+          onStatus: (status) => safeSendEvent({ type: 'status', status }),
           signal: abortController.signal,
         },
         async () => {
-          sendEvent({ type: 'status', status: 'searching' });
+          safeSendEvent({ type: 'status', status: 'searching' });
           return this.communityPlaceService.recommendCommunityPlaces(
             entity,
             dto.latitude,
@@ -504,12 +529,20 @@ export class MenuController {
           userPlaceId: rec.userPlace?.id || undefined,
         })),
       };
-      sendEvent({ type: 'result', data: response });
+      safeSendEvent({ type: 'result', data: response });
     } catch (error) {
       if (!isAbortError(error) && !res.writableEnded) {
         const message =
           error instanceof Error ? error.message : 'Unknown error';
-        sendEvent({ type: 'error', message });
+        const errorCode =
+          error instanceof HttpException
+            ? ((error.getResponse() as Record<string, unknown>)?.errorCode as string | undefined)
+            : undefined;
+        safeSendEvent({
+          type: 'error',
+          message,
+          ...(errorCode && { errorCode }),
+        });
       }
     } finally {
       clearTimeout(timeout);

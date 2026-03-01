@@ -94,13 +94,13 @@ export class AuthService {
   // ========== 토큰 관리 (위임) ==========
 
   async refreshAccessToken(
-    refreshToken: string,
-  ): Promise<{ token: string; refreshToken: string }> {
-    return this.authTokenService.refreshAccessToken(refreshToken);
+    expiredAccessToken: string,
+  ): Promise<{ token: string }> {
+    return this.authTokenService.refreshAccessToken(expiredAccessToken);
   }
 
-  async logout(refreshToken: string | undefined): Promise<void> {
-    return this.authTokenService.logout(refreshToken);
+  async logout(userId: number): Promise<void> {
+    return this.authTokenService.logout(userId);
   }
 
   // ========== 일반 회원가입/로그인 ==========
@@ -278,7 +278,6 @@ export class AuthService {
           password: hashedPassword,
           name: reRegisterDto.name,
           reRegisterEmailVerified: true,
-          refreshToken: null,
           deletedAt: null,
           lastPasswordChangedAt: new Date(),
         },
@@ -300,6 +299,9 @@ export class AuthService {
         await manager.getRepository(EmailVerification).save(verification);
       }
     });
+
+    // 재가입 시 기존 refresh token Redis 캐시 제거
+    await this.authTokenService.storeRefreshToken(deletedUser.id, null);
 
     const user = await this.userRepository.findOne({
       where: { email: reRegisterDto.email },
@@ -363,8 +365,7 @@ export class AuthService {
   // ========== Auth Result 빌드 ==========
 
   async buildAuthResult(entity: AuthEntity): Promise<AuthResult> {
-    const { token, refreshToken } =
-      await this.authTokenService.issueTokens(entity);
+    const { token } = await this.authTokenService.issueTokens(entity);
 
     // 로그인 시점 기록 (lastLoginAt + lastActiveAt)
     await this.userService.updateLoginTimestamps(entity.id);
@@ -376,7 +377,6 @@ export class AuthService {
     return {
       email: entity.email,
       token,
-      refreshToken,
       ...addressResponse,
       name: this.nullableString(entity.name),
       preferences: entity.preferences ?? null,

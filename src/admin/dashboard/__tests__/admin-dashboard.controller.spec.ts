@@ -127,7 +127,9 @@ describe('AdminDashboardController', () => {
         recentBugReports: [],
         recentDeletedUsers: [],
       };
-      mockDashboardService.getRecentActivities.mockResolvedValue(emptyActivities);
+      mockDashboardService.getRecentActivities.mockResolvedValue(
+        emptyActivities,
+      );
 
       const result = await controller.getRecentActivities();
 

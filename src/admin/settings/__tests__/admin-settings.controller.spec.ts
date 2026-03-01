@@ -32,7 +32,6 @@ describe('AdminSettingsController', () => {
     reRegisterEmailVerified: false,
     preferences: null,
     preferredLanguage: 'ko',
-    refreshToken: null,
     socialId: null,
     socialType: null,
     lastPasswordChangedAt: null,
@@ -159,7 +158,9 @@ describe('AdminSettingsController', () => {
         mockSuperAdminUser,
         '192.168.1.1',
       );
-      expect(result).toEqual({ message: `User promoted to ${ROLES.ADMIN} successfully` });
+      expect(result).toEqual({
+        message: `User promoted to ${ROLES.ADMIN} successfully`,
+      });
     });
 
     it('should promote user to admin using email identifier when email is provided', async () => {

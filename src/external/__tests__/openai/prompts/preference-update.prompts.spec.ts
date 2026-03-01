@@ -181,7 +181,12 @@ describe('preference-update.prompts', () => {
       test.each([
         [
           'breakfast',
-          { breakfast: ['김치찌개', '된장찌개'], lunch: [], dinner: [], etc: [] },
+          {
+            breakfast: ['김치찌개', '된장찌개'],
+            lunch: [],
+            dinner: [],
+            etc: [],
+          },
           ['Breakfast: 김치찌개, 된장찌개'],
           ['Lunch:', 'Dinner:', 'Other:'],
         ],
@@ -243,7 +248,12 @@ describe('preference-update.prompts', () => {
           const result = buildPreferenceUserPrompt({
             currentLikes: ['한식'],
             currentDislikes: [],
-            slotMenus: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+            slotMenus: {
+              breakfast: ['김치찌개'],
+              lunch: [],
+              dinner: [],
+              etc: [],
+            },
             language: lang,
           });
           expect(result).toContain(expectedHeader);
@@ -254,7 +264,12 @@ describe('preference-update.prompts', () => {
         const result = buildPreferenceUserPrompt({
           currentLikes: ['한식'],
           currentDislikes: [],
-          slotMenus: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+          slotMenus: {
+            breakfast: ['김치찌개'],
+            lunch: [],
+            dinner: [],
+            etc: [],
+          },
         });
         expect(result).not.toContain('RESPONSE_LANGUAGE:');
       });
@@ -263,7 +278,12 @@ describe('preference-update.prompts', () => {
         const result = buildPreferenceUserPrompt({
           currentLikes: ['한식'],
           currentDislikes: [],
-          slotMenus: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+          slotMenus: {
+            breakfast: ['김치찌개'],
+            lunch: [],
+            dinner: [],
+            etc: [],
+          },
           language: 'ko',
         });
         const lines = result.split('\n');
@@ -324,7 +344,9 @@ describe('preference-update.prompts', () => {
         expect(result).toContain(
           '2. RECENT: New patterns or changes in the last week',
         );
-        expect(result).toContain('Do NOT optimize analysis for recommendations.');
+        expect(result).toContain(
+          'Do NOT optimize analysis for recommendations.',
+        );
       });
     });
   });
@@ -373,10 +395,7 @@ describe('preference-update.prompts', () => {
 
   describe('getPreferenceResponseSchema', () => {
     test.each([
-      [
-        'ko' as const,
-        '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)',
-      ],
+      ['ko' as const, '사용자에게 보여줄 200-400자 분석 텍스트 (하위 호환용)'],
       [
         'en' as const,
         'Analysis text for user display (200-400 characters, backward compatible)',

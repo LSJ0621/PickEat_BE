@@ -36,7 +36,11 @@ describe('CurrentUser Decorator', () => {
 
   describe('Valid user extraction', () => {
     it('should return user payload when all required fields are present', () => {
-      const mockUser: AuthUserPayload = { sub: 1, email: 'test@example.com', role: 'USER' };
+      const mockUser: AuthUserPayload = {
+        sub: 1,
+        email: 'test@example.com',
+        role: 'USER',
+      };
       const context = createMockExecutionContext(mockUser);
 
       const result = currentUserDecoratorLogic(null, context);
@@ -45,7 +49,11 @@ describe('CurrentUser Decorator', () => {
     });
 
     it('should return admin user payload correctly', () => {
-      const mockUser: AuthUserPayload = { sub: 2, email: 'admin@example.com', role: 'ADMIN' };
+      const mockUser: AuthUserPayload = {
+        sub: 2,
+        email: 'admin@example.com',
+        role: 'ADMIN',
+      };
       const context = createMockExecutionContext(mockUser);
 
       const result = currentUserDecoratorLogic(null, context);
@@ -64,7 +72,11 @@ describe('CurrentUser Decorator', () => {
     });
 
     it('should ignore the data parameter regardless of its value', () => {
-      const mockUser: AuthUserPayload = { sub: 1, email: 'test@example.com', role: 'USER' };
+      const mockUser: AuthUserPayload = {
+        sub: 1,
+        email: 'test@example.com',
+        role: 'USER',
+      };
       const context = createMockExecutionContext(mockUser);
 
       expect(currentUserDecoratorLogic(null, context)).toEqual(mockUser);
@@ -105,28 +117,32 @@ describe('CurrentUser Decorator', () => {
   describe('UnauthorizedException when required fields are missing', () => {
     test.each([
       ['sub is missing', { email: 'test@example.com', role: 'USER' }],
-      ['sub is zero (falsy)', { sub: 0, email: 'test@example.com', role: 'USER' }],
+      [
+        'sub is zero (falsy)',
+        { sub: 0, email: 'test@example.com', role: 'USER' },
+      ],
       ['email is missing', { sub: 1, role: 'USER' }],
       ['email is empty string', { sub: 1, email: '', role: 'USER' }],
       ['email is null', { sub: 1, email: null, role: 'USER' }],
       ['both sub and email are missing', {}],
-    ])(
-      'should throw UnauthorizedException when %s',
-      (_label, partialUser) => {
-        const context = createMockExecutionContext(
-          partialUser as Partial<AuthUserPayload>,
-        );
+    ])('should throw UnauthorizedException when %s', (_label, partialUser) => {
+      const context = createMockExecutionContext(
+        partialUser as Partial<AuthUserPayload>,
+      );
 
-        expect(() => currentUserDecoratorLogic(null, context)).toThrow(
-          new UnauthorizedException('Invalid authentication payload'),
-        );
-      },
-    );
+      expect(() => currentUserDecoratorLogic(null, context)).toThrow(
+        new UnauthorizedException('Invalid authentication payload'),
+      );
+    });
   });
 
   describe('ExecutionContext interaction', () => {
     it('should call switchToHttp and getRequest exactly once each', () => {
-      const mockUser: AuthUserPayload = { sub: 1, email: 'test@example.com', role: 'USER' };
+      const mockUser: AuthUserPayload = {
+        sub: 1,
+        email: 'test@example.com',
+        role: 'USER',
+      };
       const getRequest = jest.fn().mockReturnValue({ user: mockUser });
       const switchToHttp = jest.fn().mockReturnValue({ getRequest });
       const context = {

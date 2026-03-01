@@ -1505,7 +1505,7 @@ describe('GptWebSearchMenuService', () => {
           undefined,
           undefined,
           undefined, // no address
-          1990,      // userBirthYear provided
+          1990, // userBirthYear provided
           undefined,
           'ko',
         );
@@ -1548,9 +1548,9 @@ describe('GptWebSearchMenuService', () => {
           dislikes,
           undefined,
           undefined,
-          undefined,  // no address
-          undefined,  // no birthYear
-          'female',   // userGender provided
+          undefined, // no address
+          undefined, // no birthYear
+          'female', // userGender provided
           'ko',
         );
 
@@ -1582,7 +1582,9 @@ describe('GptWebSearchMenuService', () => {
           usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
         };
 
-        const debugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation();
+        const debugSpy = jest
+          .spyOn(Logger.prototype, 'debug')
+          .mockImplementation();
         mockOpenAI.chat.completions.create.mockResolvedValue(mockResponse);
         mockWebSearchSummaryService.getSummary.mockResolvedValue(null);
 
@@ -1593,8 +1595,8 @@ describe('GptWebSearchMenuService', () => {
           undefined,
           undefined,
           userAddress,
-          1985,     // userBirthYear
-          'male',   // userGender
+          1985, // userBirthYear
+          'male', // userGender
           'ko',
         );
 

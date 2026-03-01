@@ -15,7 +15,10 @@ export class DiscordMessageBuilderService {
     const { bugReport } = params;
     const userEmail = bugReport.user?.email ?? '알 수 없음';
     const description = bugReport.description
-      ? truncateText(bugReport.description, BUG_REPORT_NOTIFICATION.DESCRIPTION_PREVIEW_LENGTH)
+      ? truncateText(
+          bugReport.description,
+          BUG_REPORT_NOTIFICATION.DESCRIPTION_PREVIEW_LENGTH,
+        )
       : '(내용 없음)';
 
     return {

@@ -99,18 +99,6 @@ export class UserService {
     });
   }
 
-  async updateRefreshTokenById(
-    id: number,
-    hashedToken: string | null,
-  ): Promise<void> {
-    await this.userRepository
-      .createQueryBuilder()
-      .update(User)
-      .set({ refreshToken: hashedToken })
-      .where('id = :id', { id })
-      .execute();
-  }
-
   async updateLoginTimestamps(userId: number): Promise<void> {
     const now = new Date();
     await this.userRepository
@@ -133,7 +121,7 @@ export class UserService {
   async restoreSocialUser(email: string): Promise<void> {
     await this.userRepository.update(
       { email },
-      { refreshToken: null, deletedAt: null },
+      { deletedAt: null },
     );
   }
 
@@ -237,7 +225,6 @@ export class UserService {
         });
       }
 
-      user.refreshToken = null;
       user.reRegisterEmailVerified = false;
       await manager.save(user);
       await manager.softRemove(user);
@@ -247,6 +234,7 @@ export class UserService {
         this.cacheService.invalidateUserProfile(user.id),
         this.cacheService.invalidateUserAddresses(user.id),
         this.cacheService.invalidateUserPreferences(user.id),
+        this.cacheService.deleteRefreshToken(user.id),
       ]).catch((err) => {
         this.logger.warn(`사용자 캐시 무효화 실패: ${err}`);
       });

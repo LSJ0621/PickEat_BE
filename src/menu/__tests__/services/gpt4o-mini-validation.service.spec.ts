@@ -650,7 +650,11 @@ describe('Gpt4oMiniValidationService', () => {
                 // isValid is missing
                 invalidReason: '',
                 intent: 'preference',
-                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                constraints: {
+                  budget: 'medium',
+                  dietary: [],
+                  urgency: 'normal',
+                },
                 suggestedCategories: ['한식'],
               }),
             },
@@ -688,7 +692,11 @@ describe('Gpt4oMiniValidationService', () => {
                 isValid: 'true', // string instead of boolean
                 invalidReason: '',
                 intent: 'preference',
-                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                constraints: {
+                  budget: 'medium',
+                  dietary: [],
+                  urgency: 'normal',
+                },
                 suggestedCategories: ['한식'],
               }),
             },
@@ -727,7 +735,11 @@ describe('Gpt4oMiniValidationService', () => {
                 isValid: true,
                 invalidReason: '',
                 // intent is missing
-                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                constraints: {
+                  budget: 'medium',
+                  dietary: [],
+                  urgency: 'normal',
+                },
                 suggestedCategories: ['한식'],
               }),
             },
@@ -765,7 +777,11 @@ describe('Gpt4oMiniValidationService', () => {
                 isValid: true,
                 invalidReason: '',
                 intent: 42, // number instead of string
-                constraints: { budget: 'medium', dietary: [], urgency: 'normal' },
+                constraints: {
+                  budget: 'medium',
+                  dietary: [],
+                  urgency: 'normal',
+                },
                 suggestedCategories: ['한식'],
               }),
             },

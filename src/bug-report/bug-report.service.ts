@@ -77,7 +77,10 @@ export class BugReportService {
     return savedBugReport;
   }
 
-  private async sendDiscordNotification(bugReport: BugReport, userEmail: string): Promise<void> {
+  private async sendDiscordNotification(
+    bugReport: BugReport,
+    userEmail: string,
+  ): Promise<void> {
     try {
       const bugReportWithUser = {
         ...bugReport,
@@ -89,7 +92,10 @@ export class BugReportService {
       });
       await this.discordWebhookClient.sendMessage({ embeds: [embed] });
     } catch (error) {
-      this.logger.error(`Discord 버그리포트 알림 전송 실패 (bugReportId: ${bugReport.id})`, error instanceof Error ? error.stack : String(error));
+      this.logger.error(
+        `Discord 버그리포트 알림 전송 실패 (bugReportId: ${bugReport.id})`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
 

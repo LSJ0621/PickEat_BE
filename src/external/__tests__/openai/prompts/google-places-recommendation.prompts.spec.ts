@@ -66,7 +66,15 @@ describe('google-places-recommendation.prompts', () => {
       },
     ])(
       'should contain required content for $lang prompt',
-      ({ prompt, uniqueText, roleLabel, outputLabel, rulesLabel, maxPlaces, languageInstruction }) => {
+      ({
+        prompt,
+        uniqueText,
+        roleLabel,
+        outputLabel,
+        rulesLabel,
+        maxPlaces,
+        languageInstruction,
+      }) => {
         expect(typeof prompt).toBe('string');
         expect(prompt.length).toBeGreaterThan(0);
         expect(prompt).toContain(uniqueText);
@@ -92,8 +100,12 @@ describe('google-places-recommendation.prompts', () => {
     });
 
     it('should default to Korean when no argument is given', () => {
-      expect(getGooglePlacesSystemPrompt()).toBe(GOOGLE_PLACES_SYSTEM_PROMPT_KO);
-      expect(getGooglePlacesSystemPrompt(undefined)).toBe(GOOGLE_PLACES_SYSTEM_PROMPT_KO);
+      expect(getGooglePlacesSystemPrompt()).toBe(
+        GOOGLE_PLACES_SYSTEM_PROMPT_KO,
+      );
+      expect(getGooglePlacesSystemPrompt(undefined)).toBe(
+        GOOGLE_PLACES_SYSTEM_PROMPT_KO,
+      );
     });
   });
 
@@ -102,20 +114,33 @@ describe('google-places-recommendation.prompts', () => {
   // ---------------------------------------------------------------------------
   describe('buildGooglePlacesUserPrompt', () => {
     it('should not include RESPONSE_LANGUAGE when language is not provided', () => {
-      const result = buildGooglePlacesUserPrompt('덕소 근처 마라탕', mockCandidates);
+      const result = buildGooglePlacesUserPrompt(
+        '덕소 근처 마라탕',
+        mockCandidates,
+      );
       expect(result).not.toContain('RESPONSE_LANGUAGE:');
       expect(result).toContain('Search query: 덕소 근처 마라탕');
       expect(result).toContain('[Candidate list]');
       expect(result).toContain('id, name, rating, userRatingCount');
       expect(result).toContain(JSON.stringify(mockCandidates));
       expect(result).toContain('[Request]');
-      expect(result).toContain('Recommend up to 3 restaurants related to the search query');
+      expect(result).toContain(
+        'Recommend up to 3 restaurants related to the search query',
+      );
       expect(result).toContain('Return empty array if none are relevant');
     });
 
     it.each([
-      { lang: 'ko' as const, expectedLabel: 'Korean', query: 'Malatang near Deokso' },
-      { lang: 'en' as const, expectedLabel: 'English', query: '덕소 근처 마라탕' },
+      {
+        lang: 'ko' as const,
+        expectedLabel: 'Korean',
+        query: 'Malatang near Deokso',
+      },
+      {
+        lang: 'en' as const,
+        expectedLabel: 'English',
+        query: '덕소 근처 마라탕',
+      },
     ])(
       'should include RESPONSE_LANGUAGE: $expectedLabel when language is "$lang"',
       ({ lang, expectedLabel, query }) => {
@@ -181,7 +206,9 @@ describe('google-places-recommendation.prompts', () => {
         expect(itemProps.name.description).toContain(name);
         expect(itemProps.reason.description).toContain(reason);
         expect(itemProps.reason.description).toContain(polite);
-        expect(schema.properties.recommendations.description).toContain(recommendations);
+        expect(schema.properties.recommendations.description).toContain(
+          recommendations,
+        );
       },
     );
 
@@ -189,23 +216,31 @@ describe('google-places-recommendation.prompts', () => {
       const koSchema = getGooglePlacesRecommendationsJsonSchema();
       const enSchema = getGooglePlacesRecommendationsJsonSchema('en');
 
-      expect(koSchema.properties.recommendations.items.properties.reason.description).toContain(
-        '추천 이유',
-      );
+      expect(
+        koSchema.properties.recommendations.items.properties.reason.description,
+      ).toContain('추천 이유');
 
       // Structure identical
       expect(koSchema.type).toBe(enSchema.type);
       expect(koSchema.required).toEqual(enSchema.required);
-      expect(koSchema.properties.recommendations.minItems).toBe(enSchema.properties.recommendations.minItems);
-      expect(koSchema.properties.recommendations.maxItems).toBe(enSchema.properties.recommendations.maxItems);
+      expect(koSchema.properties.recommendations.minItems).toBe(
+        enSchema.properties.recommendations.minItems,
+      );
+      expect(koSchema.properties.recommendations.maxItems).toBe(
+        enSchema.properties.recommendations.maxItems,
+      );
 
       // Descriptions differ
       expect(koSchema.properties.recommendations.description).not.toBe(
         enSchema.properties.recommendations.description,
       );
       expect(
-        koSchema.properties.recommendations.items.properties.placeId.description,
-      ).not.toBe(enSchema.properties.recommendations.items.properties.placeId.description);
+        koSchema.properties.recommendations.items.properties.placeId
+          .description,
+      ).not.toBe(
+        enSchema.properties.recommendations.items.properties.placeId
+          .description,
+      );
     });
 
     it('should equal expected schema for each language via direct function call', () => {

@@ -20,11 +20,15 @@ describe('web-search-summary.prompts', () => {
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('<critical_rules>');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('<focus>');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('<output_format>');
-      expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('음식 트렌드 정보 요약 전문가');
+      expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain(
+        '음식 트렌드 정보 요약 전문가',
+      );
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('hallucination');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('confidence');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('localTrends');
-      expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('demographicFavorites');
+      expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain(
+        'demographicFavorites',
+      );
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('seasonalItems');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_KO).toContain('"low"');
     });
@@ -52,7 +56,9 @@ describe('web-search-summary.prompts', () => {
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain('hallucination');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain('confidence');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain('localTrends');
-      expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain('demographicFavorites');
+      expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain(
+        'demographicFavorites',
+      );
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain('seasonalItems');
       expect(WEB_SEARCH_SUMMARY_SYSTEM_PROMPT_EN).toContain('"low"');
     });
@@ -178,7 +184,9 @@ describe('web-search-summary.prompts', () => {
           '남성',
           'ko',
         );
-        expect(result).toContain(`"서울 강남구 30대 남성 인기 음식 ${currentYear}"`);
+        expect(result).toContain(
+          `"서울 강남구 30대 남성 인기 음식 ${currentYear}"`,
+        );
       });
 
       it('should include region-only query when only address is provided', () => {
@@ -361,7 +369,9 @@ describe('web-search-summary.prompts', () => {
     describe('default language behavior', () => {
       it('should default to Korean when language is not provided', () => {
         const result = buildWebSearchSummaryPrompt();
-        expect(result).toContain('위 조건에 맞는 인기 음식 트렌드를 웹에서 검색하고 요약해주세요.');
+        expect(result).toContain(
+          '위 조건에 맞는 인기 음식 트렌드를 웹에서 검색하고 요약해주세요.',
+        );
       });
     });
 
@@ -387,7 +397,12 @@ describe('web-search-summary.prompts', () => {
       ])(
         'should extract region "%s" from full Korean address to "%s"',
         (address, expectedRegion) => {
-          const result = buildWebSearchSummaryPrompt(address, undefined, undefined, 'ko');
+          const result = buildWebSearchSummaryPrompt(
+            address,
+            undefined,
+            undefined,
+            'ko',
+          );
           expect(result).toContain(`지역: ${expectedRegion}`);
         },
       );
@@ -399,7 +414,12 @@ describe('web-search-summary.prompts', () => {
       ])(
         'should extract region from simple Korean address "%s"',
         (address, expectedRegion) => {
-          const result = buildWebSearchSummaryPrompt(address, undefined, undefined, 'ko');
+          const result = buildWebSearchSummaryPrompt(
+            address,
+            undefined,
+            undefined,
+            'ko',
+          );
           expect(result).toContain(`지역: ${expectedRegion}`);
         },
       );
@@ -479,7 +499,10 @@ describe('web-search-summary.prompts', () => {
     });
 
     describe('season detection', () => {
-      const getSeasonForMonth = (month: number, language: 'ko' | 'en'): string => {
+      const getSeasonForMonth = (
+        month: number,
+        language: 'ko' | 'en',
+      ): string => {
         if (language === 'ko') {
           if (month >= 3 && month <= 5) return '봄';
           if (month >= 6 && month <= 8) return '여름';
@@ -647,7 +670,9 @@ describe('web-search-summary.prompts', () => {
           undefined,
           'en',
         );
-        expect(result).toContain(`"서울 강남구 popular restaurants ${currentYear}"`);
+        expect(result).toContain(
+          `"서울 강남구 popular restaurants ${currentYear}"`,
+        );
       });
     });
 

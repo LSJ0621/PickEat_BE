@@ -72,10 +72,10 @@ describe('EmailNotificationService', () => {
       mockIsTestMode.mockReturnValue(false);
       mockConfigService.get
         .mockReturnValueOnce('smtp.example.com') // EMAIL_HOST
-        .mockReturnValueOnce(587)                // EMAIL_PORT
-        .mockReturnValueOnce('true')             // EMAIL_SECURE
+        .mockReturnValueOnce(587) // EMAIL_PORT
+        .mockReturnValueOnce('true') // EMAIL_SECURE
         .mockReturnValueOnce('no-reply@example.com') // EMAIL_ADDRESS
-        .mockReturnValueOnce('secret');          // EMAIL_PASSWORD
+        .mockReturnValueOnce('secret'); // EMAIL_PASSWORD
 
       expect(() => service.ensureMailConfig()).not.toThrow();
     });

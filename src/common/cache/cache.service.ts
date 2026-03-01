@@ -162,6 +162,33 @@ export class RedisCacheService {
     this.logger.debug(`Cache INVALIDATE: ${key}`);
   }
 
+  // ==================== Refresh Token 캐싱 ====================
+
+  /**
+   * Refresh Token 조회
+   */
+  async getRefreshToken(userId: number): Promise<string | null> {
+    const key = CACHE_KEY.refreshToken(userId);
+    const cached = await this.cacheManager.get<string>(key);
+    return cached ?? null;
+  }
+
+  /**
+   * Refresh Token 저장
+   */
+  async setRefreshToken(userId: number, token: string): Promise<void> {
+    const key = CACHE_KEY.refreshToken(userId);
+    await this.cacheManager.set(key, token, CACHE_TTL.REFRESH_TOKEN * 1000);
+  }
+
+  /**
+   * Refresh Token 삭제
+   */
+  async deleteRefreshToken(userId: number): Promise<void> {
+    const key = CACHE_KEY.refreshToken(userId);
+    await this.cacheManager.del(key);
+  }
+
   // ==================== 웹서치 요약 캐싱 ====================
 
   /**

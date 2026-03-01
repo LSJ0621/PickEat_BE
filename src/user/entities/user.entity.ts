@@ -55,9 +55,6 @@ export class User {
   @Column({ type: 'varchar', default: 'ko' })
   preferredLanguage: 'ko' | 'en';
 
-  @Column({ type: 'text', nullable: true })
-  refreshToken: string | null;
-
   @Column({ default: false })
   emailVerified: boolean;
 

@@ -181,8 +181,12 @@ describe('withAdvisoryLock', () => {
       await withAdvisoryLock(mockDataSource, 'lock-name-one', fn);
       await withAdvisoryLock(mockDataSource, 'lock-name-two', fn);
 
-      const firstLockKey = (mockQueryRunner.query.mock.calls[0] as unknown[][])[1][0];
-      const secondLockKey = (mockQueryRunner.query.mock.calls[2] as unknown[][])[1][0];
+      const firstLockKey = (
+        mockQueryRunner.query.mock.calls[0] as unknown[][]
+      )[1][0];
+      const secondLockKey = (
+        mockQueryRunner.query.mock.calls[2] as unknown[][]
+      )[1][0];
 
       expect(typeof firstLockKey).toBe('number');
       expect(typeof secondLockKey).toBe('number');
@@ -198,7 +202,9 @@ describe('withAdvisoryLock', () => {
 
       await withAdvisoryLock(mockDataSource, 'any-lock-name', fn);
 
-      const lockKey = (mockQueryRunner.query.mock.calls[0] as unknown[][])[1][0];
+      const lockKey = (
+        mockQueryRunner.query.mock.calls[0] as unknown[][]
+      )[1][0];
       expect(lockKey).toBeGreaterThanOrEqual(0);
     });
   });

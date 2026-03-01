@@ -132,7 +132,10 @@ describe('ImageValidationPipe', () => {
       ];
 
       for (const mimetype of allowedMimeTypes) {
-        const file = createMockFile({ mimetype, originalname: `image.${mimetype.split('/')[1]}` });
+        const file = createMockFile({
+          mimetype,
+          originalname: `image.${mimetype.split('/')[1]}`,
+        });
         expect(() => pipe.transform([file])).not.toThrow();
       }
     });

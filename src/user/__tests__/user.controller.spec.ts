@@ -373,7 +373,10 @@ describe('UserController', () => {
   describe('updateUserAddress', () => {
     it('should parse address id and call service with parsed numeric id', async () => {
       const user = UserFactory.create({ email: mockAuthUser.email });
-      const dto: UpdateUserAddressDto = { alias: '새로운 별칭', isDefault: true };
+      const dto: UpdateUserAddressDto = {
+        alias: '새로운 별칭',
+        isDefault: true,
+      };
       const updatedAddress = UserAddressFactory.create({
         id: 1,
         user,

@@ -519,7 +519,9 @@ describe('PreferencesRetryBatchScheduler', () => {
         release: jest.fn().mockResolvedValue(undefined),
       };
 
-      dataSource.createQueryRunner.mockReturnValue(mockQueryRunnerLockFailed as any);
+      dataSource.createQueryRunner.mockReturnValue(
+        mockQueryRunnerLockFailed as any,
+      );
 
       const warnSpy = jest.spyOn(scheduler['logger'], 'warn');
 
@@ -527,7 +529,9 @@ describe('PreferencesRetryBatchScheduler', () => {
       await scheduler.submitRetryBatch();
 
       // Assert: submitRetryBatch on preferenceBatchService should NOT be called
-      expect(mockPreferenceBatchService.submitRetryBatch).not.toHaveBeenCalled();
+      expect(
+        mockPreferenceBatchService.submitRetryBatch,
+      ).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('다른 인스턴스에서 이미 실행 중'),
       );

@@ -3,20 +3,18 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
   Query,
   Req,
-  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { Throttle } from '@nestjs/throttler';
-import { Request, Response } from 'express';
-import {
-  AUTH_COOKIE,
-  AUTH_TIMING,
-} from '@/common/constants/business.constants';
+import { Request } from 'express';
 import { ErrorCode } from '@/common/constants/error-codes';
 import { MessageCode } from '@/common/constants/message-codes';
 import { User } from '@/user/entities/user.entity';
@@ -49,22 +47,19 @@ export class AuthController {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly userService: UserService,
     private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
   ) {}
 
   /** @public */
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('kakao/doLogin')
-  async kakaoLogin(
-    @Body() redirectDto: RedirectDto,
-    @Res({ passthrough: true }) res: Response,
-    @Req() req: Request,
-  ) {
+  async kakaoLogin(@Body() redirectDto: RedirectDto, @Req() req: Request) {
     const language = this.extractLanguage(req);
     const result = await this.authService.kakaoLogin(
       redirectDto.code,
       language,
     );
-    return this.handleAuthSuccess(res, result);
+    return this.handleAuthSuccess(result);
   }
 
   /** @public */
@@ -72,7 +67,6 @@ export class AuthController {
   @Post('kakao/appLogin')
   async kakaoAppLogin(
     @Body() appKakaoLoginDto: AppKakaoLoginDto,
-    @Res({ passthrough: true }) res: Response,
     @Req() req: Request,
   ) {
     const language = this.extractLanguage(req);
@@ -80,23 +74,19 @@ export class AuthController {
       appKakaoLoginDto.accessToken,
       language,
     );
-    return this.handleAuthSuccess(res, result);
+    return this.handleAuthSuccess(result);
   }
 
   /** @public */
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('google/doLogin')
-  async googleLogin(
-    @Body() redirectDto: RedirectDto,
-    @Res({ passthrough: true }) res: Response,
-    @Req() req: Request,
-  ) {
+  async googleLogin(@Body() redirectDto: RedirectDto, @Req() req: Request) {
     const language = this.extractLanguage(req);
     const result = await this.authService.googleLogin(
       redirectDto.code,
       language,
     );
-    return this.handleAuthSuccess(res, result);
+    return this.handleAuthSuccess(result);
   }
 
   /** @public */
@@ -111,7 +101,7 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   @UseGuards(LocalAuthGuard)
-  async login(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async login(@Req() req: Request) {
     const user = (req as Request & { user: User }).user;
     if (!user?.id) {
       throw new UnauthorizedException({
@@ -119,7 +109,7 @@ export class AuthController {
       });
     }
     const result = await this.authService.buildAuthResult(user);
-    return this.handleAuthSuccess(res, result);
+    return this.handleAuthSuccess(result);
   }
 
   /** @public */
@@ -231,32 +221,51 @@ export class AuthController {
   /** @public */
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('refresh')
-  async refreshToken(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const refreshToken = req.cookies?.[AUTH_COOKIE.REFRESH_TOKEN_NAME];
-    if (!refreshToken) {
+  @HttpCode(HttpStatus.OK)
+  async refreshToken(@Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    const expiredToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : null;
+    if (!expiredToken) {
       throw new UnauthorizedException({
-        errorCode: ErrorCode.AUTH_REFRESH_TOKEN_COOKIE_MISSING,
+        errorCode: ErrorCode.AUTH_MISSING_ACCESS_TOKEN,
       });
     }
-    const tokens = await this.authService.refreshAccessToken(refreshToken);
-    this.setRefreshTokenCookie(res, tokens.refreshToken);
-    return { token: tokens.token };
+    return this.authService.refreshAccessToken(expiredToken);
   }
 
   /** @public */
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('logout')
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.authService.logout(
-      req.cookies?.[AUTH_COOKIE.REFRESH_TOKEN_NAME],
-    );
-    this.clearRefreshTokenCookie(res);
-    return {
-      messageCode: MessageCode.AUTH_LOGOUT_COMPLETED,
-    };
+  @HttpCode(HttpStatus.OK)
+  async logout(@Req() req: Request) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : null;
+    if (!token) {
+      throw new UnauthorizedException({
+        errorCode: ErrorCode.AUTH_MISSING_ACCESS_TOKEN,
+      });
+    }
+
+    const accessTokenSecret =
+      this.configService.getOrThrow<string>('JWT_SECRET');
+    let payload: { sub: number };
+    try {
+      payload = this.jwtService.verify(token, {
+        secret: accessTokenSecret,
+        ignoreExpiration: true,
+      });
+    } catch {
+      throw new UnauthorizedException({
+        errorCode: ErrorCode.AUTH_MISSING_ACCESS_TOKEN,
+      });
+    }
+
+    await this.authService.logout(payload.sub);
+    return { messageCode: MessageCode.AUTH_LOGOUT_COMPLETED };
   }
 
   /** @public */
@@ -273,30 +282,8 @@ export class AuthController {
     return this.authService.reRegisterSocial(reRegisterSocialDto);
   }
 
-  private handleAuthSuccess(res: Response, result: AuthResult) {
-    this.setRefreshTokenCookie(res, result.refreshToken);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { refreshToken, ...payload } = result;
-    return payload;
-  }
-
-  private setRefreshTokenCookie(res: Response, refreshToken: string) {
-    res.cookie(AUTH_COOKIE.REFRESH_TOKEN_NAME, refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-      maxAge: AUTH_TIMING.COOKIE_MAX_AGE_MS,
-    });
-  }
-
-  private clearRefreshTokenCookie(res: Response) {
-    res.clearCookie(AUTH_COOKIE.REFRESH_TOKEN_NAME, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-    });
+  private handleAuthSuccess(result: AuthResult) {
+    return result;
   }
 
   private extractLanguage(req: Request): 'ko' | 'en' | undefined {

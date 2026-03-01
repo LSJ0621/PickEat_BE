@@ -351,10 +351,9 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.processResults(results, mockBatchJob);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [10],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([10], {
+        status: MenuSelectionStatus.FAILED,
+      });
       expect(mockDataSource.createQueryRunner).not.toHaveBeenCalled();
     });
 
@@ -369,10 +368,9 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.processResults(results, mockBatchJob);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [10],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([10], {
+        status: MenuSelectionStatus.FAILED,
+      });
     });
 
     it('should mark selections as FAILED when user is not found', async () => {
@@ -387,10 +385,9 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.processResults(results, mockBatchJob);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [10],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([10], {
+        status: MenuSelectionStatus.FAILED,
+      });
     });
 
     it('should rollback transaction and mark selections as FAILED when transaction throws', async () => {
@@ -410,10 +407,9 @@ describe('PreferenceBatchResultProcessorService', () => {
       await service.processResults(results, mockBatchJob);
 
       expect(defaultQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [10],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([10], {
+        status: MenuSelectionStatus.FAILED,
+      });
     });
 
     it('should always release query runner even when transaction fails', async () => {
@@ -481,10 +477,9 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.processResults(results, mockBatchJob);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [10],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([10], {
+        status: MenuSelectionStatus.FAILED,
+      });
     });
 
     it('should log error when outer catch has customId that parseCustomId returns null for (lines 177-180)', async () => {
@@ -533,10 +528,9 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.processResults(results, mockBatchJob);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [10],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([10], {
+        status: MenuSelectionStatus.FAILED,
+      });
     });
 
     it('should process empty results map without error', async () => {
@@ -561,15 +555,18 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       const errors = [
         { customId: 'pref_1_100', code: 'server_error', message: 'Timeout' },
-        { customId: 'pref_2_200,201', code: 'rate_limit', message: 'Too many requests' },
+        {
+          customId: 'pref_2_200,201',
+          code: 'rate_limit',
+          message: 'Too many requests',
+        },
       ];
 
       await service.processErrors(errors, mockBatchJob);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [100],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([100], {
+        status: MenuSelectionStatus.FAILED,
+      });
       expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
         [200, 201],
         { status: MenuSelectionStatus.FAILED },
@@ -610,10 +607,10 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.markSelectionsBatchProcessing(selections, 10);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [1, 2],
-        { status: MenuSelectionStatus.BATCH_PROCESSING, batchJobId: 10 },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([1, 2], {
+        status: MenuSelectionStatus.BATCH_PROCESSING,
+        batchJobId: 10,
+      });
     });
 
     it('should return without calling repository when selections array is empty', async () => {
@@ -635,10 +632,9 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.markSelectionsSucceeded(selections);
 
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [5],
-        { status: MenuSelectionStatus.SUCCEEDED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([5], {
+        status: MenuSelectionStatus.SUCCEEDED,
+      });
     });
 
     it('should return without calling repository when selections array is empty', async () => {
@@ -669,9 +665,7 @@ describe('PreferenceBatchResultProcessorService', () => {
 
       await service.incrementRetryCount(selections);
 
-      expect(
-        mockMenuSelectionRepository.createQueryBuilder,
-      ).toHaveBeenCalled();
+      expect(mockMenuSelectionRepository.createQueryBuilder).toHaveBeenCalled();
       expect(mockQueryBuilder.update).toHaveBeenCalledWith(MenuSelection);
       expect(mockQueryBuilder.whereInIds).toHaveBeenCalledWith([1, 2]);
       expect(mockQueryBuilder.execute).toHaveBeenCalled();
@@ -699,7 +693,9 @@ describe('PreferenceBatchResultProcessorService', () => {
     it('should return without calling repository when selections array is empty', async () => {
       await service.incrementRetryCount([]);
 
-      expect(mockMenuSelectionRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(
+        mockMenuSelectionRepository.createQueryBuilder,
+      ).not.toHaveBeenCalled();
     });
   });
 });

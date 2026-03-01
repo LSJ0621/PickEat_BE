@@ -680,9 +680,7 @@ describe('PreferencesBatchResultScheduler', () => {
       // Since this is hard to unit test without mocking the utility, we verify the lock-not-acquired path.
       const mockQueryRunnerNotAcquired = {
         connect: jest.fn().mockResolvedValue(undefined),
-        query: jest
-          .fn()
-          .mockResolvedValue([{ pg_try_advisory_lock: false }]),
+        query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: false }]),
         release: jest.fn().mockResolvedValue(undefined),
       };
       dataSource.createQueryRunner = jest
@@ -723,9 +721,7 @@ describe('PreferencesBatchResultScheduler', () => {
         BatchJobStatus.FAILED,
         expect.objectContaining({ errorMessage: 'OpenAI batch failed' }),
       );
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('FAILED'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('FAILED'));
     });
 
     it('should handle expired batch status', async () => {
@@ -891,12 +887,17 @@ describe('PreferencesBatchResultScheduler', () => {
       mockBatchJobService.updateStatus
         .mockResolvedValueOnce(undefined) // first call succeeds
         .mockRejectedValueOnce('string reset error'); // second call (via resetSelections -> updateStatus)
-      mockMenuSelectionRepository.find.mockRejectedValue('selection find error');
+      mockMenuSelectionRepository.find.mockRejectedValue(
+        'selection find error',
+      );
 
       const errorSpy = jest.spyOn((scheduler as any).logger, 'error');
 
       // Act
-      await (scheduler as any).handleBatchProcessingFailure(1, new Error('orig'));
+      await (scheduler as any).handleBatchProcessingFailure(
+        1,
+        new Error('orig'),
+      );
 
       // Assert
       expect(errorSpy).toHaveBeenCalledWith(

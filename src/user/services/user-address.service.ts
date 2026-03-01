@@ -116,7 +116,12 @@ export class UserAddressService {
         ? parseFloat(selectedAddress.longitude)
         : null;
 
-    if (latitude === null || longitude === null || isNaN(latitude) || isNaN(longitude)) {
+    if (
+      latitude === null ||
+      longitude === null ||
+      isNaN(latitude) ||
+      isNaN(longitude)
+    ) {
       throw new BadRequestException({
         errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
       });
@@ -430,7 +435,12 @@ export class UserAddressService {
         ? parseFloat(selectedAddress.longitude)
         : null;
 
-    if (latitude === null || longitude === null || isNaN(latitude) || isNaN(longitude)) {
+    if (
+      latitude === null ||
+      longitude === null ||
+      isNaN(latitude) ||
+      isNaN(longitude)
+    ) {
       throw new BadRequestException({
         errorCode: ErrorCode.ADDRESS_LAT_LNG_REQUIRED,
       });

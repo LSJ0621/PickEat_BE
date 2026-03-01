@@ -46,7 +46,6 @@ describe('AuthController', () => {
     reRegisterEmailVerified: false,
     preferences: null,
     preferredLanguage: 'ko',
-    refreshToken: null,
     socialId: null,
     socialType: null,
     lastPasswordChangedAt: null,

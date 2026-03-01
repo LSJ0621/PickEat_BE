@@ -6,7 +6,6 @@ import { User } from '@/user/entities/user.entity';
  */
 export interface AuthResult {
   token: string;
-  refreshToken: string;
   email: string;
   address: string | null;
   latitude: number | null;

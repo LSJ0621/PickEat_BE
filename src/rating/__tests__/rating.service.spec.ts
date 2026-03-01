@@ -593,7 +593,9 @@ describe('RatingService', () => {
       // Act & Assert
       await expect(
         service.dismissRating(mockUser, dismissRatingDto),
-      ).rejects.toThrow(new NotFoundException(ErrorCode.PLACE_RATING_NOT_FOUND));
+      ).rejects.toThrow(
+        new NotFoundException(ErrorCode.PLACE_RATING_NOT_FOUND),
+      );
 
       expect(placeRatingRepository.save).not.toHaveBeenCalled();
     });
@@ -619,7 +621,11 @@ describe('RatingService', () => {
 
     it('should set promptDismissed to true without changing other fields', async () => {
       // Arrange
-      const ratingWithSkipped = { ...mockPlaceRating, skipped: true, rating: 3 };
+      const ratingWithSkipped = {
+        ...mockPlaceRating,
+        skipped: true,
+        rating: 3,
+      };
       placeRatingRepository.findOne.mockResolvedValue(
         ratingWithSkipped as PlaceRating,
       );
@@ -744,15 +750,17 @@ describe('RatingService', () => {
     it('should calculate correct totalPages', async () => {
       // Arrange
       const dto: GetRatingHistoryDto = { page: 1, limit: 5 };
-      const mockPaginatedRatings: Partial<PlaceRating>[] = Array(5).fill(null).map((_, i) => ({
-        id: i + 1,
-        placeId: `ChIJ${i}`,
-        placeName: `식당${i}`,
-        rating: null,
-        skipped: false,
-        promptDismissed: false,
-        createdAt: new Date('2026-02-15T10:00:00Z'),
-      }));
+      const mockPaginatedRatings: Partial<PlaceRating>[] = Array(5)
+        .fill(null)
+        .map((_, i) => ({
+          id: i + 1,
+          placeId: `ChIJ${i}`,
+          placeName: `식당${i}`,
+          rating: null,
+          skipped: false,
+          promptDismissed: false,
+          createdAt: new Date('2026-02-15T10:00:00Z'),
+        }));
       placeRatingRepository.findAndCount.mockResolvedValue([
         mockPaginatedRatings as PlaceRating[],
         13,

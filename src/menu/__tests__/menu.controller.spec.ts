@@ -254,7 +254,12 @@ describe('MenuController', () => {
       const selections = [
         {
           id: 1,
-          menuPayload: { breakfast: ['김치찌개'], lunch: [], dinner: [], etc: [] },
+          menuPayload: {
+            breakfast: ['김치찌개'],
+            lunch: [],
+            dinner: [],
+            etc: [],
+          },
           selectedDate: '2024-01-15',
         },
       ];
@@ -544,7 +549,12 @@ describe('MenuController', () => {
 
       await expect(
         controller.recommendSearchPlaces(
-          { menuRecommendationId: 999, menuName: '파스타', latitude: 0, longitude: 0 },
+          {
+            menuRecommendationId: 999,
+            menuName: '파스타',
+            latitude: 0,
+            longitude: 0,
+          },
           mockAuthUser,
         ),
       ).rejects.toThrow(NotFoundException);
@@ -747,7 +757,9 @@ describe('MenuController', () => {
           id: 1,
           prompt: '점심 추천',
           intro: '오늘은 한식이 어울리는 날씨네요',
-          recommendations: [{ condition: '든든하게 먹고 싶다면', menu: '김치찌개' }],
+          recommendations: [
+            { condition: '든든하게 먹고 싶다면', menu: '김치찌개' },
+          ],
           closing: '맛있게 드세요!',
           recommendedAt: new Date(),
           requestAddress: '서울시',
@@ -779,7 +791,10 @@ describe('MenuController', () => {
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
       mockMenuService.getRecommendationDetail.mockResolvedValue(expectedDetail);
 
-      const result = await controller.getRecommendationDetail('1', mockAuthUser);
+      const result = await controller.getRecommendationDetail(
+        '1',
+        mockAuthUser,
+      );
 
       expect(mockMenuService.getRecommendationDetail).toHaveBeenCalledWith(
         user,
@@ -832,7 +847,10 @@ describe('MenuController', () => {
 
       const result = await controller.getPlaceDetail(placeId, mockAuthUser);
 
-      expect(mockMenuService.getPlaceDetail).toHaveBeenCalledWith(placeId, 'ko');
+      expect(mockMenuService.getPlaceDetail).toHaveBeenCalledWith(
+        placeId,
+        'ko',
+      );
       expect(result).toEqual(expectedDetail);
     });
 
@@ -901,7 +919,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       const writeCalls = (res.write as jest.Mock).mock.calls;
       const errorEvent = writeCalls.find((call: string[]) =>
@@ -925,7 +948,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       expect(res.end).toHaveBeenCalled();
     });
@@ -938,7 +966,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       const writeCalls = (res.write as jest.Mock).mock.calls;
       const errorEvent = writeCalls.find((call: string[]) =>
@@ -961,7 +994,12 @@ describe('MenuController', () => {
         configurable: true,
       });
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       const writeCalls = (res.write as jest.Mock).mock.calls;
       const errorEvent = writeCalls.find((call: string[]) =>
@@ -979,7 +1017,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       const writeCalls = (res.write as jest.Mock).mock.calls;
       const errorEvent = writeCalls.find((call: string[]) =>
@@ -1008,7 +1051,12 @@ describe('MenuController', () => {
         configurable: true,
       });
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       // If writableEnded is true at close, abort should NOT have been called via closeHandler
       // (the test verifies the false branch of !res.writableEnded inside closeHandler)
@@ -1061,7 +1109,12 @@ describe('MenuController', () => {
         configurable: true,
       });
 
-      await controller.recommendStream({ prompt: '추천' }, mockAuthUser, req, res);
+      await controller.recommendStream(
+        { prompt: '추천' },
+        mockAuthUser,
+        req,
+        res,
+      );
 
       expect(res.end).not.toHaveBeenCalled();
     });
@@ -1159,7 +1212,12 @@ describe('MenuController', () => {
       const res = createMockResponse();
 
       await controller.recommendSearchPlacesStream(
-        { menuRecommendationId: 999, menuName: '파스타', latitude: 0, longitude: 0 },
+        {
+          menuRecommendationId: 999,
+          menuName: '파스타',
+          latitude: 0,
+          longitude: 0,
+        },
         mockAuthUser,
         req,
         res,
@@ -1187,7 +1245,12 @@ describe('MenuController', () => {
       });
 
       await controller.recommendSearchPlacesStream(
-        { menuRecommendationId: 1, menuName: '라면', latitude: 0, longitude: 0 },
+        {
+          menuRecommendationId: 1,
+          menuName: '라면',
+          latitude: 0,
+          longitude: 0,
+        },
         mockAuthUser,
         req,
         res,
@@ -1238,13 +1301,20 @@ describe('MenuController', () => {
       mockMenuRecommendationService.findById.mockResolvedValue(
         MenuRecommendationFactory.create({ id: 1 }),
       );
-      mockPlaceService.recommendRestaurants.mockRejectedValue('raw string error');
+      mockPlaceService.recommendRestaurants.mockRejectedValue(
+        'raw string error',
+      );
 
       const req = createMockRequest();
       const res = createMockResponse();
 
       await controller.recommendSearchPlacesStream(
-        { menuRecommendationId: 1, menuName: '라면', latitude: 0, longitude: 0 },
+        {
+          menuRecommendationId: 1,
+          menuName: '라면',
+          latitude: 0,
+          longitude: 0,
+        },
         mockAuthUser,
         req,
         res,
@@ -1286,7 +1356,9 @@ describe('MenuController', () => {
       ];
 
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);
-      mockMenuRecommendationService.findById.mockResolvedValue(menuRecommendation);
+      mockMenuRecommendationService.findById.mockResolvedValue(
+        menuRecommendation,
+      );
       mockCommunityPlaceService.recommendCommunityPlaces.mockResolvedValue(
         placeRecommendations as never,
       );
@@ -1294,7 +1366,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendCommunityPlacesStream(dto, mockAuthUser, req, res);
+      await controller.recommendCommunityPlacesStream(
+        dto,
+        mockAuthUser,
+        req,
+        res,
+      );
 
       expect(res.setHeader).toHaveBeenCalledWith(
         'Content-Type',
@@ -1328,7 +1405,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendCommunityPlacesStream(dto, mockAuthUser, req, res);
+      await controller.recommendCommunityPlacesStream(
+        dto,
+        mockAuthUser,
+        req,
+        res,
+      );
 
       const writeCalls = (res.write as jest.Mock).mock.calls;
       const errorEvent = writeCalls.find((call: string[]) =>
@@ -1361,7 +1443,12 @@ describe('MenuController', () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
-      await controller.recommendCommunityPlacesStream(dto, mockAuthUser, req, res);
+      await controller.recommendCommunityPlacesStream(
+        dto,
+        mockAuthUser,
+        req,
+        res,
+      );
 
       expect(
         mockCommunityPlaceService.recommendCommunityPlaces,
@@ -1390,7 +1477,12 @@ describe('MenuController', () => {
       });
 
       await controller.recommendCommunityPlacesStream(
-        { menuRecommendationId: 5, menuName: '피자', latitude: 0, longitude: 0 },
+        {
+          menuRecommendationId: 5,
+          menuName: '피자',
+          latitude: 0,
+          longitude: 0,
+        },
         mockAuthUser,
         req,
         res,
@@ -1417,7 +1509,12 @@ describe('MenuController', () => {
       const res = createMockResponse();
 
       await controller.recommendCommunityPlacesStream(
-        { menuRecommendationId: 5, menuName: '피자', latitude: 0, longitude: 0 },
+        {
+          menuRecommendationId: 5,
+          menuName: '피자',
+          latitude: 0,
+          longitude: 0,
+        },
         mockAuthUser,
         req,
         res,
@@ -1456,7 +1553,12 @@ describe('MenuController', () => {
         configurable: true,
       });
 
-      await controller.recommendCommunityPlacesStream(dto, mockAuthUser, req, res);
+      await controller.recommendCommunityPlacesStream(
+        dto,
+        mockAuthUser,
+        req,
+        res,
+      );
 
       // writableEnded=true means closeHandler won't abort, and res.end won't be called
       expect(res.end).not.toHaveBeenCalled();

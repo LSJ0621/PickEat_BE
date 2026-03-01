@@ -40,7 +40,9 @@ describe('PreferenceBatchResultProcessorService', () => {
     updatedAt: new Date(),
   };
 
-  const createMockQueryRunner = (overrides?: Partial<Record<string, jest.Mock>>) => ({
+  const createMockQueryRunner = (
+    overrides?: Partial<Record<string, jest.Mock>>,
+  ) => ({
     connect: jest.fn().mockResolvedValue(undefined),
     startTransaction: jest.fn().mockResolvedValue(undefined),
     commitTransaction: jest.fn().mockResolvedValue(undefined),
@@ -234,14 +236,12 @@ describe('PreferenceBatchResultProcessorService', () => {
       await service.processErrors(errors, mockBatchJob);
 
       // Assert
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [100],
-        { status: MenuSelectionStatus.FAILED },
-      );
-      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith(
-        [200],
-        { status: MenuSelectionStatus.FAILED },
-      );
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([100], {
+        status: MenuSelectionStatus.FAILED,
+      });
+      expect(mockMenuSelectionRepository.update).toHaveBeenCalledWith([200], {
+        status: MenuSelectionStatus.FAILED,
+      });
     });
 
     it('should skip errors with invalid custom_id format', async () => {

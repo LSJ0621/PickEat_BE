@@ -798,9 +798,7 @@ describe('S3Client', () => {
 
       const result = await client.getBucketStats();
 
-      expect(mockS3Send).toHaveBeenCalledWith(
-        expect.any(ListObjectsV2Command),
-      );
+      expect(mockS3Send).toHaveBeenCalledWith(expect.any(ListObjectsV2Command));
       expect(result.fileCount).toBe(2);
       expect(result.totalSizeBytes).toBe(3072);
       expect(result.files).toHaveLength(2);
@@ -1018,13 +1016,17 @@ describe('S3Client', () => {
       // Throw a plain string (non-Error) to cover the non-Error branch at lines 257-262
       mockS3Send.mockRejectedValueOnce('string s3 error');
 
-      await expect(client.getBucketStats()).rejects.toThrow(ExternalApiException);
+      await expect(client.getBucketStats()).rejects.toThrow(
+        ExternalApiException,
+      );
     });
 
     it('should throw ExternalApiException wrapping a non-Error object when S3 list throws an object', async () => {
       mockS3Send.mockRejectedValueOnce({ code: 'S3Error', message: 'bad' });
 
-      await expect(client.getBucketStats()).rejects.toThrow(ExternalApiException);
+      await expect(client.getBucketStats()).rejects.toThrow(
+        ExternalApiException,
+      );
     });
   });
 
@@ -1060,9 +1062,9 @@ describe('S3Client', () => {
       const presignError = new Error('Presigned URL generation failed');
       (getSignedUrl as jest.Mock).mockRejectedValue(presignError);
 
-      await expect(privateClient.uploadBugReportImage(mockFile)).rejects.toThrow(
-        ExternalApiException,
-      );
+      await expect(
+        privateClient.uploadBugReportImage(mockFile),
+      ).rejects.toThrow(ExternalApiException);
 
       // Verify cleanup: DeleteObjectCommand was sent after presign failure
       expect(mockS3Send).toHaveBeenCalledTimes(2);
@@ -1106,9 +1108,9 @@ describe('S3Client', () => {
       const presignError = new Error('Presigned URL generation failed');
       (getSignedUrl as jest.Mock).mockRejectedValue(presignError);
 
-      await expect(privateClient.uploadBugReportImage(mockFile)).rejects.toThrow(
-        ExternalApiException,
-      );
+      await expect(
+        privateClient.uploadBugReportImage(mockFile),
+      ).rejects.toThrow(ExternalApiException);
     });
   });
 });

@@ -22,6 +22,7 @@ import {
 } from '../../../../test/factories/entity.factory';
 import { ROLES } from '@/common/constants/roles.constants';
 import { ErrorCode } from '@/common/constants/error-codes';
+import { RedisCacheService } from '@/common/cache/cache.service';
 
 describe('AdminUserService', () => {
   let service: AdminUserService;
@@ -31,6 +32,7 @@ describe('AdminUserService', () => {
   let menuSelectionRepository: jest.Mocked<Repository<MenuSelection>>;
   let bugReportRepository: jest.Mocked<Repository<BugReport>>;
   let auditLogRepository: jest.Mocked<Repository<AdminAuditLog>>;
+  let cacheService: jest.Mocked<Pick<RedisCacheService, 'deleteRefreshToken'>>;
 
   beforeEach(async () => {
     userRepository = {
@@ -62,6 +64,10 @@ describe('AdminUserService', () => {
       save: jest.fn(),
     } as unknown as jest.Mocked<Repository<AdminAuditLog>>;
 
+    cacheService = {
+      deleteRefreshToken: jest.fn().mockResolvedValue(undefined),
+    } as jest.Mocked<Pick<RedisCacheService, 'deleteRefreshToken'>>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminUserService,
@@ -89,10 +95,15 @@ describe('AdminUserService', () => {
           provide: getRepositoryToken(AdminAuditLog),
           useValue: auditLogRepository,
         },
+        {
+          provide: RedisCacheService,
+          useValue: cacheService,
+        },
       ],
     }).compile();
 
     service = module.get<AdminUserService>(AdminUserService);
+    cacheService = module.get(RedisCacheService);
   });
 
   afterEach(() => {
@@ -694,7 +705,6 @@ describe('AdminUserService', () => {
           {
             isDeactivated: true,
             deactivatedAt: expect.any(Date),
-            refreshToken: null,
           },
         );
       });
@@ -730,7 +740,6 @@ describe('AdminUserService', () => {
           {
             isDeactivated: true,
             deactivatedAt: expect.any(Date),
-            refreshToken: null,
           },
         );
       });
@@ -766,7 +775,6 @@ describe('AdminUserService', () => {
           {
             isDeactivated: true,
             deactivatedAt: expect.any(Date),
-            refreshToken: null,
           },
         );
       });
@@ -799,7 +807,6 @@ describe('AdminUserService', () => {
           {
             isDeactivated: true,
             deactivatedAt: expect.any(Date),
-            refreshToken: null,
           },
         );
         expect(userRepository.update).toHaveBeenCalledTimes(1);
@@ -918,7 +925,7 @@ describe('AdminUserService', () => {
         ).rejects.toThrow(dbError);
       });
 
-      it('should set refreshToken to null when deactivating user', async () => {
+      it('should delete refresh token from Redis when deactivating user', async () => {
         // Arrange
         const userId = 1;
         const requestUserId = 2;
@@ -938,15 +945,8 @@ describe('AdminUserService', () => {
           '127.0.0.1',
         );
 
-        // Assert
-        expect(userRepository.update).toHaveBeenCalledWith(
-          { id: userId, isDeactivated: false },
-          expect.objectContaining({
-            isDeactivated: true,
-            deactivatedAt: expect.any(Date),
-            refreshToken: null, // Critical: ensures user is logged out
-          }),
-        );
+        // Assert: Redis-based token deletion ensures user is logged out
+        expect(cacheService.deleteRefreshToken).toHaveBeenCalledWith(userId);
       });
     });
   });
@@ -976,7 +976,12 @@ describe('AdminUserService', () => {
       userRepository.findOneBy.mockResolvedValue(targetUser);
 
       await expect(
-        service.activate(targetUserId, requestUserId, ROLES.SUPER_ADMIN, '127.0.0.1'),
+        service.activate(
+          targetUserId,
+          requestUserId,
+          ROLES.SUPER_ADMIN,
+          '127.0.0.1',
+        ),
       ).rejects.toThrow(
         new ForbiddenException('SUPER_ADMIN은 활성화할 수 없습니다'),
       );
@@ -1185,7 +1190,12 @@ describe('AdminUserService', () => {
       userRepository.update.mockResolvedValue(updateResult);
       auditLogRepository.save.mockResolvedValue({} as AdminAuditLog);
 
-      await service.deactivate(userId, requestUserId, ROLES.ADMIN, '192.168.0.1');
+      await service.deactivate(
+        userId,
+        requestUserId,
+        ROLES.ADMIN,
+        '192.168.0.1',
+      );
 
       expect(auditLogRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({

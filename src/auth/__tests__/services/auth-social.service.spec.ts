@@ -667,7 +667,6 @@ describe('AuthSocialService', () => {
       const restoredUser = {
         ...deletedUser,
         deletedAt: null,
-        refreshToken: null,
       };
 
       mockUserService.findBySocialEmailWithDeleted.mockResolvedValue(

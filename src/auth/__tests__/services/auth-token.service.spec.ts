@@ -6,22 +6,13 @@ import {
   HttpStatus,
   UnauthorizedException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
-import { DataSource } from 'typeorm';
 import { AuthTokenService } from '../../services/auth-token.service';
 import { JwtTokenProvider } from '../../provider/jwt-token.provider';
 import { UserService } from '@/user/user.service';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import { UserFactory } from '../../../../test/factories/entity.factory';
 import { createMockConfigService } from '../../../../test/mocks/external-clients.mock';
 import { ErrorCode } from '@/common/constants/error-codes';
-
-/**
- * Helper function to compute SHA-256 hash like the service does
- */
-function hashTokenForStorage(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
 
 describe('AuthTokenService', () => {
   let service: AuthTokenService;
@@ -30,66 +21,46 @@ describe('AuthTokenService', () => {
     Pick<JwtTokenProvider, 'createToken' | 'createRefreshToken'>
   >;
   let mockUserService: jest.Mocked<
-    Pick<UserService, 'findByEmail' | 'updateRefreshTokenById'>
+    Pick<UserService, 'findByEmail' | 'findByIdWithSelect'>
   >;
-  let mockQueryBuilder: {
-    update: jest.Mock;
-    set: jest.Mock;
-    where: jest.Mock;
-    execute: jest.Mock;
-    setLock: jest.Mock;
-    getOne: jest.Mock;
-  };
-  let mockQueryRunner: {
-    connect: jest.Mock;
-    startTransaction: jest.Mock;
-    commitTransaction: jest.Mock;
-    rollbackTransaction: jest.Mock;
-    release: jest.Mock;
-    manager: {
-      createQueryBuilder: jest.Mock;
-    };
-  };
+  let mockCacheService: jest.Mocked<
+    Pick<
+      RedisCacheService,
+      'setRefreshToken' | 'getRefreshToken' | 'deleteRefreshToken'
+    >
+  >;
 
   beforeEach(async () => {
-    mockQueryBuilder = {
-      update: jest.fn().mockReturnThis(),
-      set: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      execute: jest.fn().mockResolvedValue({ affected: 1 }),
-      setLock: jest.fn().mockReturnThis(),
-      getOne: jest.fn(),
-    };
-
-    mockQueryRunner = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      startTransaction: jest.fn().mockResolvedValue(undefined),
-      commitTransaction: jest.fn().mockResolvedValue(undefined),
-      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-      release: jest.fn().mockResolvedValue(undefined),
-      manager: {
-        createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
-      },
-    };
-
-    // Clear all mock calls before each test
     jest.clearAllMocks();
 
     mockJwtService = {
       sign: jest.fn(),
       verify: jest.fn(),
     } as jest.Mocked<Pick<JwtService, 'sign' | 'verify'>>;
+
     mockJwtTokenProvider = {
       createToken: jest.fn(),
       createRefreshToken: jest.fn(),
     } as jest.Mocked<
       Pick<JwtTokenProvider, 'createToken' | 'createRefreshToken'>
     >;
+
     mockUserService = {
       findByEmail: jest.fn(),
-      updateRefreshTokenById: jest.fn().mockResolvedValue(undefined),
+      findByIdWithSelect: jest.fn(),
     } as jest.Mocked<
-      Pick<UserService, 'findByEmail' | 'updateRefreshTokenById'>
+      Pick<UserService, 'findByEmail' | 'findByIdWithSelect'>
+    >;
+
+    mockCacheService = {
+      setRefreshToken: jest.fn().mockResolvedValue(undefined),
+      getRefreshToken: jest.fn(),
+      deleteRefreshToken: jest.fn().mockResolvedValue(undefined),
+    } as jest.Mocked<
+      Pick<
+        RedisCacheService,
+        'setRefreshToken' | 'getRefreshToken' | 'deleteRefreshToken'
+      >
     >;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -108,14 +79,13 @@ describe('AuthTokenService', () => {
           useValue: mockUserService,
         },
         {
-          provide: DataSource,
-          useValue: {
-            createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner),
-          },
+          provide: RedisCacheService,
+          useValue: mockCacheService,
         },
         {
           provide: ConfigService,
           useValue: createMockConfigService({
+            JWT_SECRET: 'test-access-secret',
             JWT_REFRESH_SECRET: 'test-refresh-secret',
           }),
         },
@@ -126,7 +96,7 @@ describe('AuthTokenService', () => {
   });
 
   describe('issueTokens', () => {
-    it('should issue access and refresh tokens when user is valid', async () => {
+    it('should issue access and refresh tokens and store refresh token in Redis', async () => {
       // Arrange
       const user = UserFactory.create({
         email: 'test@example.com',
@@ -139,11 +109,6 @@ describe('AuthTokenService', () => {
       mockJwtTokenProvider.createRefreshToken.mockReturnValue(
         expectedRefreshToken,
       );
-
-      // Mock bcrypt.hash
-      jest
-        .spyOn(bcrypt, 'hash')
-        .mockResolvedValue('hashed-refresh-token' as never);
 
       // Act
       const result = await service.issueTokens(user);
@@ -162,218 +127,78 @@ describe('AuthTokenService', () => {
         'test@example.com',
         'USER',
       );
-      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalled();
-    });
-
-    it('should persist hashed refresh token to database', async () => {
-      // Arrange
-      const user = UserFactory.create();
-      const refreshToken = 'refresh-token-123';
-      const hashedToken = 'hashed-token-123';
-      const sha256Hash = hashTokenForStorage(refreshToken);
-
-      mockJwtTokenProvider.createToken.mockReturnValue('access-token');
-      mockJwtTokenProvider.createRefreshToken.mockReturnValue(refreshToken);
-      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedToken as never);
-
-      // Act
-      await service.issueTokens(user);
-
-      // Assert
-      expect(bcrypt.hash).toHaveBeenCalledWith(sha256Hash, 10);
-      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
+      expect(mockCacheService.setRefreshToken).toHaveBeenCalledWith(
         user.id,
-        hashedToken,
+        expectedRefreshToken,
       );
     });
   });
 
-  describe('persistRefreshToken', () => {
-    it('should hash and save refresh token when provided', async () => {
+  describe('storeRefreshToken', () => {
+    it('should store refresh token in Redis when token is provided', async () => {
       // Arrange
-      const user = UserFactory.create();
-      const refreshToken = 'refresh-token-123';
-      const hashedToken = 'hashed-token-123';
-      const sha256Hash = hashTokenForStorage(refreshToken);
-
-      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedToken as never);
+      const userId = 1;
+      const token = 'refresh-token-123';
 
       // Act
-      await service.persistRefreshToken(user, refreshToken);
+      await service.storeRefreshToken(userId, token);
 
       // Assert
-      expect(bcrypt.hash).toHaveBeenCalledWith(sha256Hash, 10);
-      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
-        user.id,
-        hashedToken,
+      expect(mockCacheService.setRefreshToken).toHaveBeenCalledWith(
+        userId,
+        token,
       );
+      expect(mockCacheService.deleteRefreshToken).not.toHaveBeenCalled();
     });
 
-    it('should set refresh token to null when null is provided', async () => {
+    it('should delete refresh token from Redis when null is provided', async () => {
       // Arrange
-      const user = UserFactory.create({ refreshToken: 'old-token' });
+      const userId = 1;
 
       // Act
-      await service.persistRefreshToken(user, null);
+      await service.storeRefreshToken(userId, null);
 
       // Assert
-      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
-        user.id,
-        null,
-      );
+      expect(mockCacheService.deleteRefreshToken).toHaveBeenCalledWith(userId);
+      expect(mockCacheService.setRefreshToken).not.toHaveBeenCalled();
     });
   });
 
   describe('refreshAccessToken', () => {
-    it('should refresh tokens when valid refresh token is provided', async () => {
+    it('should issue a new access token when valid expired access token is provided', async () => {
       // Arrange
       const user = UserFactory.create({
+        id: 42,
         email: 'test@example.com',
         role: 'USER',
-        refreshToken: 'hashed-refresh-token',
       });
-      const refreshToken = 'valid-refresh-token';
-      const sha256Hash = hashTokenForStorage(refreshToken);
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
+      const accessToken = 'expired-access-token';
+      const storedRefreshToken = 'stored-refresh-token';
       const newAccessToken = 'new-access-token';
       const newRefreshToken = 'new-refresh-token';
-      const newSha256Hash = hashTokenForStorage(newRefreshToken);
 
-      mockJwtService.verify.mockReturnValue(payload);
-      mockQueryBuilder.getOne.mockResolvedValue(user);
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
-      jest.spyOn(bcrypt, 'hash').mockResolvedValue('new-hashed-token' as never);
+      mockJwtService.verify
+        .mockReturnValueOnce({ sub: 42, email: 'test@example.com', role: 'USER' }) // access token verify (ignoreExpiration)
+        .mockReturnValueOnce({}) // refresh token verify
+        .mockReturnValueOnce({}); // new refresh token verify (token rotation)
+      mockCacheService.getRefreshToken.mockResolvedValue(storedRefreshToken);
+      mockUserService.findByIdWithSelect.mockResolvedValue(user);
       mockJwtTokenProvider.createToken.mockReturnValue(newAccessToken);
       mockJwtTokenProvider.createRefreshToken.mockReturnValue(newRefreshToken);
 
       // Act
-      const result = await service.refreshAccessToken(refreshToken);
+      const result = await service.refreshAccessToken(accessToken);
 
       // Assert
-      expect(result).toEqual({
-        token: newAccessToken,
-        refreshToken: newRefreshToken,
-      });
-      expect(mockJwtService.verify).toHaveBeenCalledWith(refreshToken, {
-        secret: 'test-refresh-secret',
-      });
-      expect(mockQueryBuilder.getOne).toHaveBeenCalled();
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        sha256Hash,
-        'hashed-refresh-token',
+      expect(result).toEqual({ token: newAccessToken });
+      expect(mockCacheService.getRefreshToken).toHaveBeenCalledWith(42);
+      expect(mockCacheService.setRefreshToken).toHaveBeenCalledWith(
+        42,
+        newRefreshToken,
       );
-      expect(bcrypt.hash).toHaveBeenCalledWith(newSha256Hash, 10);
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException when token type is not refresh', async () => {
-      // Arrange
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'access',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-
-      // Act & Assert
-      await expect(service.refreshAccessToken('invalid-token')).rejects.toThrow(
-        UnauthorizedException,
-      );
-      await expect(service.refreshAccessToken('invalid-token')).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
-          }),
-        }),
-      );
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedException when user not found', async () => {
-      // Arrange
-      const payload = {
-        email: 'nonexistent@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockQueryBuilder.getOne.mockResolvedValue(null);
-
-      // Act & Assert
-      await expect(service.refreshAccessToken('token')).rejects.toThrow(
-        UnauthorizedException,
-      );
-      await expect(service.refreshAccessToken('token')).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.USER_NOT_FOUND,
-          }),
-        }),
-      );
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedException when user has no refresh token', async () => {
-      // Arrange
-      const user = UserFactory.create({ refreshToken: null });
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockQueryBuilder.getOne.mockResolvedValue(user);
-
-      // Act & Assert
-      await expect(service.refreshAccessToken('token')).rejects.toThrow(
-        UnauthorizedException,
-      );
-      await expect(service.refreshAccessToken('token')).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
-          }),
-        }),
-      );
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedException when refresh token does not match', async () => {
-      // Arrange
-      const user = UserFactory.create({ refreshToken: 'hashed-token' });
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockQueryBuilder.getOne.mockResolvedValue(user);
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
-
-      // Act & Assert
-      await expect(service.refreshAccessToken('wrong-token')).rejects.toThrow(
-        UnauthorizedException,
-      );
-      await expect(service.refreshAccessToken('wrong-token')).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            errorCode: ErrorCode.AUTH_INVALID_REFRESH_TOKEN,
-          }),
-        }),
-      );
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedException when JWT verification fails', async () => {
+    it('should throw UnauthorizedException when access token is invalid', async () => {
       // Arrange
       mockJwtService.verify.mockImplementation(() => {
         throw new Error('jwt malformed');
@@ -381,165 +206,95 @@ describe('AuthTokenService', () => {
 
       // Act & Assert
       await expect(
-        service.refreshAccessToken('malformed-token'),
+        service.refreshAccessToken('invalid-token'),
       ).rejects.toThrow(UnauthorizedException);
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException when JWT is expired', async () => {
+    it('should throw UnauthorizedException when no refresh token exists in Redis', async () => {
       // Arrange
-      mockJwtService.verify.mockImplementation(() => {
-        throw new Error('jwt expired');
+      mockJwtService.verify.mockReturnValue({
+        sub: 42,
+        email: 'test@example.com',
+        role: 'USER',
       });
+      mockCacheService.getRefreshToken.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(service.refreshAccessToken('expired-token')).rejects.toThrow(
-        UnauthorizedException,
-      );
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
+      await expect(
+        service.refreshAccessToken('expired-token'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException and delete Redis token when refresh token is expired', async () => {
+      // Arrange
+      mockJwtService.verify
+        .mockReturnValueOnce({ sub: 42, email: 'test@example.com', role: 'USER' }) // access token verify
+        .mockImplementationOnce(() => {
+          throw new Error('jwt expired'); // refresh token verify fails
+        });
+      mockCacheService.getRefreshToken.mockResolvedValue('expired-refresh-token');
+
+      // Act & Assert
+      await expect(
+        service.refreshAccessToken('expired-token'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockCacheService.deleteRefreshToken).toHaveBeenCalledWith(42);
+    });
+
+    it('should throw UnauthorizedException when user not found', async () => {
+      // Arrange
+      mockJwtService.verify
+        .mockReturnValueOnce({ sub: 42, email: 'test@example.com', role: 'USER' })
+        .mockReturnValueOnce({});
+      mockCacheService.getRefreshToken.mockResolvedValue('stored-refresh-token');
+      mockUserService.findByIdWithSelect.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.refreshAccessToken('expired-token'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockCacheService.deleteRefreshToken).toHaveBeenCalledWith(42);
     });
 
     it('should throw HttpException with FORBIDDEN status when user is deactivated', async () => {
       // Arrange
       const user = UserFactory.create({
-        email: 'test@example.com',
-        refreshToken: 'hashed-refresh-token',
-      });
-      // Set isDeactivated and deactivatedAt directly on the user object
-      (user as any).isDeactivated = true;
-      (user as any).deactivatedAt = new Date();
-
-      const payload = {
+        id: 42,
         email: 'test@example.com',
         role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockQueryBuilder.getOne.mockResolvedValue(user);
+      });
+      (user as Record<string, unknown>).isDeactivated = true;
+
+      mockJwtService.verify
+        .mockReturnValueOnce({ sub: 42, email: 'test@example.com', role: 'USER' })
+        .mockReturnValueOnce({});
+      mockCacheService.getRefreshToken.mockResolvedValue('stored-refresh-token');
+      mockUserService.findByIdWithSelect.mockResolvedValue(user);
 
       // Act & Assert
-      await expect(service.refreshAccessToken('valid-token')).rejects.toThrow(
+      await expect(
+        service.refreshAccessToken('expired-token'),
+      ).rejects.toThrow(
         expect.objectContaining({
           response: expect.objectContaining({
             errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
           }),
         }),
       );
-      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
-      expect(mockQueryRunner.release).toHaveBeenCalled();
+      expect(mockCacheService.deleteRefreshToken).toHaveBeenCalledWith(42);
     });
   });
 
   describe('logout', () => {
-    it('should clear refresh token when valid token is provided', async () => {
+    it('should delete refresh token from Redis', async () => {
       // Arrange
-      const user = UserFactory.create({
-        email: 'test@example.com',
-        refreshToken: 'hashed-token',
-      });
-      const refreshToken = 'valid-refresh-token';
-      const sha256Hash = hashTokenForStorage(refreshToken);
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-
-      mockJwtService.verify.mockReturnValue(payload);
-      mockUserService.findByEmail.mockResolvedValue(user);
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+      const userId = 42;
 
       // Act
-      await service.logout(refreshToken);
+      await service.logout(userId);
 
       // Assert
-      expect(mockJwtService.verify).toHaveBeenCalledWith(refreshToken, {
-        secret: 'test-refresh-secret',
-      });
-      expect(mockUserService.findByEmail).toHaveBeenCalledWith(
-        'test@example.com',
-      );
-      expect(bcrypt.compare).toHaveBeenCalledWith(sha256Hash, 'hashed-token');
-      expect(mockUserService.updateRefreshTokenById).toHaveBeenCalledWith(
-        user.id,
-        null,
-      );
-    });
-
-    it('should do nothing when no refresh token is provided', async () => {
-      // Act
-      await service.logout(undefined);
-
-      // Assert
-      expect(mockJwtService.verify).not.toHaveBeenCalled();
-      expect(mockUserService.findByEmail).not.toHaveBeenCalled();
-      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
-    });
-
-    it('should not throw error when JWT verification fails during logout', async () => {
-      // Arrange
-      mockJwtService.verify.mockImplementation(() => {
-        throw new Error('jwt expired');
-      });
-
-      // Act & Assert
-      await expect(service.logout('expired-token')).resolves.toBeUndefined();
-    });
-
-    it('should not clear token when user not found', async () => {
-      // Arrange
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockUserService.findByEmail.mockResolvedValue(null);
-
-      // Act
-      await service.logout('token');
-
-      // Assert
-      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
-    });
-
-    it('should not clear token when user has no refresh token', async () => {
-      // Arrange
-      const user = UserFactory.create({ refreshToken: null });
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockUserService.findByEmail.mockResolvedValue(user);
-
-      // Act
-      await service.logout('token');
-
-      // Assert
-      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
-    });
-
-    it('should not clear token when token does not match', async () => {
-      // Arrange
-      const user = UserFactory.create({ refreshToken: 'hashed-token' });
-      const payload = {
-        email: 'test@example.com',
-        role: 'USER',
-        type: 'refresh',
-      };
-      mockJwtService.verify.mockReturnValue(payload);
-      mockUserService.findByEmail.mockResolvedValue(user);
-      jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
-
-      // Act
-      await service.logout('wrong-token');
-
-      // Assert
-      expect(mockUserService.updateRefreshTokenById).not.toHaveBeenCalled();
+      expect(mockCacheService.deleteRefreshToken).toHaveBeenCalledWith(userId);
     });
   });
 });

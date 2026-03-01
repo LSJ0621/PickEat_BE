@@ -88,10 +88,7 @@ describe('PreferenceBatchService', () => {
   let mockOpenAiBatchClient: jest.Mocked<
     Pick<
       OpenAiBatchClient,
-      | 'isReady'
-      | 'createBatchContent'
-      | 'uploadBatchContent'
-      | 'createBatch'
+      'isReady' | 'createBatchContent' | 'uploadBatchContent' | 'createBatch'
     >
   >;
 
@@ -201,9 +198,9 @@ describe('PreferenceBatchService', () => {
       const result = await service.submitBatch();
 
       expect(result).toBeNull();
-      expect(mockResultProcessorService.markSelectionsSucceeded).toHaveBeenCalledWith(
-        group.selections,
-      );
+      expect(
+        mockResultProcessorService.markSelectionsSucceeded,
+      ).toHaveBeenCalledWith(group.selections);
       expect(mockBatchJobService.create).not.toHaveBeenCalled();
     });
 
@@ -551,9 +548,10 @@ describe('PreferenceBatchService', () => {
 
       await service.processResults(results, batchJob);
 
-      expect(
-        mockResultProcessorService.processResults,
-      ).toHaveBeenCalledWith(results, batchJob);
+      expect(mockResultProcessorService.processResults).toHaveBeenCalledWith(
+        results,
+        batchJob,
+      );
     });
 
     it('should propagate errors thrown by resultProcessorService', async () => {
@@ -582,9 +580,10 @@ describe('PreferenceBatchService', () => {
 
       await service.processErrors(errors, batchJob);
 
-      expect(
-        mockResultProcessorService.processErrors,
-      ).toHaveBeenCalledWith(errors, batchJob);
+      expect(mockResultProcessorService.processErrors).toHaveBeenCalledWith(
+        errors,
+        batchJob,
+      );
     });
 
     it('should handle empty errors array gracefully', async () => {

@@ -114,9 +114,19 @@ describe('SelectionGroupingService', () => {
       const user1 = UserFactory.create({ id: 1 });
       const user2 = UserFactory.create({ id: 2 });
       const sel1 = MenuSelectionFactory.createPending(user1);
-      sel1.menuPayload = { breakfast: ['토스트'], lunch: [], dinner: [], etc: [] };
+      sel1.menuPayload = {
+        breakfast: ['토스트'],
+        lunch: [],
+        dinner: [],
+        etc: [],
+      };
       const sel2 = MenuSelectionFactory.createPending(user2);
-      sel2.menuPayload = { breakfast: [], lunch: ['된장찌개'], dinner: [], etc: [] };
+      sel2.menuPayload = {
+        breakfast: [],
+        lunch: ['된장찌개'],
+        dinner: [],
+        etc: [],
+      };
 
       mockRepository.find.mockResolvedValue([sel1, sel2]);
 
@@ -138,7 +148,12 @@ describe('SelectionGroupingService', () => {
       sel1.menuPayload = { breakfast: ['빵'], lunch: [], dinner: [], etc: [] };
       const sel2 = MenuSelectionFactory.createPending(user);
       sel2.id = 11;
-      sel2.menuPayload = { breakfast: [], lunch: ['비빔밥'], dinner: [], etc: [] };
+      sel2.menuPayload = {
+        breakfast: [],
+        lunch: ['비빔밥'],
+        dinner: [],
+        etc: [],
+      };
 
       mockRepository.find.mockResolvedValue([sel1, sel2]);
 
@@ -172,7 +187,7 @@ describe('SelectionGroupingService', () => {
 
     it('should call markPermanentlyFailedSelections before querying failed selections', async () => {
       const updateQb = createUpdateChainQb();
-      (updateQb.execute as jest.Mock).mockResolvedValue({ affected: 2 });
+      updateQb.execute.mockResolvedValue({ affected: 2 });
 
       const selectQb = createMockQueryBuilder<MenuSelection>();
       (selectQb.getMany as jest.Mock).mockResolvedValue([]);
@@ -276,11 +291,21 @@ describe('SelectionGroupingService', () => {
       const user = UserFactory.create({ id: 1 });
       const sel1 = MenuSelectionFactory.create({
         user,
-        menuPayload: { breakfast: [], lunch: ['된장찌개'], dinner: [], etc: [] },
+        menuPayload: {
+          breakfast: [],
+          lunch: ['된장찌개'],
+          dinner: [],
+          etc: [],
+        },
       });
       const sel2 = MenuSelectionFactory.create({
         user,
-        menuPayload: { breakfast: [], lunch: ['된장찌개'], dinner: [], etc: [] },
+        menuPayload: {
+          breakfast: [],
+          lunch: ['된장찌개'],
+          dinner: [],
+          etc: [],
+        },
       });
 
       const result = service.groupSelectionsToUserMap([sel1, sel2]);

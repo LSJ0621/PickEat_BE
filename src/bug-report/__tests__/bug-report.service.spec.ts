@@ -107,7 +107,11 @@ describe('BugReportService', () => {
   });
 
   describe('createBugReport', () => {
-    const authUser = { sub: 1, email: 'test@example.com', role: 'USER' as const };
+    const authUser = {
+      sub: 1,
+      email: 'test@example.com',
+      role: 'USER' as const,
+    };
     const dto: CreateBugReportDto = {
       category: 'UI/UX',
       title: '버튼이 작동하지 않습니다',
@@ -236,7 +240,9 @@ describe('BugReportService', () => {
       // Flush the void promise so the async notification runs
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(discordMessageBuilderService.buildImmediateAlertEmbed).toHaveBeenCalledWith(
+      expect(
+        discordMessageBuilderService.buildImmediateAlertEmbed,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           bugReport: expect.objectContaining({
             user: expect.objectContaining({ email: authUser.email }),
@@ -546,7 +552,7 @@ describe('BugReportService', () => {
       bugReport.updatedAt = new Date('2024-01-01T00:00:00Z');
 
       bugReportRepository.findOne.mockResolvedValue(bugReport);
-      bugReportRepository.save.mockResolvedValue(bugReport as BugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport);
 
       await service.updateStatusWithHistory(
         1,
@@ -577,13 +583,17 @@ describe('BugReportService', () => {
     });
 
     it('should use the provided changedBy user in history entry', async () => {
-      const adminUser = UserFactory.create({ id: 99, email: 'admin@test.com', role: 'ADMIN' });
+      const adminUser = UserFactory.create({
+        id: 99,
+        email: 'admin@test.com',
+        role: 'ADMIN',
+      });
       const bugReport = BugReportFactory.create({ id: 1 });
       bugReport.createdAt = new Date();
       bugReport.updatedAt = new Date();
 
       bugReportRepository.findOne.mockResolvedValue(bugReport);
-      bugReportRepository.save.mockResolvedValue(bugReport as BugReport);
+      bugReportRepository.save.mockResolvedValue(bugReport);
 
       await service.updateStatusWithHistory(
         1,
@@ -734,7 +744,11 @@ describe('BugReportService', () => {
   });
 
   describe('createBugReport - image upload failures', () => {
-    const authUser = { sub: 1, email: 'test@example.com', role: 'USER' as const };
+    const authUser = {
+      sub: 1,
+      email: 'test@example.com',
+      role: 'USER' as const,
+    };
 
     it('should log warning when some image uploads fail', async () => {
       const user = UserFactory.create();
@@ -774,11 +788,15 @@ describe('BugReportService', () => {
         .spyOn(service['logger'], 'warn')
         .mockImplementation();
 
-      const result = await service.createBugReport(authUser, {
-        category: 'Bug',
-        title: 'Test',
-        description: 'Desc',
-      }, mockFiles);
+      const result = await service.createBugReport(
+        authUser,
+        {
+          category: 'Bug',
+          title: 'Test',
+          description: 'Desc',
+        },
+        mockFiles,
+      );
 
       expect(loggerWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('bug report image upload(s) failed'),
@@ -809,11 +827,15 @@ describe('BugReportService', () => {
       bugReportRepository.create.mockReturnValue(bugReport);
       bugReportRepository.save.mockResolvedValue(bugReport);
 
-      const result = await service.createBugReport(authUser, {
-        category: 'Bug',
-        title: 'Test',
-        description: 'Desc',
-      }, mockFiles);
+      const result = await service.createBugReport(
+        authUser,
+        {
+          category: 'Bug',
+          title: 'Test',
+          description: 'Desc',
+        },
+        mockFiles,
+      );
 
       expect(bugReportRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ images: null }),

@@ -28,7 +28,10 @@ const mockPreferences: Omit<CachedUserPreferences, 'cachedAt'> = {
       confidence: 'high',
     },
     recentSignals: { trending: ['국밥'], declining: ['양식'] },
-    diversityHints: { explorationAreas: ['일식'], rotationSuggestions: ['중식'] },
+    diversityHints: {
+      explorationAreas: ['일식'],
+      rotationSuggestions: ['중식'],
+    },
   },
   analysisParagraphs: {
     paragraph1: '첫 번째',
@@ -189,7 +192,10 @@ describe('RedisCacheService', () => {
       const afterTime = Date.now();
       expect(cacheManager.set).toHaveBeenCalledWith(
         CACHE_KEY.userPreferences(USER_ID),
-        expect.objectContaining({ ...mockPreferences, cachedAt: expect.any(String) }),
+        expect.objectContaining({
+          ...mockPreferences,
+          cachedAt: expect.any(String),
+        }),
         CACHE_TTL.USER_PREFERENCES * 1000,
       );
 
@@ -219,7 +225,10 @@ describe('RedisCacheService', () => {
 
       expect(cacheManager.set).toHaveBeenCalledWith(
         CACHE_KEY.userAddresses(USER_ID),
-        expect.objectContaining({ addresses: mockAddresses, cachedAt: expect.any(String) }),
+        expect.objectContaining({
+          addresses: mockAddresses,
+          cachedAt: expect.any(String),
+        }),
         CACHE_TTL.USER_ADDRESSES * 1000,
       );
     });
@@ -255,7 +264,10 @@ describe('RedisCacheService', () => {
 
       expect(cacheManager.set).toHaveBeenCalledWith(
         CACHE_KEY.userProfile(USER_ID),
-        expect.objectContaining({ ...mockProfile, cachedAt: expect.any(String) }),
+        expect.objectContaining({
+          ...mockProfile,
+          cachedAt: expect.any(String),
+        }),
         CACHE_TTL.USER_PROFILE * 1000,
       );
     });
@@ -288,10 +300,17 @@ describe('RedisCacheService', () => {
 
   describe('getWebSearchSummary', () => {
     it('should return cached summary on cache hit', async () => {
-      const cached: CachedWebSearchSummary = { ...mockSummary, cachedAt: '2026-02-15T10:00:00.000Z' };
+      const cached: CachedWebSearchSummary = {
+        ...mockSummary,
+        cachedAt: '2026-02-15T10:00:00.000Z',
+      };
       cacheManager.get.mockResolvedValue(cached);
 
-      const result = await service.getWebSearchSummary('서울특별시 강남구 테헤란로', 1996, 'male');
+      const result = await service.getWebSearchSummary(
+        '서울특별시 강남구 테헤란로',
+        1996,
+        'male',
+      );
 
       expect(result).toEqual(cached);
       expect(cacheManager.get).toHaveBeenCalledWith(
@@ -301,15 +320,29 @@ describe('RedisCacheService', () => {
 
     it('should return null on cache miss', async () => {
       cacheManager.get.mockResolvedValue(undefined);
-      const result = await service.getWebSearchSummary('서울특별시 강남구', 1996, 'male');
+      const result = await service.getWebSearchSummary(
+        '서울특별시 강남구',
+        1996,
+        'male',
+      );
       expect(result).toBeNull();
     });
 
     describe('cache key segments — undefined inputs default to "unknown"', () => {
       it.each([
         [undefined, 1996, 'male', 'ai:websearch:unknown:30s:male:'],
-        ['서울특별시 강남구', undefined, 'male', 'ai:websearch:서울:unknown:male:'],
-        ['서울특별시 강남구', 1996, undefined, 'ai:websearch:서울:30s:unknown:'],
+        [
+          '서울특별시 강남구',
+          undefined,
+          'male',
+          'ai:websearch:서울:unknown:male:',
+        ],
+        [
+          '서울특별시 강남구',
+          1996,
+          undefined,
+          'ai:websearch:서울:30s:unknown:',
+        ],
       ])(
         'address=%j birthYear=%j gender=%j -> key contains %j',
         async (address, birthYear, gender, keyFragment) => {
@@ -343,45 +376,40 @@ describe('RedisCacheService', () => {
         ['제주특별자치도', '제주'],
         ['Tokyo, Shibuya Ward', 'tokyo'],
         ['', 'unknown'],
-      ])(
-        'address "%s" -> region "%s"',
-        async (address, region) => {
-          cacheManager.get.mockResolvedValue(null);
-          await service.getWebSearchSummary(address, 1996, 'male');
-          expect(cacheManager.get).toHaveBeenCalledWith(
-            expect.stringContaining(`ai:websearch:${region}:`),
-          );
-        },
-      );
+      ])('address "%s" -> region "%s"', async (address, region) => {
+        cacheManager.get.mockResolvedValue(null);
+        await service.getWebSearchSummary(address, 1996, 'male');
+        expect(cacheManager.get).toHaveBeenCalledWith(
+          expect.stringContaining(`ai:websearch:${region}:`),
+        );
+      });
     });
 
     describe('getAgeGroup (via getWebSearchSummary)', () => {
       // Current year is 2026
       it.each([
-        [2010, 'teens'],   // age 16
-        [2006, '20s'],     // age 20
-        [1996, '30s'],     // age 30
-        [1986, '40s'],     // age 40
-        [1976, '50s'],     // age 50
-        [1956, '60plus'],  // age 70
+        [2010, 'teens'], // age 16
+        [2006, '20s'], // age 20
+        [1996, '30s'], // age 30
+        [1986, '40s'], // age 40
+        [1976, '50s'], // age 50
+        [1956, '60plus'], // age 70
         [undefined, 'unknown'],
-      ])(
-        'birthYear %s -> ageGroup "%s"',
-        async (birthYear, ageGroup) => {
-          cacheManager.get.mockResolvedValue(null);
-          await service.getWebSearchSummary('서울특별시', birthYear, 'male');
-          expect(cacheManager.get).toHaveBeenCalledWith(
-            expect.stringContaining(`ai:websearch:서울:${ageGroup}:`),
-          );
-        },
-      );
+      ])('birthYear %s -> ageGroup "%s"', async (birthYear, ageGroup) => {
+        cacheManager.get.mockResolvedValue(null);
+        await service.getWebSearchSummary('서울특별시', birthYear, 'male');
+        expect(cacheManager.get).toHaveBeenCalledWith(
+          expect.stringContaining(`ai:websearch:서울:${ageGroup}:`),
+        );
+      });
     });
 
     it('should include current month in YYYY-MM format in cache key', async () => {
       cacheManager.get.mockResolvedValue(null);
       await service.getWebSearchSummary('서울특별시', 1996, 'male');
 
-      const calledKey = (cacheManager.get as jest.Mock).mock.calls[0][0] as string;
+      const calledKey = (cacheManager.get as jest.Mock).mock
+        .calls[0][0] as string;
       const monthPart = calledKey.split(':').pop();
       expect(monthPart).toMatch(/^\d{4}-\d{2}$/);
     });
@@ -390,11 +418,19 @@ describe('RedisCacheService', () => {
   describe('setWebSearchSummary', () => {
     it('should store summary with cachedAt timestamp and correct TTL', async () => {
       cacheManager.set.mockResolvedValue(undefined);
-      await service.setWebSearchSummary('서울특별시 강남구 테헤란로', 1996, 'male', mockSummary);
+      await service.setWebSearchSummary(
+        '서울특별시 강남구 테헤란로',
+        1996,
+        'male',
+        mockSummary,
+      );
 
       expect(cacheManager.set).toHaveBeenCalledWith(
         expect.stringContaining('ai:websearch:서울:30s:male:'),
-        expect.objectContaining({ ...mockSummary, cachedAt: expect.any(String) }),
+        expect.objectContaining({
+          ...mockSummary,
+          cachedAt: expect.any(String),
+        }),
         CACHE_TTL.WEB_SEARCH_SUMMARY * 1000,
       );
     });
@@ -408,7 +444,9 @@ describe('RedisCacheService', () => {
     it('should generate unique keys for different users', () => {
       expect(CACHE_KEY.userPreferences(1)).toBe('user:1:preferences');
       expect(CACHE_KEY.userPreferences(2)).toBe('user:2:preferences');
-      expect(CACHE_KEY.userPreferences(1)).not.toBe(CACHE_KEY.userPreferences(2));
+      expect(CACHE_KEY.userPreferences(1)).not.toBe(
+        CACHE_KEY.userPreferences(2),
+      );
     });
 
     it('should generate distinct keys for different cache types for the same user', () => {
@@ -417,14 +455,20 @@ describe('RedisCacheService', () => {
         CACHE_KEY.userAddresses(USER_ID),
         CACHE_KEY.userProfile(USER_ID),
       ];
-      expect(keys).toEqual(['user:1:preferences', 'user:1:addresses', 'user:1:profile']);
+      expect(keys).toEqual([
+        'user:1:preferences',
+        'user:1:addresses',
+        'user:1:profile',
+      ]);
       expect(new Set(keys).size).toBe(keys.length);
     });
 
     it('should generate deterministic web search keys', () => {
       const key = CACHE_KEY.webSearchSummary('서울', '20s', 'male', '2026-02');
       expect(key).toBe('ai:websearch:서울:20s:male:2026-02');
-      expect(CACHE_KEY.webSearchSummary('서울', '20s', 'male', '2026-02')).toBe(key);
+      expect(CACHE_KEY.webSearchSummary('서울', '20s', 'male', '2026-02')).toBe(
+        key,
+      );
     });
 
     it('should generate different web search keys for different months', () => {

@@ -221,9 +221,9 @@ describe('UserService', () => {
         new OptimisticLockVersionMismatchError('User', 1, 2),
       );
 
-      await expect(
-        service.updatePassword(user, 'newPassword'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.updatePassword(user, 'newPassword')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -350,12 +350,21 @@ describe('UserService', () => {
       const email = 'social@example.com';
       const socialType = SocialType.KAKAO;
       const name = 'Social User';
-      const createdUser = UserFactory.createWithSocial(email, socialId, socialType);
+      const createdUser = UserFactory.createWithSocial(
+        email,
+        socialId,
+        socialType,
+      );
       createdUser.name = name;
       userRepository.create.mockReturnValue(createdUser);
       userRepository.save.mockResolvedValue(createdUser);
 
-      const result = await service.createOauth(socialId, email, socialType, name);
+      const result = await service.createOauth(
+        socialId,
+        email,
+        socialType,
+        name,
+      );
 
       expect(result).toEqual(createdUser);
       expect(userRepository.create).toHaveBeenCalledWith({
@@ -373,7 +382,11 @@ describe('UserService', () => {
       const socialId = 999888777;
       const email = 'social@example.com';
       const socialType = SocialType.GOOGLE;
-      const createdUser = UserFactory.createWithSocial(email, '999888777', socialType);
+      const createdUser = UserFactory.createWithSocial(
+        email,
+        '999888777',
+        socialType,
+      );
       userRepository.create.mockReturnValue(createdUser);
       userRepository.save.mockResolvedValue(createdUser);
 
@@ -412,7 +425,9 @@ describe('UserService', () => {
       softRemove: jest.fn().mockResolvedValue(user),
     });
 
-    const setupTransaction = (mockManager: ReturnType<typeof buildMockManager>) => {
+    const setupTransaction = (
+      mockManager: ReturnType<typeof buildMockManager>,
+    ) => {
       dataSource.transaction.mockImplementation(
         async (
           _isolationOrRunInTransaction: unknown,
@@ -430,7 +445,6 @@ describe('UserService', () => {
       const email = 'test@example.com';
       const user = UserFactory.create({
         email,
-        refreshToken: 'valid-refresh-token',
         reRegisterEmailVerified: true,
       });
       const mockManager = buildMockManager(user);
@@ -438,7 +452,6 @@ describe('UserService', () => {
 
       await service.deleteUser(email);
 
-      expect(user.refreshToken).toBeNull();
       expect(user.reRegisterEmailVerified).toBe(false);
       expect(mockManager.save).toHaveBeenCalledWith(user);
       expect(mockManager.softRemove).toHaveBeenCalledWith(user);
@@ -448,9 +461,9 @@ describe('UserService', () => {
       const mockManager = buildMockManager(null);
       setupTransaction(mockManager);
 
-      await expect(service.deleteUser('nonexistent@example.com')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.deleteUser('nonexistent@example.com'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when user already deleted', async () => {
@@ -510,10 +523,19 @@ describe('UserService', () => {
       const user = UserFactory.create();
       const likes = ['한식', '중식'];
       const dislikes = ['양식'];
-      const updatedPreferences = UserPreferencesFactory.create({ likes, dislikes });
-      userPreferenceService.updatePreferences.mockResolvedValue(updatedPreferences);
+      const updatedPreferences = UserPreferencesFactory.create({
+        likes,
+        dislikes,
+      });
+      userPreferenceService.updatePreferences.mockResolvedValue(
+        updatedPreferences,
+      );
 
-      const result = await service.updateEntityPreferences(user, likes, dislikes);
+      const result = await service.updateEntityPreferences(
+        user,
+        likes,
+        dislikes,
+      );
 
       expect(result).toEqual(updatedPreferences);
       expect(userPreferenceService.updatePreferences).toHaveBeenCalledWith(
@@ -526,8 +548,13 @@ describe('UserService', () => {
     it('should pass undefined for omitted parameters', async () => {
       const user = UserFactory.create();
       const likes = ['한식'];
-      const updatedPreferences = UserPreferencesFactory.create({ likes, dislikes: [] });
-      userPreferenceService.updatePreferences.mockResolvedValue(updatedPreferences);
+      const updatedPreferences = UserPreferencesFactory.create({
+        likes,
+        dislikes: [],
+      });
+      userPreferenceService.updatePreferences.mockResolvedValue(
+        updatedPreferences,
+      );
 
       await service.updateEntityPreferences(user, likes, undefined);
 
@@ -549,7 +576,10 @@ describe('UserService', () => {
         updatedPreferences,
       );
 
-      const result = await service.updateEntityPreferencesAnalysis(user, analysis);
+      const result = await service.updateEntityPreferencesAnalysis(
+        user,
+        analysis,
+      );
 
       expect(result).toEqual(updatedPreferences);
       expect(
@@ -629,7 +659,9 @@ describe('UserService', () => {
       const result = await service.searchAddress(searchDto);
 
       expect(result).toEqual(searchResponse);
-      expect(addressSearchService.searchAddress).toHaveBeenCalledWith(searchDto);
+      expect(addressSearchService.searchAddress).toHaveBeenCalledWith(
+        searchDto,
+      );
     });
   });
 
@@ -639,7 +671,10 @@ describe('UserService', () => {
       const updatedAddress = UserAddressFactory.create({ user });
       userAddressService.updateSingleAddress.mockResolvedValue(updatedAddress);
 
-      const result = await service.updateEntitySingleAddress(user, mockRawAddress);
+      const result = await service.updateEntitySingleAddress(
+        user,
+        mockRawAddress,
+      );
 
       expect(result).toEqual(updatedAddress);
       expect(userAddressService.updateSingleAddress).toHaveBeenCalledWith(
@@ -687,7 +722,11 @@ describe('UserService', () => {
       const result = await service.updateEntityAddress(user, addressId, dto);
 
       expect(result).toEqual(updatedAddress);
-      expect(userAddressService.updateAddress).toHaveBeenCalledWith(user, addressId, dto);
+      expect(userAddressService.updateAddress).toHaveBeenCalledWith(
+        user,
+        addressId,
+        dto,
+      );
     });
   });
 
@@ -699,7 +738,10 @@ describe('UserService', () => {
 
       await service.deleteEntityAddresses(user, addressIds);
 
-      expect(userAddressService.deleteAddresses).toHaveBeenCalledWith(user, addressIds);
+      expect(userAddressService.deleteAddresses).toHaveBeenCalledWith(
+        user,
+        addressIds,
+      );
     });
   });
 
@@ -707,13 +749,20 @@ describe('UserService', () => {
     it('should delegate to userAddressService', async () => {
       const user = UserFactory.create();
       const addressId = 1;
-      const defaultAddress = UserAddressFactory.create({ id: addressId, user, isDefault: true });
+      const defaultAddress = UserAddressFactory.create({
+        id: addressId,
+        user,
+        isDefault: true,
+      });
       userAddressService.setDefaultAddress.mockResolvedValue(defaultAddress);
 
       const result = await service.setEntityDefaultAddress(user, addressId);
 
       expect(result).toEqual(defaultAddress);
-      expect(userAddressService.setDefaultAddress).toHaveBeenCalledWith(user, addressId);
+      expect(userAddressService.setDefaultAddress).toHaveBeenCalledWith(
+        user,
+        addressId,
+      );
     });
   });
 
@@ -721,13 +770,20 @@ describe('UserService', () => {
     it('should delegate to userAddressService', async () => {
       const user = UserFactory.create();
       const addressId = 1;
-      const searchAddress = UserAddressFactory.create({ id: addressId, user, isSearchAddress: true });
+      const searchAddress = UserAddressFactory.create({
+        id: addressId,
+        user,
+        isSearchAddress: true,
+      });
       userAddressService.setSearchAddress.mockResolvedValue(searchAddress);
 
       const result = await service.setEntitySearchAddress(user, addressId);
 
       expect(result).toEqual(searchAddress);
-      expect(userAddressService.setSearchAddress).toHaveBeenCalledWith(user, addressId);
+      expect(userAddressService.setSearchAddress).toHaveBeenCalledWith(
+        user,
+        addressId,
+      );
     });
   });
 

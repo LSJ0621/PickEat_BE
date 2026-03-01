@@ -148,18 +148,22 @@ describe('UserPlaceService', () => {
 
     it('should return nearby places with rounded distance from PostGIS', async () => {
       const user = UserFactory.create({ id: userId });
-      const place1 = UserPlaceFactory.create({ user, id: 1, name: '가까운 곳' });
-      const place2 = UserPlaceFactory.create({ user, id: 2, name: '중간 거리' });
+      const place1 = UserPlaceFactory.create({
+        user,
+        id: 1,
+        name: '가까운 곳',
+      });
+      const place2 = UserPlaceFactory.create({
+        user,
+        id: 2,
+        name: '중간 거리',
+      });
       const place3 = UserPlaceFactory.create({ user, id: 3, name: '먼 곳' });
 
       const mockQueryBuilder = createMockQueryBuilder();
       mockQueryBuilder.getRawAndEntities.mockResolvedValue({
         entities: [place1, place2, place3],
-        raw: [
-          { distance: '10.5' },
-          { distance: '45.2' },
-          { distance: '89.7' },
-        ],
+        raw: [{ distance: '10.5' }, { distance: '45.2' }, { distance: '89.7' }],
       });
 
       userPlaceRepository.count.mockResolvedValue(0);
@@ -879,10 +883,15 @@ describe('UserPlaceService', () => {
         Promise.resolve(entity as UserPlace),
       );
 
-      const result = await service.update(userId, placeId, {
-        existingPhotos: ['https://example.com/existing-photo.jpg'],
-        version: 1,
-      }, mockFiles);
+      const result = await service.update(
+        userId,
+        placeId,
+        {
+          existingPhotos: ['https://example.com/existing-photo.jpg'],
+          version: 1,
+        },
+        mockFiles,
+      );
 
       expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(1);
       expect(result.photos).toContain('https://example.com/existing-photo.jpg');
@@ -919,13 +928,20 @@ describe('UserPlaceService', () => {
         .spyOn(service['logger'], 'warn')
         .mockImplementation();
 
-      const result = await service.update(userId, placeId, {
-        existingPhotos: [],
-        version: 1,
-      }, mockFiles);
+      const result = await service.update(
+        userId,
+        placeId,
+        {
+          existingPhotos: [],
+          version: 1,
+        },
+        mockFiles,
+      );
 
       expect(loggerWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('user place image upload(s) failed during update'),
+        expect.stringContaining(
+          'user place image upload(s) failed during update',
+        ),
       );
       expect(result).toBeDefined();
 
@@ -965,15 +981,20 @@ describe('UserPlaceService', () => {
         Promise.resolve(entity as UserPlace),
       );
 
-      const result = await service.update(userId, placeId, {
-        existingPhotos: [
-          'https://example.com/photo1.jpg',
-          'https://example.com/photo2.jpg',
-          'https://example.com/photo3.jpg',
-          'https://example.com/photo4.jpg',
-        ],
-        version: 1,
-      }, mockFiles);
+      const result = await service.update(
+        userId,
+        placeId,
+        {
+          existingPhotos: [
+            'https://example.com/photo1.jpg',
+            'https://example.com/photo2.jpg',
+            'https://example.com/photo3.jpg',
+            'https://example.com/photo4.jpg',
+          ],
+          version: 1,
+        },
+        mockFiles,
+      );
 
       // Existing 4 + up to 1 new = max 5
       expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledTimes(1);

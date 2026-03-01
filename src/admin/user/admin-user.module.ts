@@ -7,6 +7,7 @@ import { MenuSelection } from '@/menu/entities/menu-selection.entity';
 import { BugReport } from '@/bug-report/entities/bug-report.entity';
 import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity';
 import { UserModule } from '@/user/user.module';
+import { RedisCacheModule } from '@/common/cache/cache.module';
 import { AdminUserController } from './admin-user.controller';
 import { AdminUserService } from './admin-user.service';
 
@@ -21,6 +22,7 @@ import { AdminUserService } from './admin-user.service';
       AdminAuditLog,
     ]),
     UserModule,
+    RedisCacheModule,
   ],
   controllers: [AdminUserController],
   providers: [AdminUserService],

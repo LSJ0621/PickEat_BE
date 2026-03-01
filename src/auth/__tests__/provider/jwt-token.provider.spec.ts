@@ -48,7 +48,11 @@ describe('JwtTokenProvider', () => {
 
       // Assert
       expect(result).toBe(expectedToken);
-      expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
+      expect(mockJwtService.sign).toHaveBeenCalledWith({
+        sub: userId,
+        email,
+        role,
+      });
     });
 
     it('should create access token for ADMIN role', () => {
@@ -65,7 +69,11 @@ describe('JwtTokenProvider', () => {
 
       // Assert
       expect(result).toBe(expectedToken);
-      expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
+      expect(mockJwtService.sign).toHaveBeenCalledWith({
+        sub: userId,
+        email,
+        role,
+      });
     });
 
     it('should create tokens with different emails', () => {
@@ -85,7 +93,11 @@ describe('JwtTokenProvider', () => {
 
         // Assert
         expect(result).toBe(`token-${index}`);
-        expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
+        expect(mockJwtService.sign).toHaveBeenCalledWith({
+          sub: userId,
+          email,
+          role,
+        });
       });
     });
 
@@ -101,7 +113,11 @@ describe('JwtTokenProvider', () => {
 
       // Assert
       // JwtService.sign is called without options, so it uses module defaults
-      expect(mockJwtService.sign).toHaveBeenCalledWith({ sub: userId, email, role });
+      expect(mockJwtService.sign).toHaveBeenCalledWith({
+        sub: userId,
+        email,
+        role,
+      });
     });
   });
 
@@ -247,7 +263,11 @@ describe('JwtTokenProvider', () => {
       expect(mockJwtService.sign).toHaveBeenCalledTimes(2);
 
       // Access token call (no extra options)
-      expect(mockJwtService.sign).toHaveBeenNthCalledWith(1, { sub: userId, email, role });
+      expect(mockJwtService.sign).toHaveBeenNthCalledWith(1, {
+        sub: userId,
+        email,
+        role,
+      });
 
       // Refresh token call (with type, jti, and options)
       expect(mockJwtService.sign).toHaveBeenNthCalledWith(

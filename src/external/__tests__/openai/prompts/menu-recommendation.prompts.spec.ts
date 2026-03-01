@@ -253,7 +253,12 @@ describe('menu-recommendation.prompts', () => {
 
     describe('PREFERENCES section - likes and dislikes', () => {
       test.each([
-        [['국밥', '찌개'], ['매운 음식'], 'Likes: 국밥, 찌개', 'Dislikes: 매운 음식'],
+        [
+          ['국밥', '찌개'],
+          ['매운 음식'],
+          'Likes: 국밥, 찌개',
+          'Dislikes: 매운 음식',
+        ],
         [[], ['매운 음식'], 'Likes: None', 'Dislikes: 매운 음식'],
         [['국밥'], [], 'Likes: 국밥', 'Dislikes: None'],
         [[], [], 'Likes: None', 'Dislikes: None'],
@@ -285,7 +290,10 @@ describe('menu-recommendation.prompts', () => {
 
     describe('PREFERENCE_ANALYSIS section', () => {
       test.each([
-        ['한식을 선호하시는 경향이 있습니다.', '한식을 선호하시는 경향이 있습니다.'],
+        [
+          '한식을 선호하시는 경향이 있습니다.',
+          '한식을 선호하시는 경향이 있습니다.',
+        ],
         [undefined, 'None'],
         ['', 'None'],
         ['   ', 'None'],
@@ -305,7 +313,12 @@ describe('menu-recommendation.prompts', () => {
       });
 
       it('should preserve multi-line analysis', () => {
-        const result = buildUserPrompt('test', [], [], '첫 줄\n둘째 줄\n셋째 줄');
+        const result = buildUserPrompt(
+          'test',
+          [],
+          [],
+          '첫 줄\n둘째 줄\n셋째 줄',
+        );
         expect(result).toContain('첫 줄\n둘째 줄\n셋째 줄');
       });
     });
@@ -528,7 +541,12 @@ describe('menu-recommendation.prompts', () => {
 
     describe('output structure', () => {
       it('should have correct section order with all required sections', () => {
-        const result = buildUserPrompt('테스트 프롬프트', ['한식'], ['양식'], '분석 내용');
+        const result = buildUserPrompt(
+          '테스트 프롬프트',
+          ['한식'],
+          ['양식'],
+          '분석 내용',
+        );
         const lines = result.split('\n');
 
         expect(lines[0]).toBe('RESPONSE_LANGUAGE: Korean');
@@ -840,8 +858,7 @@ describe('menu-recommendation.prompts', () => {
     });
 
     it('should define recommendations as array with correct constraints and Korean description', () => {
-      const { recommendations } =
-        MENU_RECOMMENDATIONS_JSON_SCHEMA.properties;
+      const { recommendations } = MENU_RECOMMENDATIONS_JSON_SCHEMA.properties;
       expect(recommendations.type).toBe('array');
       expect(recommendations.minItems).toBe(1);
       expect(recommendations.maxItems).toBe(5);
@@ -861,7 +878,11 @@ describe('menu-recommendation.prompts', () => {
     test.each([
       [
         'ko' as const,
-        { intro: '첫 설명', recommendations: '조건 + 메뉴 배열', closing: '마무리 말' },
+        {
+          intro: '첫 설명',
+          recommendations: '조건 + 메뉴 배열',
+          closing: '마무리 말',
+        },
       ],
       [
         'en' as const,
@@ -949,12 +970,22 @@ describe('menu-recommendation.prompts', () => {
 
     describe('ageGroup field', () => {
       it('should set Korean age group when language is ko', () => {
-        const result = buildUserProfile(currentYear - 30, undefined, undefined, 'ko');
+        const result = buildUserProfile(
+          currentYear - 30,
+          undefined,
+          undefined,
+          'ko',
+        );
         expect(result.ageGroup).toBe('30대');
       });
 
       it('should set English age group when language is en', () => {
-        const result = buildUserProfile(currentYear - 30, undefined, undefined, 'en');
+        const result = buildUserProfile(
+          currentYear - 30,
+          undefined,
+          undefined,
+          'en',
+        );
         expect(result.ageGroup).toBe('30s');
       });
 
@@ -974,7 +1005,12 @@ describe('menu-recommendation.prompts', () => {
       });
 
       it('should not include ageGroup when birthYear is in the future', () => {
-        const result = buildUserProfile(currentYear + 1, undefined, undefined, 'ko');
+        const result = buildUserProfile(
+          currentYear + 1,
+          undefined,
+          undefined,
+          'ko',
+        );
         expect(result.ageGroup).toBeUndefined();
       });
 
@@ -985,7 +1021,12 @@ describe('menu-recommendation.prompts', () => {
       });
 
       it('should include ageGroup when birthYear is the current year', () => {
-        const result = buildUserProfile(currentYear, undefined, undefined, 'ko');
+        const result = buildUserProfile(
+          currentYear,
+          undefined,
+          undefined,
+          'ko',
+        );
         expect(result.ageGroup).toBeDefined();
         expect(result.ageGroup).toBe('10대');
       });
@@ -1075,7 +1116,11 @@ describe('menu-recommendation.prompts', () => {
     it('should use buildUserPromptWithValidation when validationContext is provided', () => {
       const validationContext = {
         intent: 'preference' as const,
-        constraints: { budget: 'low' as const, dietary: [], urgency: 'normal' as const },
+        constraints: {
+          budget: 'low' as const,
+          dietary: [],
+          urgency: 'normal' as const,
+        },
         suggestedCategories: ['한식'],
       };
       const result = buildUserPromptWithAddress(

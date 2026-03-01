@@ -390,13 +390,9 @@ describe('AdminUserPlaceService', () => {
 
       mockQueryRunner.manager.save.mockResolvedValue(place);
 
-      await service.updatePlaceByAdmin(
-        place.id,
-        adminId,
-        dto,
-        ipAddress,
-        [mockFile],
-      );
+      await service.updatePlaceByAdmin(place.id, adminId, dto, ipAddress, [
+        mockFile,
+      ]);
 
       expect(s3Client.uploadUserPlaceImage).toHaveBeenCalledWith(mockFile);
     });

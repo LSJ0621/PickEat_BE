@@ -8,9 +8,7 @@ import { PlaceService } from '../services/place.service';
 import { GeminiPlacesService } from '../services/gemini-places.service';
 import { PlaceRecommendation } from '../entities/place-recommendation.entity';
 import { PlaceRecommendationSource } from '../enum/place-recommendation-source.enum';
-import {
-  GeminiPlaceRecommendationsResponse,
-} from '../interfaces/gemini-places.interface';
+import { GeminiPlaceRecommendationsResponse } from '../interfaces/gemini-places.interface';
 import { RecommendPlacesV2Dto } from '../dto/recommend-places-v2.dto';
 import { RedisCacheService } from '@/common/cache/cache.service';
 import { createMockRepository } from '../../../test/mocks/repository.mock';
@@ -27,7 +25,9 @@ describe('MenuService (Facade)', () => {
   let mockMenuSelectionService: jest.Mocked<MenuSelectionService>;
   let mockPlaceService: jest.Mocked<PlaceService>;
   let mockGeminiPlacesService: jest.Mocked<GeminiPlacesService>;
-  let mockPlaceRecommendationRepository: ReturnType<typeof createMockRepository>;
+  let mockPlaceRecommendationRepository: ReturnType<
+    typeof createMockRepository
+  >;
 
   beforeEach(async () => {
     mockMenuRecommendationService = {
@@ -502,8 +502,12 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
-      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        {} as PlaceRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue(
+        [] as unknown as PlaceRecommendation,
+      );
 
       const result = await service.recommendPlacesWithGemini(dto, userId);
 
@@ -559,8 +563,12 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
-      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        {} as PlaceRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue(
+        [] as unknown as PlaceRecommendation,
+      );
 
       await service.recommendPlacesWithGemini(dto, userId);
 
@@ -591,8 +599,12 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
-      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        {} as PlaceRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue(
+        [] as unknown as PlaceRecommendation,
+      );
 
       const result = await service.recommendPlacesWithGemini(dto, userId);
 
@@ -624,7 +636,9 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        {} as PlaceRecommendation,
+      );
       mockPlaceRecommendationRepository.save.mockRejectedValue(
         new Error('DB save error'),
       );
@@ -658,8 +672,12 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
-      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        {} as PlaceRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue(
+        [] as unknown as PlaceRecommendation,
+      );
 
       await service.recommendPlacesWithGemini(dto, userId);
 
@@ -677,7 +695,9 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+      mockPlaceRecommendationRepository.save.mockResolvedValue(
+        [] as unknown as PlaceRecommendation,
+      );
 
       await service.recommendPlacesWithGemini(englishDto, userId);
 
@@ -714,8 +734,12 @@ describe('MenuService (Facade)', () => {
       mockGeminiPlacesService.recommendRestaurants.mockResolvedValue(
         geminiResponse as unknown as GeminiPlaceRecommendationsResponse,
       );
-      mockPlaceRecommendationRepository.create.mockReturnValue({} as PlaceRecommendation);
-      mockPlaceRecommendationRepository.save.mockResolvedValue([] as unknown as PlaceRecommendation);
+      mockPlaceRecommendationRepository.create.mockReturnValue(
+        {} as PlaceRecommendation,
+      );
+      mockPlaceRecommendationRepository.save.mockResolvedValue(
+        [] as unknown as PlaceRecommendation,
+      );
 
       await service.recommendPlacesWithGemini(dto, userId);
 

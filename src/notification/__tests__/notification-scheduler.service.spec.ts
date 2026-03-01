@@ -229,9 +229,7 @@ describe('NotificationSchedulerService', () => {
       // Arrange - mock lock not acquired
       const mockQueryRunnerNotAcquired = {
         connect: jest.fn().mockResolvedValue(undefined),
-        query: jest
-          .fn()
-          .mockResolvedValue([{ pg_try_advisory_lock: false }]),
+        query: jest.fn().mockResolvedValue([{ pg_try_advisory_lock: false }]),
         release: jest.fn().mockResolvedValue(undefined),
       };
       dataSource.createQueryRunner = jest

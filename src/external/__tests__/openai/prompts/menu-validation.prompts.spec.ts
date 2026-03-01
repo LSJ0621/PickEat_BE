@@ -69,13 +69,18 @@ describe('menu-validation.prompts', () => {
     it.each([
       { lang: 'ko' as const, expected: VALIDATION_SYSTEM_PROMPT_KO },
       { lang: 'en' as const, expected: VALIDATION_SYSTEM_PROMPT_EN },
-    ])('should return $lang prompt when language is "$lang"', ({ lang, expected }) => {
-      expect(getValidationSystemPrompt(lang)).toBe(expected);
-    });
+    ])(
+      'should return $lang prompt when language is "$lang"',
+      ({ lang, expected }) => {
+        expect(getValidationSystemPrompt(lang)).toBe(expected);
+      },
+    );
 
     it('should default to Korean when no argument is given', () => {
       expect(getValidationSystemPrompt()).toBe(VALIDATION_SYSTEM_PROMPT_KO);
-      expect(getValidationSystemPrompt(undefined)).toBe(VALIDATION_SYSTEM_PROMPT_KO);
+      expect(getValidationSystemPrompt(undefined)).toBe(
+        VALIDATION_SYSTEM_PROMPT_KO,
+      );
     });
   });
 
@@ -119,9 +124,24 @@ describe('menu-validation.prompts', () => {
     });
 
     it.each([
-      { likes: [], dislikes: ['양식'], expectedLikes: 'None', expectedDislikes: '양식' },
-      { likes: ['한식'], dislikes: [], expectedLikes: '한식', expectedDislikes: 'None' },
-      { likes: [], dislikes: [], expectedLikes: 'None', expectedDislikes: 'None' },
+      {
+        likes: [],
+        dislikes: ['양식'],
+        expectedLikes: 'None',
+        expectedDislikes: '양식',
+      },
+      {
+        likes: ['한식'],
+        dislikes: [],
+        expectedLikes: '한식',
+        expectedDislikes: 'None',
+      },
+      {
+        likes: [],
+        dislikes: [],
+        expectedLikes: 'None',
+        expectedDislikes: 'None',
+      },
       {
         likes: null as unknown as string[],
         dislikes: ['양식'],
@@ -157,7 +177,11 @@ describe('menu-validation.prompts', () => {
 
     it('should handle special characters and line breaks in user prompt', () => {
       expect(
-        buildValidationUserPrompt('오늘 점심 뭐 먹을까? 😋', ['한식'], ['양식']),
+        buildValidationUserPrompt(
+          '오늘 점심 뭐 먹을까? 😋',
+          ['한식'],
+          ['양식'],
+        ),
       ).toContain('오늘 점심 뭐 먹을까? 😋');
 
       expect(
@@ -201,13 +225,31 @@ describe('menu-validation.prompts', () => {
       expect(schema.properties.isValid.type).toBe('boolean');
       expect(schema.properties.invalidReason.type).toBe('string');
       expect(schema.properties.intent.type).toBe('string');
-      expect(schema.properties.intent.enum).toEqual(['preference', 'mood', 'location', 'mixed']);
+      expect(schema.properties.intent.enum).toEqual([
+        'preference',
+        'mood',
+        'location',
+        'mixed',
+      ]);
       expect(schema.properties.constraints.type).toBe('object');
-      expect(schema.properties.constraints.required).toEqual(['budget', 'dietary', 'urgency']);
+      expect(schema.properties.constraints.required).toEqual([
+        'budget',
+        'dietary',
+        'urgency',
+      ]);
       expect(schema.properties.constraints.additionalProperties).toBe(false);
-      expect(schema.properties.constraints.properties.budget.enum).toEqual(['low', 'medium', 'high']);
-      expect(schema.properties.constraints.properties.dietary.type).toBe('array');
-      expect(schema.properties.constraints.properties.urgency.enum).toEqual(['quick', 'normal']);
+      expect(schema.properties.constraints.properties.budget.enum).toEqual([
+        'low',
+        'medium',
+        'high',
+      ]);
+      expect(schema.properties.constraints.properties.dietary.type).toBe(
+        'array',
+      );
+      expect(schema.properties.constraints.properties.urgency.enum).toEqual([
+        'quick',
+        'normal',
+      ]);
       expect(schema.properties.suggestedCategories.type).toBe('array');
       expect(schema.properties.suggestedCategories.maxItems).toBe(3);
     });
@@ -249,7 +291,9 @@ describe('menu-validation.prompts', () => {
         expect(c.budget.description).toContain(checks.budget);
         expect(c.dietary.description).toContain(checks.dietary);
         expect(c.urgency.description).toContain(checks.urgency);
-        expect(p.suggestedCategories.description).toContain(checks.suggestedCategories);
+        expect(p.suggestedCategories.description).toContain(
+          checks.suggestedCategories,
+        );
       },
     );
 
@@ -257,16 +301,24 @@ describe('menu-validation.prompts', () => {
       const koSchema = getValidationJsonSchema();
       const enSchema = getValidationJsonSchema('en');
 
-      expect(koSchema.properties.isValid.description).toContain('음식 관련 요청');
+      expect(koSchema.properties.isValid.description).toContain(
+        '음식 관련 요청',
+      );
 
       // Structure identical
       expect(koSchema.type).toBe(enSchema.type);
       expect(koSchema.required).toEqual(enSchema.required);
-      expect(koSchema.properties.intent.enum).toEqual(enSchema.properties.intent.enum);
+      expect(koSchema.properties.intent.enum).toEqual(
+        enSchema.properties.intent.enum,
+      );
 
       // Descriptions differ
-      expect(koSchema.properties.isValid.description).not.toBe(enSchema.properties.isValid.description);
-      expect(koSchema.properties.intent.description).not.toBe(enSchema.properties.intent.description);
+      expect(koSchema.properties.isValid.description).not.toBe(
+        enSchema.properties.isValid.description,
+      );
+      expect(koSchema.properties.intent.description).not.toBe(
+        enSchema.properties.intent.description,
+      );
     });
   });
 });

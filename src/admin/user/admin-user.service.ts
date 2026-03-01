@@ -18,6 +18,7 @@ import { BugReport } from '@/bug-report/entities/bug-report.entity';
 import { AdminAuditLog } from '@/admin/settings/entities/admin-audit-log.entity';
 import { AUDIT_ACTIONS } from '@/admin/settings/constants/audit-action.constants';
 import { PaginatedResponse } from '@/common/interfaces/pagination.interface';
+import { RedisCacheService } from '@/common/cache/cache.service';
 import { AdminUserListQueryDto } from './dto/admin-user-list-query.dto';
 import { AdminUserListItemDto } from './dto/admin-user-list-item.dto';
 import { AdminUserDetailDto } from './dto/admin-user-detail.dto';
@@ -39,6 +40,7 @@ export class AdminUserService {
     private readonly bugReportRepository: Repository<BugReport>,
     @InjectRepository(AdminAuditLog)
     private readonly auditLogRepository: Repository<AdminAuditLog>,
+    private readonly cacheService: RedisCacheService,
   ) {}
 
   async findAll(
@@ -204,7 +206,7 @@ export class AdminUserService {
 
     const result = await this.userRepository.update(
       { id, isDeactivated: false },
-      { isDeactivated: true, deactivatedAt: new Date(), refreshToken: null },
+      { isDeactivated: true, deactivatedAt: new Date() },
     );
 
     if (result.affected === 0) {
@@ -212,6 +214,8 @@ export class AdminUserService {
         errorCode: ErrorCode.ADMIN_USER_ALREADY_DEACTIVATED,
       });
     }
+
+    await this.cacheService.deleteRefreshToken(id);
 
     // 감사 로그 생성
     await this.auditLogRepository.save({

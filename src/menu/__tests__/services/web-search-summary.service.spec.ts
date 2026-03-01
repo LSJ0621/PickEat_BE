@@ -77,19 +77,17 @@ describe('WebSearchSummaryService', () => {
     service = module.get<WebSearchSummaryService>(WebSearchSummaryService);
 
     // Access the mocked openai.responses.create
-    mockOpenAIResponsesCreate = (service as unknown as {
-      openai: { responses: { create: jest.Mock } };
-    }).openai.responses.create;
+    mockOpenAIResponsesCreate = (
+      service as unknown as {
+        openai: { responses: { create: jest.Mock } };
+      }
+    ).openai.responses.create;
 
     // Suppress logger output in tests
     loggerLogSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
-    loggerErrorSpy = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation();
-    loggerDebugSpy = jest
-      .spyOn(Logger.prototype, 'debug')
-      .mockImplementation();
+    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    loggerDebugSpy = jest.spyOn(Logger.prototype, 'debug').mockImplementation();
   });
 
   afterEach(() => {
@@ -125,7 +123,11 @@ describe('WebSearchSummaryService', () => {
       };
       mockCacheService.getWebSearchSummary.mockResolvedValue(cachedSummary);
 
-      const result = await service.getSummary('서울시 강남구', undefined, undefined);
+      const result = await service.getSummary(
+        '서울시 강남구',
+        undefined,
+        undefined,
+      );
 
       expect(result).not.toBeNull();
       expect(mockCacheService.getWebSearchSummary).toHaveBeenCalled();
@@ -254,7 +256,11 @@ describe('WebSearchSummaryService', () => {
 
       expect(result).not.toBeNull();
       expect(result?.localTrends).toEqual(['김치찌개', '된장찌개', '부대찌개']);
-      expect(result?.demographicFavorites).toEqual(['비빔밥', '불고기', '갈비']);
+      expect(result?.demographicFavorites).toEqual([
+        '비빔밥',
+        '불고기',
+        '갈비',
+      ]);
       expect(result?.seasonalItems).toEqual(['삼계탕', '냉면']);
       expect(result?.confidence).toBe('high');
       expect(result?.summary).toBe('강남구 30대 남성 인기 메뉴');

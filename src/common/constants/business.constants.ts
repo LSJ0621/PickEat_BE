@@ -19,13 +19,6 @@ export const SEARCH_DEFAULTS = {
 } as const;
 
 /**
- * 인증 관련 쿠키 상수
- */
-export const AUTH_COOKIE = {
-  REFRESH_TOKEN_NAME: 'refreshToken',
-} as const;
-
-/**
  * 인증 관련 상수 (밀리초 단위)
  */
 export const AUTH_TIMING = {
@@ -33,8 +26,6 @@ export const AUTH_TIMING = {
   ACCESS_TOKEN_EXPIRES: '15m',
   /** Refresh Token 만료 시간: 7일 */
   REFRESH_TOKEN_EXPIRES: '7d',
-  /** 쿠키 만료 시간: 7일 */
-  COOKIE_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
   /** 하루: 24시간 */
   ONE_DAY_MS: 24 * 60 * 60 * 1000,
 } as const;

@@ -223,16 +223,16 @@ describe('MenuRecommendationService', () => {
 
       const aiResponse = {
         intro: '한식 추천',
-        recommendations: [
-          { condition: '든든하게', menu: '김치찌개' },
-        ],
+        recommendations: [{ condition: '든든하게', menu: '김치찌개' }],
         closing: '맛있게 드세요!',
       };
 
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
         aiResponse,
       );
-      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(
+        defaultAddress,
+      );
 
       const savedRecommendation = MenuRecommendationFactory.create({
         id: 2,
@@ -282,9 +282,9 @@ describe('MenuRecommendationService', () => {
       const defaultAddress = UserAddressFactory.createDefault(user);
 
       // Reject with a non-Error object to hit the 'Unknown error' branch (line 47)
-      mockUserTasteAnalysisService.getByUserId.mockRejectedValue(
-        { code: 'NON_ERROR_REJECTION' },
-      );
+      mockUserTasteAnalysisService.getByUserId.mockRejectedValue({
+        code: 'NON_ERROR_REJECTION',
+      });
 
       const aiResponse = {
         intro: '한식 추천',
@@ -295,7 +295,9 @@ describe('MenuRecommendationService', () => {
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
         aiResponse,
       );
-      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(
+        defaultAddress,
+      );
 
       const savedRecommendation = MenuRecommendationFactory.create({
         id: 3,
@@ -336,7 +338,12 @@ describe('MenuRecommendationService', () => {
 
       const tasteAnalysis = {
         compactSummary: '한식 선호',
-        stablePatterns: { categories: ['한식'], flavors: [], cookingMethods: [], confidence: 'high' as const },
+        stablePatterns: {
+          categories: ['한식'],
+          flavors: [],
+          cookingMethods: [],
+          confidence: 'high' as const,
+        },
         recentSignals: { trending: [], declining: [] },
         diversityHints: { explorationAreas: [], rotationSuggestions: [] },
       };
@@ -352,7 +359,9 @@ describe('MenuRecommendationService', () => {
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
         aiResponse,
       );
-      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(
+        defaultAddress,
+      );
 
       const savedRecommendation = MenuRecommendationFactory.create({
         id: 4,
@@ -421,7 +430,9 @@ describe('MenuRecommendationService', () => {
       mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(
         aiResponse,
       );
-      mockUserAddressService.getDefaultAddress.mockResolvedValue(defaultAddress);
+      mockUserAddressService.getDefaultAddress.mockResolvedValue(
+        defaultAddress,
+      );
 
       const savedRecommendation = MenuRecommendationFactory.create({
         id: 5,

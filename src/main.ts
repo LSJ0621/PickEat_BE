@@ -2,7 +2,6 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import * as compression from 'compression';
-import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
@@ -37,7 +36,6 @@ async function bootstrap() {
       },
     }),
   );
-  app.use(cookieParser());
   const corsOrigin = process.env.CORS_ORIGIN;
   if (!corsOrigin) {
     throw new Error('CORS_ORIGIN environment variable is required');

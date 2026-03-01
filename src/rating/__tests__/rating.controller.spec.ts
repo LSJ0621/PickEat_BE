@@ -111,9 +111,7 @@ describe('RatingController', () => {
       };
 
       userService.getAuthenticatedEntity.mockResolvedValue(mockUser);
-      ratingService.getPendingRating.mockResolvedValue(
-        expectedResult as never,
-      );
+      ratingService.getPendingRating.mockResolvedValue(expectedResult as never);
 
       const result = await controller.getPendingRating(mockAuthUser);
 
@@ -204,9 +202,7 @@ describe('RatingController', () => {
       };
 
       userService.getAuthenticatedEntity.mockResolvedValue(mockUser);
-      ratingService.getRatingHistory.mockResolvedValue(
-        expectedResult as never,
-      );
+      ratingService.getRatingHistory.mockResolvedValue(expectedResult as never);
 
       const result = await controller.getRatingHistory(dto, mockAuthUser);
 
@@ -228,9 +224,7 @@ describe('RatingController', () => {
       };
 
       userService.getAuthenticatedEntity.mockResolvedValue(mockUser);
-      ratingService.getRatingHistory.mockResolvedValue(
-        expectedResult as never,
-      );
+      ratingService.getRatingHistory.mockResolvedValue(expectedResult as never);
 
       const result = await controller.getRatingHistory(dto, mockAuthUser);
 

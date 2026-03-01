@@ -572,7 +572,9 @@ describe('GooglePlacesClient', () => {
           },
         },
       ];
-      const mockResponse = createAxiosResponse({ suggestions: mockSuggestions });
+      const mockResponse = createAxiosResponse({
+        suggestions: mockSuggestions,
+      });
       httpService.post.mockReturnValue(of(mockResponse));
 
       const result = await client.autocomplete(input);
@@ -619,8 +621,7 @@ describe('GooglePlacesClient', () => {
         ],
       }).compile();
 
-      const testClient =
-        testModule.get<GooglePlacesClient>(GooglePlacesClient);
+      const testClient = testModule.get<GooglePlacesClient>(GooglePlacesClient);
 
       await expect(testClient.autocomplete(input)).rejects.toThrow(
         ConfigMissingException,

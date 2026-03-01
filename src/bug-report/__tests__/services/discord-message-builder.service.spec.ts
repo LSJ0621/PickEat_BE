@@ -3,7 +3,10 @@ import { DiscordMessageBuilderService } from '../../services/discord-message-bui
 import { DISCORD_WEBHOOK_CONFIG } from '@/external/discord/discord.constants';
 import { BUG_REPORT_NOTIFICATION } from '@/common/constants/business.constants';
 import { BugReport } from '../../entities/bug-report.entity';
-import { BugReportFactory, UserFactory } from '../../../../test/factories/entity.factory';
+import {
+  BugReportFactory,
+  UserFactory,
+} from '../../../../test/factories/entity.factory';
 
 function createMockBugReport(overrides?: Partial<BugReport>): BugReport {
   const user = UserFactory.create({ email: 'tester@example.com' });

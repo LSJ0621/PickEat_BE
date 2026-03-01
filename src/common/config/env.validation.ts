@@ -233,7 +233,6 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   CRON_NOTIFICATION_PUBLISH?: string;
-
 }
 
 export function validate(config: Record<string, unknown>) {
