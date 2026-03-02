@@ -11,9 +11,11 @@ import {
   IsUrl,
   Matches,
   IsInt,
+  ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { IsS3PhotoUrl } from '@/common/validators/s3-url.validator';
+import { MenuItemDto, BusinessHoursDto } from './create-user-place.dto';
 
 export class UpdateUserPlaceByAdminDto {
   @IsOptional()
@@ -42,11 +44,22 @@ export class UpdateUserPlaceByAdminDto {
   longitude?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsArray()
   @ArrayMinSize(1, { message: '메뉴를 최소 1개 이상 입력해주세요' })
   @ArrayMaxSize(10, { message: '메뉴는 최대 10개까지 입력 가능합니다' })
-  @IsString({ each: true })
-  menuTypes?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => MenuItemDto)
+  menuItems?: MenuItemDto[];
 
   @IsOptional()
   @IsArray()
@@ -57,9 +70,19 @@ export class UpdateUserPlaceByAdminDto {
   existingPhotos?: string[];
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200, { message: '영업시간은 200자 이내로 입력해주세요' })
-  openingHours?: string;
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  @ValidateNested()
+  @Type(() => BusinessHoursDto)
+  businessHours?: BusinessHoursDto;
 
   @IsOptional()
   @IsString()

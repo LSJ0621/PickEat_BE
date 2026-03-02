@@ -2,16 +2,106 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
+  IsInt,
   IsLatitude,
   IsLongitude,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
+  Max,
   MaxLength,
+  Min,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { plainToInstance, Transform, Type } from 'class-transformer';
 import { IsS3PhotoUrl } from '@/common/validators/s3-url.validator';
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export class MenuItemDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  name: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(9999999)
+  price: number;
+}
+
+export class DayHoursDto {
+  @IsString()
+  @Matches(TIME_PATTERN, { message: '시간 형식은 HH:MM이어야 합니다' })
+  open: string;
+
+  @IsString()
+  @Matches(TIME_PATTERN, { message: '시간 형식은 HH:MM이어야 합니다' })
+  close: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(TIME_PATTERN, { message: '시간 형식은 HH:MM이어야 합니다' })
+  breakStart?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(TIME_PATTERN, { message: '시간 형식은 HH:MM이어야 합니다' })
+  breakEnd?: string;
+}
+
+export class BusinessHoursDaysDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  mon?: DayHoursDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  tue?: DayHoursDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  wed?: DayHoursDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  thu?: DayHoursDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  fri?: DayHoursDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  sat?: DayHoursDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DayHoursDto)
+  sun?: DayHoursDto;
+}
+
+export class BusinessHoursDto {
+  @IsBoolean()
+  isOpen247: boolean;
+
+  @IsBoolean()
+  is24Hours: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BusinessHoursDaysDto)
+  days?: BusinessHoursDaysDto;
+}
 
 export class CreateUserPlaceDto {
   @IsString()
@@ -24,20 +114,31 @@ export class CreateUserPlaceDto {
   @MaxLength(500)
   address: string;
 
+  @Type(() => Number)
   @IsLatitude()
   @IsNotEmpty()
   latitude: number;
 
+  @Type(() => Number)
   @IsLongitude()
   @IsNotEmpty()
   longitude: number;
 
-  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
+  @Transform(({ value }) => {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return Array.isArray(parsed)
+        ? plainToInstance(MenuItemDto, parsed)
+        : parsed;
+    } catch {
+      return value;
+    }
+  })
   @IsArray()
   @ArrayMinSize(1, { message: '메뉴를 최소 1개 이상 입력해주세요' })
   @ArrayMaxSize(10, { message: '메뉴는 최대 10개까지 입력 가능합니다' })
-  @IsString({ each: true })
-  menuTypes: string[];
+  @ValidateNested({ each: true })
+  menuItems: MenuItemDto[];
 
   @IsOptional()
   @IsArray()
@@ -47,9 +148,16 @@ export class CreateUserPlaceDto {
   photos?: string[];
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200, { message: '영업시간은 200자 이내로 입력해주세요' })
-  openingHours?: string;
+  @Transform(({ value }) => {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return parsed ? plainToInstance(BusinessHoursDto, parsed) : parsed;
+    } catch {
+      return value;
+    }
+  })
+  @ValidateNested()
+  businessHours?: BusinessHoursDto;
 
   @IsString()
   @IsOptional()

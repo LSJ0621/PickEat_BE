@@ -18,7 +18,7 @@ import { ErrorCode } from '@/common/constants/error-codes';
 import { USER_PLACE } from '@/common/constants/business.constants';
 import { User } from '@/user/entities/user.entity';
 import { S3Client } from '@/external/aws/clients/s3.client';
-import { CreateUserPlaceDto } from './dto/create-user-place.dto';
+import { CreateUserPlaceDto, BusinessHoursDto } from './dto/create-user-place.dto';
 import { UpdateUserPlaceDto } from './dto/update-user-place.dto';
 import { UserPlaceListQueryDto } from './dto/user-place-list-query.dto';
 import { CheckRegistrationDto } from './dto/check-registration.dto';
@@ -145,6 +145,59 @@ export class UserPlaceService {
 
     // Return null if empty (to set photos = null in DB), otherwise return array
     return mergedPhotos.length > 0 ? mergedPhotos : null;
+  }
+
+  /**
+   * Validate business hours structure
+   */
+  private validateBusinessHours(businessHours: BusinessHoursDto): void {
+    // If open 24/7, skip further validation
+    if (businessHours.isOpen247) {
+      return;
+    }
+
+    if (!businessHours.days) {
+      return;
+    }
+
+    for (const [day, hours] of Object.entries(businessHours.days)) {
+      if (!hours) continue;
+
+      // Validate close > open
+      if (hours.close <= hours.open) {
+        throw new BadRequestException(
+          `${day}: 마감 시간은 오픈 시간보다 늦어야 합니다`,
+        );
+      }
+
+      // Validate break time pair (both or neither)
+      const hasBreakStart = hours.breakStart !== undefined;
+      const hasBreakEnd = hours.breakEnd !== undefined;
+      if (hasBreakStart !== hasBreakEnd) {
+        throw new BadRequestException(
+          `${day}: 브레이크 시작과 종료 시간은 함께 입력해야 합니다`,
+        );
+      }
+
+      // Validate break time within business hours
+      if (hours.breakStart && hours.breakEnd) {
+        if (hours.breakStart <= hours.open || hours.breakStart >= hours.close) {
+          throw new BadRequestException(
+            `${day}: 브레이크 시작 시간은 영업시간 내에 있어야 합니다`,
+          );
+        }
+        if (hours.breakEnd <= hours.open || hours.breakEnd >= hours.close) {
+          throw new BadRequestException(
+            `${day}: 브레이크 종료 시간은 영업시간 내에 있어야 합니다`,
+          );
+        }
+        if (hours.breakEnd <= hours.breakStart) {
+          throw new BadRequestException(
+            `${day}: 브레이크 종료 시간은 시작 시간보다 늦어야 합니다`,
+          );
+        }
+      }
+    }
   }
 
   /**
@@ -303,6 +356,11 @@ export class UserPlaceService {
       imageUrls = successUrls.length > 0 ? successUrls : null;
     }
 
+    // Validate business hours if provided
+    if (dto.businessHours) {
+      this.validateBusinessHours(dto.businessHours);
+    }
+
     const userPlace = this.userPlaceRepository.create({
       user: { id: userId } as User,
       name: dto.name,
@@ -310,9 +368,9 @@ export class UserPlaceService {
       latitude: dto.latitude,
       longitude: dto.longitude,
       location: this.createLocationPoint(dto.latitude, dto.longitude),
-      menuTypes: dto.menuTypes,
+      menuItems: dto.menuItems,
       photos: imageUrls,
-      openingHours: dto.openingHours || null,
+      businessHours: dto.businessHours || null,
       phoneNumber: dto.phoneNumber || null,
       category: dto.category || null,
       description: dto.description || null,
@@ -404,13 +462,19 @@ export class UserPlaceService {
       });
     }
 
+    // Validate business hours if provided
+    if (dto.businessHours) {
+      this.validateBusinessHours(dto.businessHours);
+    }
+
     // Update fields
     if (dto.name !== undefined) place.name = dto.name;
     if (dto.address !== undefined) place.address = dto.address;
     if (dto.latitude !== undefined) place.latitude = dto.latitude;
     if (dto.longitude !== undefined) place.longitude = dto.longitude;
-    if (dto.menuTypes !== undefined) place.menuTypes = dto.menuTypes;
-    if (dto.openingHours !== undefined) place.openingHours = dto.openingHours;
+    if (dto.menuItems !== undefined) place.menuItems = dto.menuItems;
+    if (dto.businessHours !== undefined)
+      place.businessHours = dto.businessHours;
     if (dto.phoneNumber !== undefined) place.phoneNumber = dto.phoneNumber;
     if (dto.category !== undefined) place.category = dto.category;
     if (dto.description !== undefined) place.description = dto.description;

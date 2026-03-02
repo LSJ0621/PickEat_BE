@@ -162,9 +162,9 @@ export class PlaceService {
         source: PlaceRecommendationSource.USER,
         phoneNumber: userPlace.phoneNumber,
         category: userPlace.category,
-        menuTypes: userPlace.menuTypes,
+        menuItems: userPlace.menuItems,
         description: userPlace.description,
-        openingHours: userPlace.openingHours,
+        businessHours: userPlace.businessHours,
       },
     };
   }

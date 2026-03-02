@@ -183,7 +183,7 @@ export class CommunityPlaceService {
       id: up.id,
       name: up.name,
       address: up.address,
-      menuTypes: up.menuTypes || [],
+      menuTypes: (up.menuItems || []).map((item) => item.name),
       category: up.category || '',
       description: up.description || null,
       distance: up.distance,

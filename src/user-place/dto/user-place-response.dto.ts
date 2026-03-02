@@ -1,4 +1,8 @@
 import { UserPlaceStatus } from '../enum/user-place-status.enum';
+import {
+  MenuItem,
+  BusinessHours,
+} from '../interfaces/business-hours.interface';
 
 export class UserPlaceResponseDto {
   id: number;
@@ -7,9 +11,9 @@ export class UserPlaceResponseDto {
   address: string;
   latitude: number;
   longitude: number;
-  menuTypes: string[];
+  menuItems: MenuItem[];
   photos: string[] | null;
-  openingHours: string | null;
+  businessHours: BusinessHours | null;
   phoneNumber: string | null;
   category: string | null;
   description: string | null;

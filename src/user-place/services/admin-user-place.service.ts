@@ -287,9 +287,9 @@ export class AdminUserPlaceService {
       dto.address !== undefined ||
       dto.latitude !== undefined ||
       dto.longitude !== undefined ||
-      dto.menuTypes !== undefined ||
+      dto.menuItems !== undefined ||
       dto.existingPhotos !== undefined ||
-      dto.openingHours !== undefined ||
+      dto.businessHours !== undefined ||
       dto.phoneNumber !== undefined ||
       dto.category !== undefined ||
       dto.description !== undefined ||
@@ -342,13 +342,13 @@ export class AdminUserPlaceService {
         place,
       );
 
-      if (dto.menuTypes !== undefined) {
-        const menuTypesChanged =
-          JSON.stringify(dto.menuTypes) !== JSON.stringify(place.menuTypes);
-        if (menuTypesChanged) {
-          previousValue.menuTypes = place.menuTypes;
-          newValue.menuTypes = dto.menuTypes;
-          place.menuTypes = dto.menuTypes;
+      if (dto.menuItems !== undefined) {
+        const menuItemsChanged =
+          JSON.stringify(dto.menuItems) !== JSON.stringify(place.menuItems);
+        if (menuItemsChanged) {
+          previousValue.menuItems = place.menuItems;
+          newValue.menuItems = dto.menuItems;
+          place.menuItems = dto.menuItems;
         }
       }
 
@@ -365,14 +365,16 @@ export class AdminUserPlaceService {
         place.photos = updatedPhotos;
       }
 
-      this.updateFieldIfChanged(
-        'openingHours',
-        dto.openingHours,
-        place.openingHours,
-        previousValue,
-        newValue,
-        place,
-      );
+      if (dto.businessHours !== undefined) {
+        const businessHoursChanged =
+          JSON.stringify(dto.businessHours) !==
+          JSON.stringify(place.businessHours);
+        if (businessHoursChanged) {
+          previousValue.businessHours = place.businessHours;
+          newValue.businessHours = dto.businessHours;
+          place.businessHours = dto.businessHours;
+        }
+      }
       this.updateFieldIfChanged(
         'phoneNumber',
         dto.phoneNumber,

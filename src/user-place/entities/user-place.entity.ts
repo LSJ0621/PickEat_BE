@@ -12,6 +12,10 @@ import {
 import { Point } from 'geojson';
 import { User } from '@/user/entities/user.entity';
 import { UserPlaceStatus } from '../enum/user-place-status.enum';
+import {
+  MenuItem,
+  BusinessHours,
+} from '../interfaces/business-hours.interface';
 
 @Entity('user_place')
 @Index('idx_user_place_user_status', ['user', 'status'])
@@ -44,14 +48,14 @@ export class UserPlace {
   })
   location: Point | null;
 
-  @Column({ type: 'simple-array' })
-  menuTypes: string[];
+  @Column({ type: 'jsonb', default: '[]' })
+  menuItems: MenuItem[];
 
   @Column({ type: 'simple-array', nullable: true })
   photos: string[] | null;
 
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  openingHours: string | null;
+  @Column({ type: 'jsonb', nullable: true })
+  businessHours: BusinessHours | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   phoneNumber: string | null;

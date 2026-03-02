@@ -97,6 +97,7 @@ export class MenuService {
   async recommendPlacesWithGemini(
     dto: RecommendPlacesV2Dto,
     userId: number,
+    preferredLanguage: string | undefined,
   ): Promise<GeminiPlaceRecommendationsResponse> {
     // 1. Verify menuRecommendationId belongs to user
     const menuRecommendation = await this.menuRecommendationService.findById(
@@ -105,7 +106,7 @@ export class MenuService {
     );
 
     // 2. Parse language from dto or default to 'ko'
-    const language = parseLanguage(dto.language);
+    const language = parseLanguage(dto.language ?? preferredLanguage);
 
     // 3. Call geminiPlacesService.recommendRestaurants
     const geminiResponse = await this.geminiPlacesService.recommendRestaurants(

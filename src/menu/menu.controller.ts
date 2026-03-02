@@ -240,6 +240,7 @@ export class MenuController {
     const result = await this.menuService.recommendPlacesWithGemini(
       dto,
       entity.id,
+      entity.preferredLanguage,
     );
     return {
       ...this.mapGeminiRecommendationResponse(result, language),

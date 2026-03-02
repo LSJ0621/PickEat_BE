@@ -10,9 +10,11 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsUrl,
+  ValidateNested,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { plainToInstance, Transform, Type } from 'class-transformer';
 import { IsS3PhotoUrl } from '@/common/validators/s3-url.validator';
+import { MenuItemDto, BusinessHoursDto } from './create-user-place.dto';
 
 export class UpdateUserPlaceDto {
   @Type(() => Number)
@@ -33,20 +35,31 @@ export class UpdateUserPlaceDto {
   address?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsLatitude()
   latitude?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsLongitude()
   longitude?: number;
 
-  @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
   @IsOptional()
+  @Transform(({ value }) => {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return Array.isArray(parsed)
+        ? plainToInstance(MenuItemDto, parsed)
+        : parsed;
+    } catch {
+      return value;
+    }
+  })
   @IsArray()
   @ArrayMinSize(1, { message: '메뉴를 최소 1개 이상 입력해주세요' })
   @ArrayMaxSize(10, { message: '메뉴는 최대 10개까지 입력 가능합니다' })
-  @IsString({ each: true })
-  menuTypes?: string[];
+  @ValidateNested({ each: true })
+  menuItems?: MenuItemDto[];
 
   @IsOptional()
   @IsArray()
@@ -57,9 +70,16 @@ export class UpdateUserPlaceDto {
   existingPhotos?: string[];
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200, { message: '영업시간은 200자 이내로 입력해주세요' })
-  openingHours?: string;
+  @Transform(({ value }) => {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return parsed ? plainToInstance(BusinessHoursDto, parsed) : parsed;
+    } catch {
+      return value;
+    }
+  })
+  @ValidateNested()
+  businessHours?: BusinessHoursDto;
 
   @IsOptional()
   @IsString()
