@@ -4,6 +4,8 @@
 
 **AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버**
 
+[www.pick-eat-fe-web.vercel.app](https://www.pick-eat-fe-web.vercel.app)
+
 ![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
@@ -14,7 +16,7 @@
 
 ![License](https://img.shields.io/badge/License-UNLICENSED-gray?style=flat-square)
 
-[프로젝트 개요](#프로젝트-개요) · [주요 기능](#주요-기능) · [아키텍처](#아키텍처) · [ERD](#erd) · [문서](#문서)
+[프로젝트 개요](#프로젝트-개요) · [주요 기능](#주요-기능) · [기술 스택](#기술-스택) · [아키텍처](#아키텍처) · [ERD](#erd) · [시작하기](#시작하기) · [문서](#문서)
 
 </div>
 
@@ -36,8 +38,8 @@ OpenAI GPT와 Google Gemini를 결합하여
 **"취향 분석 → 메뉴 추천 → 맛집 탐색"** 까지의 흐름을 하나의 서비스로 제공합니다.
 
 - 사용자의 식사 패턴을 AI가 자동으로 분석하여 선호도를 학습하고
-- 학습된 취향 기반으로 맞춤 메뉴를 실시간 스트리밍으로 추천하며
-- 추천된 메뉴를 먹을 수 있는 주변 맛집까지 검색해줍니다
+- 학습된 취향과 유저의 요청사항을 분석하여 맞춤 메뉴를 실시간 스트리밍으로 추천하며
+- 추천된 메뉴를 먹을 수 있는 등록된 주소 근처의 맛집까지 검색해줍니다
 
 ---
 
@@ -107,6 +109,8 @@ OpenAI GPT와 Google Gemini를 결합하여
 
 ### Infra / Test
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Railway](https://img.shields.io/badge/Railway-Deploy-0B0D0E?style=flat-square&logo=railway&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-Deploy-000000?style=flat-square&logo=vercel&logoColor=white)
 ![Jest](https://img.shields.io/badge/Jest-29-C21325?style=flat-square&logo=jest&logoColor=white)
 
 ---
@@ -122,6 +126,36 @@ OpenAI GPT와 Google Gemini를 결합하여
 ## ERD
 
 ![PickEat ERD](docs/images/pickeat_erd_dark.png)
+
+---
+
+## 시작하기
+
+### 사전 요구사항
+
+- **Node.js** >= 20
+- **pnpm**
+- **Docker** (PostgreSQL + PostGIS, Redis용)
+
+### 설치
+
+```bash
+# 저장소 클론
+git clone https://github.com/LSJ0621/PickEat_BE.git
+cd PickEat_BE
+
+# 환경 변수 설정
+# .env.example 파일에 API 키(OpenAI, Google, Kakao, AWS S3 등)를 입력하세요
+
+# 의존성 설치
+pnpm install
+
+# Docker로 PostgreSQL + PostGIS, Redis 실행
+docker-compose up -d
+
+# 개발 서버 실행
+pnpm run start:dev    # → http://localhost:3000
+```
 
 ---
 
