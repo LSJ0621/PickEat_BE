@@ -2,33 +2,58 @@
 
 # PickEat Backend
 
-AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버
+**AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버**
 
-![PickEat Overview](docs/images/개요%20사진.png)
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.1-412991?style=flat-square&logo=openai&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat-square&logo=google&logoColor=white)
 
-![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)
-![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)
-![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.1-412991?logo=openai)
-![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google)
+![License](https://img.shields.io/badge/License-UNLICENSED-gray?style=flat-square)
+
+[프로젝트 개요](#프로젝트-개요) · [주요 기능](#주요-기능) · [아키텍처](#아키텍처) · [ERD](#erd) · [문서](#문서)
 
 </div>
 
-## Key Features
+---
+
+## 프로젝트 개요
+
+<div align="center">
+  <img src="docs/images/개요%20사진.png" width="600" />
+</div>
+
+<br>
+
+매일 반복되는 "오늘 뭐 먹지?"라는 고민,
+기존 서비스에서는 사용자 취향을 반영한 메뉴 추천을 제공하지 못하는 문제가 있습니다.
+
+**PickEat**은 이 문제를 해결하기 위한 프로젝트로,
+OpenAI GPT와 Google Gemini를 결합하여
+**"취향 분석 → 메뉴 추천 → 맛집 탐색"** 까지의 흐름을 하나의 서비스로 제공합니다.
+
+- 사용자의 식사 패턴을 AI가 자동으로 분석하여 선호도를 학습하고
+- 학습된 취향 기반으로 맞춤 메뉴를 실시간 스트리밍으로 추천하며
+- 추천된 메뉴를 먹을 수 있는 주변 맛집까지 검색해줍니다
+
+---
+
+## 주요 기능
 
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="docs/images/pickeat_취향설정.gif" width="380" />
+<img src="docs/images/pickeat_취향설정.gif" width="280" />
 <br/>
 <b>취향 설정</b>
 <br/>
-<sub>사용자 식사 패턴을 <code>OpenAI Batch API</code>로 비동기 분석하여 선호도를 자동 업데이트합니다.</sub>
+<sub>음식 취향, 알레르기, 식사 스타일 등을 설정하여 AI 메뉴 추천의 기반 데이터를 구성합니다.</sub>
 </td>
 <td align="center" width="50%">
-<img src="docs/images/pickeat_메뉴추천.gif" width="380" />
+<img src="docs/images/pickeat_메뉴추천.gif" width="280" />
 <br/>
 <b>AI 메뉴 추천</b>
 <br/>
@@ -37,14 +62,14 @@ AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="docs/images/pickeat_store_recommend.gif" width="380" />
+<img src="docs/images/pickeat_store_recommend.gif" width="280" />
 <br/>
 <b>맛집 추천</b>
 <br/>
 <sub><code>Gemini Maps Grounding</code>과 <code>Google Places API</code>를 연동하여 주변 맛집을 검색하고 추천합니다.</sub>
 </td>
 <td align="center" width="50%">
-<img src="docs/images/pickeat_store_detail.gif" width="380" />
+<img src="docs/images/pickeat_store_detail.gif" width="280" />
 <br/>
 <b>가게 상세</b>
 <br/>
@@ -53,20 +78,45 @@ AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버
 </tr>
 </table>
 
-## Architecture
+---
+
+## 기술 스택
+
+| 분류 | 기술 |
+|------|------|
+| **프레임워크** | NestJS 11, TypeORM 0.3, Passport JWT, class-validator, Pino logger |
+| **데이터베이스** | PostgreSQL 16, PostGIS 3.4 |
+| **캐시** | Redis 7 (ioredis) |
+| **AI / LLM** | OpenAI API (GPT-4o, GPT-5.1), Google Gemini API (Maps Grounding) |
+| **검색 / 지도** | Google Places API, Google Custom Search Engine |
+| **인증** | JWT (NestJS Passport), bcrypt, Kakao OAuth, Google OAuth |
+| **이메일** | Nodemailer, Handlebars 템플릿 |
+| **스토리지** | AWS S3 (@aws-sdk/client-s3) |
+| **알림** | Discord Webhook |
+| **스케줄링** | @nestjs/schedule (OpenAI Batch, 별점 집계, 알림 발송) |
+| **테스트** | Jest 29, ts-jest |
+| **인프라** | Docker (Multi-stage build), Docker Compose |
+
+---
+
+## 아키텍처
 
 ![PickEat Architecture](docs/images/pickeat_architecture_dark.png)
 
 **Layer**: Controller (요청/응답) → Service (비즈니스 로직) → Repository (데이터) / Client (외부 API)
 
+---
+
 ## ERD
 
 ![PickEat ERD](docs/images/pickeat_erd_dark.png)
 
-## Docs
+---
 
-| Document | Description |
-|----------|-------------|
+## 문서
+
+| 문서 | 설명 |
+|------|------|
 | [Architecture](docs/architecture.md) | 시스템 아키텍처 및 데이터 흐름 |
 | [Backend Structure](docs/backend-structure.md) | 모듈별 구조 및 레이어 설명 |
 | [Database Schema](docs/database-schema.md) | 13개 테이블 스키마 및 관계 |
