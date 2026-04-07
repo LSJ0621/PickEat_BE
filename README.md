@@ -82,20 +82,32 @@ OpenAI GPT와 Google Gemini를 결합하여
 
 ## 기술 스택
 
-| 분류 | 기술 |
-|------|------|
-| **프레임워크** | NestJS 11, TypeORM 0.3, Passport JWT, class-validator, Pino logger |
-| **데이터베이스** | PostgreSQL 16, PostGIS 3.4 |
-| **캐시** | Redis 7 (ioredis) |
-| **AI / LLM** | OpenAI API (GPT-4o, GPT-5.1), Google Gemini API (Maps Grounding) |
-| **검색 / 지도** | Google Places API, Google Custom Search Engine |
-| **인증** | JWT (NestJS Passport), bcrypt, Kakao OAuth, Google OAuth |
-| **이메일** | Nodemailer, Handlebars 템플릿 |
-| **스토리지** | AWS S3 (@aws-sdk/client-s3) |
-| **알림** | Discord Webhook |
-| **스케줄링** | @nestjs/schedule (OpenAI Batch, 별점 집계, 알림 발송) |
-| **테스트** | Jest 29, ts-jest |
-| **인프라** | Docker (Multi-stage build), Docker Compose |
+### Backend
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![TypeORM](https://img.shields.io/badge/TypeORM-0.3-FE0803?style=flat-square&logo=typeorm&logoColor=white)
+![Passport](https://img.shields.io/badge/Passport-JWT-34E27A?style=flat-square&logo=passport&logoColor=white)
+![Pino](https://img.shields.io/badge/Pino-Logger-687634?style=flat-square&logoColor=white)
+
+### DB / Cache
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![PostGIS](https://img.shields.io/badge/PostGIS-3.4-5A9B4E?style=flat-square&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)
+
+### AI / LLM
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.1-412991?style=flat-square&logo=openai&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat-square&logo=google&logoColor=white)
+
+### External API
+![Google Places](https://img.shields.io/badge/Google-Places_API-4285F4?style=flat-square&logo=googlemaps&logoColor=white)
+![Google CSE](https://img.shields.io/badge/Google-Custom_Search-4285F4?style=flat-square&logo=google&logoColor=white)
+![Kakao](https://img.shields.io/badge/Kakao-OAuth-FFCD00?style=flat-square&logo=kakao&logoColor=black)
+![AWS S3](https://img.shields.io/badge/AWS-S3-569A31?style=flat-square&logo=amazons3&logoColor=white)
+![Discord](https://img.shields.io/badge/Discord-Webhook-5865F2?style=flat-square&logo=discord&logoColor=white)
+
+### Infra / Test
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Jest](https://img.shields.io/badge/Jest-29-C21325?style=flat-square&logo=jest&logoColor=white)
 
 ---
 
