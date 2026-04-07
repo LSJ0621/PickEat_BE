@@ -188,7 +188,7 @@ export class MenuService {
   async searchRestaurantBlogs(
     query: string,
     restaurantName: string,
-    language?: 'ko' | 'en' | 'ja' | 'zh',
+    language?: 'ko' | 'en',
     searchName?: string,
     searchAddress?: string,
   ) {

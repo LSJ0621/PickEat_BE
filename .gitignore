@@ -64,3 +64,20 @@ postgres-data/
 # Monitoring data
 monitoring/prometheus/data/
 monitoring/grafana/data/
+
+# Claude Code
+CLAUDE.md
+.claude/
+
+# Cursor IDE
+.cursorignore
+
+# Archived code
+_archived/
+
+# GitHub Actions (unused)
+.github/
+
+# Jupyter notebooks
+*.ipynb
+dummy

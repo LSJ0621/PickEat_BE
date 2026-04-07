@@ -11,6 +11,7 @@ import { AddressSearchService } from './services/address-search.service';
 import { UserAddressService } from './services/user-address.service';
 import { UserPreferenceService } from './services/user-preference.service';
 import { UserTasteAnalysisService } from './services/user-taste-analysis.service';
+import { PreferenceUpdateAiService } from './preference-update-ai.service';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 
@@ -29,6 +30,7 @@ import { UserService } from './user.service';
     AddressSearchService,
     AdminInitializerService,
     TestUserSeederService,
+    PreferenceUpdateAiService,
   ],
   exports: [
     UserService,

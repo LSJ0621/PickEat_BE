@@ -19,8 +19,8 @@ export class SearchRestaurantBlogsDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['ko', 'en', 'ja', 'zh'])
-  language?: 'ko' | 'en' | 'ja' | 'zh'; // 언어 코드 (ko, en, ja, zh)
+  @IsIn(['ko', 'en'])
+  language?: 'ko' | 'en'; // 언어 코드 (ko, en)
 
   @IsOptional()
   @IsString()

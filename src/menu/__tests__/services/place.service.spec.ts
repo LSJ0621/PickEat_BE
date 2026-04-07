@@ -650,9 +650,7 @@ describe('PlaceService', () => {
     test.each([
       ['ko', { lr: 'lang_ko', hl: 'ko' }],
       ['en', { lr: 'lang_en', hl: 'en' }],
-      ['ja', { lr: 'lang_ja', hl: 'ja' }],
-      ['zh', { lr: 'lang_zh-CN', hl: 'zh' }],
-    ] as Array<['ko' | 'en' | 'ja' | 'zh', Record<string, string>]>)(
+    ] as Array<['ko' | 'en', Record<string, string>]>)(
       'should pass correct language restrict options for %s',
       async (lang, expectedOptions) => {
         mockGoogleSearchClient.searchBlogs.mockResolvedValue(blogs);
