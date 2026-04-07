@@ -1,3 +1,5 @@
+<div align="center">
+
 # PickEat Backend
 
 AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버
@@ -9,32 +11,47 @@ AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--5.1-412991?logo=openai)
+![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google)
+
+</div>
 
 ## Key Features
 
-- **AI 메뉴 추천** — OpenAI GPT-5.1 기반 사용자 맞춤 메뉴 추천 + SSE 실시간 스트리밍 응답
-- **AI 맛집 탐색** — Google Gemini Maps Grounding + Google Places API 연동으로 주변 맛집 검색 및 추천
-- **선호도 학습** — OpenAI Batch API를 활용한 사용자 식사 패턴 비동기 분석 및 선호도 자동 업데이트
-- **소셜 인증** — Kakao/Google OAuth + 이메일 인증 기반 통합 인증 시스템
-- **관리자 시스템** — 대시보드, 사용자/알림/버그리포트 관리 + Discord 웹훅 실시간 알림
-
-## Tech Stack
-
-| Category | Technology |
-|----------|------------|
-| Framework | NestJS 11 |
-| Language | TypeScript 5.7 (ES2023) |
-| Database | PostgreSQL 16 + PostGIS 3.4 |
-| ORM | TypeORM 0.3 |
-| Cache | Redis 7 (ioredis) |
-| Auth | JWT + Passport (Kakao, Google OAuth) |
-| AI/LLM | OpenAI API (GPT-4o, GPT-5.1), Google Gemini API |
-| Search | Google Places API, Google Custom Search Engine |
-| Storage | AWS S3 |
-| Email | Nodemailer + Handlebars |
-| Logging | Pino |
-| Testing | Jest 29 |
-| Container | Docker (Multi-stage build) |
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="docs/images/pickeat_취향설정.gif" width="380" />
+<br/>
+<b>취향 설정</b>
+<br/>
+<sub>사용자 식사 패턴을 <code>OpenAI Batch API</code>로 비동기 분석하여 선호도를 자동 업데이트합니다.</sub>
+</td>
+<td align="center" width="50%">
+<img src="docs/images/pickeat_메뉴추천.gif" width="380" />
+<br/>
+<b>AI 메뉴 추천</b>
+<br/>
+<sub><code>GPT-5.1</code> 2단계 파이프라인으로 맞춤 메뉴를 추천하고, <code>SSE</code> 스트리밍으로 실시간 응답합니다.</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="docs/images/pickeat_store_recommend.gif" width="380" />
+<br/>
+<b>맛집 추천</b>
+<br/>
+<sub><code>Gemini Maps Grounding</code>과 <code>Google Places API</code>를 연동하여 주변 맛집을 검색하고 추천합니다.</sub>
+</td>
+<td align="center" width="50%">
+<img src="docs/images/pickeat_store_detail.gif" width="380" />
+<br/>
+<b>가게 상세</b>
+<br/>
+<sub>AI가 작성한 가게 설명, 평점, 리뷰 요약을 제공합니다.</sub>
+</td>
+</tr>
+</table>
 
 ## Architecture
 
@@ -42,31 +59,15 @@ AI 기반 맞춤형 메뉴 추천 서비스의 백엔드 API 서버
 
 **Layer**: Controller (요청/응답) → Service (비즈니스 로직) → Repository (데이터) / Client (외부 API)
 
-## Project Structure
-
-```
-src/
-├── admin/          # 관리자 대시보드, 사용자·설정 관리
-├── auth/           # 인증 (JWT, OAuth, 이메일 인증, 비밀번호 재설정)
-├── batch/          # OpenAI Batch API 스케줄러 (선호도 분석)
-├── bug-report/     # 버그 리포트 + Discord 알림
-├── common/         # 공통 모듈 (필터, 데코레이터, 유틸, 설정)
-├── external/       # 외부 API 클라이언트 (OpenAI, Google, Gemini, AWS, Kakao, Discord)
-├── menu/           # AI 메뉴 추천 + 맛집 검색 (핵심 도메인)
-├── migrations/     # TypeORM 마이그레이션
-├── notification/   # 알림 관리 + 스케줄러
-├── rating/         # 별점 평가 + 집계
-├── user/           # 사용자 프로필, 주소, 선호도 관리
-└── user-place/     # 사용자 등록 맛집 관리
-```
-
 ## ERD
 
 ![PickEat ERD](docs/images/pickeat_erd_dark.png)
 
 ## Docs
 
-| Document | Link |
-|----------|------|
-| API Documentation | _TODO_ |
-| Portfolio | _TODO_ |
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | 시스템 아키텍처 및 데이터 흐름 |
+| [Backend Structure](docs/backend-structure.md) | 모듈별 구조 및 레이어 설명 |
+| [Database Schema](docs/database-schema.md) | 13개 테이블 스키마 및 관계 |
+| [API Reference](docs/api-reference.md) | 75개 엔드포인트 명세 |
