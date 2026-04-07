@@ -12,11 +12,10 @@ export const databaseConfig: TypeOrmModuleAsyncOptions = {
     password: config.getOrThrow<string>('POSTGRES_PASSWORD'),
     database: config.getOrThrow<string>('POSTGRES_DB'),
     autoLoadEntities: true,
-    // TODO: 스키마 동기화 완료 후 원복 필요
-    synchronize: config.get<string>('POSTGRES_SYNCHRONIZE') === 'true',
+    synchronize:
+      config.get<string>('NODE_ENV') !== 'production' &&
+      config.get<string>('POSTGRES_SYNCHRONIZE') === 'true',
     dropSchema: config.get<string>('NODE_ENV') === 'test',
-    // dropSchema: true,
-    // synchronize: true,
     ssl:
       config.get<string>('NODE_ENV') === 'production'
         ? { rejectUnauthorized: false }

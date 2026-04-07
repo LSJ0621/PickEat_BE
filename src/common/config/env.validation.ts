@@ -154,21 +154,21 @@ class EnvironmentVariables {
   OAUTH_GOOGLE_REDIRECT_URI: string;
 
   // Admin User (optional, for initial seeding)
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  ADMIN_NAME: string;
+  ADMIN_NAME?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  ADMIN_EMAIL: string;
+  ADMIN_EMAIL?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  ADMIN_PASSWORD: string;
+  ADMIN_PASSWORD?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  ADMIN_ROLE: string;
+  ADMIN_ROLE?: string;
 
   // AWS S3
   @IsString()
@@ -204,6 +204,11 @@ class EnvironmentVariables {
   @IsOptional()
   @IsIn(['minimal', 'normal', 'debug'])
   GEMINI_LOG_VERBOSITY?: string;
+
+  // Frontend URL (optional, for email links)
+  @IsOptional()
+  @IsString()
+  FRONTEND_URL?: string;
 
   // Address Search Provider (optional, defaults to 'kakao')
   ADDRESS_SEARCH_PROVIDER?: string;

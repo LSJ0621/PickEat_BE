@@ -98,8 +98,6 @@ The backend is a NestJS 11 modular application following a strict layered archit
 
 All external clients are isolated in `src/external/{provider}/` with dedicated constants, types, and client classes. Mock implementations exist in `src/external/mocks/` for E2E testing.
 
-> **Note:** A `src/external/naver/` directory exists but is **legacy and inactive** -- it is not registered in `ExternalModule` and not used by any active module.
-
 ## Key Data Flows
 
 ### Menu Recommendation Flow

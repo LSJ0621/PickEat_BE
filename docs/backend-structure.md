@@ -114,7 +114,6 @@ src/
 │   ├── gemini/                    # GeminiClient + prompts
 │   ├── google/                    # GooglePlacesClient, GoogleSearchClient, GoogleOAuthClient
 │   ├── kakao/                     # KakaoOAuthClient
-│   ├── naver/                     # NaverMapClient, NaverSearchClient (legacy)
 │   ├── openai/                    # OpenAiBatchClient + prompts (8 prompt files)
 │   └── mocks/                     # MockExternalModule + mock clients for E2E testing
 │
@@ -500,17 +499,6 @@ Module: `AwsModule`
 | `DiscordWebhookClient` | Discord webhooks -- bug report notifications, scheduler alerts |
 
 Module: `DiscordModule`
-
-### Naver (`src/external/naver/`) -- Legacy
-
-| Client | Purpose |
-|--------|---------|
-| `NaverMapClient` | Naver Map API (legacy, being replaced by Google) |
-| `NaverSearchClient` | Naver Search API (legacy) |
-
-Service: `LocationService`
-
-Note: No dedicated module. Not registered in `ExternalModule`. Being phased out in favor of Google APIs.
 
 ### Mock Module (`src/external/mocks/`)
 
