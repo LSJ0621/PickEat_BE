@@ -110,7 +110,6 @@ OpenAI GPT와 Google Gemini를 결합하여
 ### Infra / Test
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Railway](https://img.shields.io/badge/Railway-Deploy-0B0D0E?style=flat-square&logo=railway&logoColor=white)
-![Vercel](https://img.shields.io/badge/Vercel-Deploy-000000?style=flat-square&logo=vercel&logoColor=white)
 ![Jest](https://img.shields.io/badge/Jest-29-C21325?style=flat-square&logo=jest&logoColor=white)
 
 ---
