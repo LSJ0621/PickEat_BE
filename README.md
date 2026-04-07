@@ -59,7 +59,7 @@ OpenAI GPT와 Google Gemini를 결합하여
 <br/>
 <b>AI 메뉴 추천</b>
 <br/>
-<sub><code>GPT-5.1</code> 2단계 파이프라인으로 맞춤 메뉴를 추천하고, <code>SSE</code> 스트리밍으로 실시간 응답합니다.</sub>
+<sub><code>GPT-4o</code> 검증 → <code>GPT-5-mini</code> 트렌드 분석 → <code>GPT-5.1</code> 메뉴 추천 3단계 파이프라인으로 맞춤 메뉴를 추천하고, <code>SSE</code> 스트리밍으로 실시간 응답합니다.</sub>
 </td>
 </tr>
 <tr>
