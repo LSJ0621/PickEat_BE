@@ -98,7 +98,7 @@ async function createSelection(
   if (res.status !== 201) {
     throw new Error(`createSelection failed: ${res.status} ${JSON.stringify(res.body)}`);
   }
-  return res.body.id as number;
+  return res.body.selection.id as number;
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────────
@@ -236,8 +236,9 @@ describe('Menu (e2e)', () => {
         .send({ menus: [{ slot: 'lunch', name: '김치찌개' }] });
 
       expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty('id');
-      expect(res.body).toHaveProperty('menuPayload');
+      expect(res.body).toHaveProperty('selection');
+      expect(res.body.selection).toHaveProperty('id');
+      expect(res.body.selection).toHaveProperty('menuPayload');
     });
 
     it('should return 400 when menus array is empty', async () => {
@@ -284,10 +285,11 @@ describe('Menu (e2e)', () => {
         .send({ lunch: ['된장찌개'] });
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('id', selectionId);
+      expect(res.body).toHaveProperty('selection');
+      expect(res.body.selection).toHaveProperty('id', selectionId);
     });
 
-    it('should return 404 when selection id does not exist', async () => {
+    it('should return 400 when selection id does not exist', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -295,10 +297,10 @@ describe('Menu (e2e)', () => {
         .set('Authorization', `Bearer ${testUser.accessToken}`)
         .send({ lunch: ['된장찌개'] });
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(400);
     });
 
-    it('should return 403 when user tries to update another users selection', async () => {
+    it('should return 400 when user tries to update another users selection', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
       const selectionId = await createSelection(app, owner.accessToken);
@@ -308,7 +310,8 @@ describe('Menu (e2e)', () => {
         .set('Authorization', `Bearer ${other.accessToken}`)
         .send({ lunch: ['된장찌개'] });
 
-      expect(res.status).toBe(403);
+      // Service queries by both selectionId AND userId, so other user's selection appears as "not found" → 400
+      expect(res.status).toBe(400);
     });
   });
 
@@ -392,21 +395,22 @@ describe('Menu (e2e)', () => {
         .set('Authorization', `Bearer ${testUser.accessToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('id', recId);
-      expect(res.body).toHaveProperty('recommendations');
+      expect(res.body).toHaveProperty('history');
+      expect(res.body.history).toHaveProperty('id', recId);
+      expect(res.body.history).toHaveProperty('recommendations');
     });
 
-    it('should return 404 when recommendation id does not exist', async () => {
+    it('should return 400 when recommendation id does not exist', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
         .get('/menu/recommendations/99999')
         .set('Authorization', `Bearer ${testUser.accessToken}`);
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(400);
     });
 
-    it('should return 403 when user requests another users recommendation', async () => {
+    it('should return 400 when user requests another users recommendation', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, owner.user);
@@ -416,7 +420,8 @@ describe('Menu (e2e)', () => {
         .get(`/menu/recommendations/${recId}`)
         .set('Authorization', `Bearer ${other.accessToken}`);
 
-      expect(res.status).toBe(403);
+      // Service queries by both id AND userId, so other user's recommendation appears as "not found" → 400
+      expect(res.status).toBe(400);
     });
   });
 

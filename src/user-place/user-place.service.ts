@@ -422,11 +422,18 @@ export class UserPlaceService {
    */
   async findOne(userId: number, id: number): Promise<UserPlace> {
     const place = await this.userPlaceRepository.findOne({
-      where: { id, user: { id: userId } },
+      where: { id },
+      relations: ['user'],
     });
 
     if (!place) {
       throw new NotFoundException({
+        errorCode: ErrorCode.USER_PLACE_NOT_FOUND,
+      });
+    }
+
+    if (place.user.id !== userId) {
+      throw new ForbiddenException({
         errorCode: ErrorCode.USER_PLACE_NOT_FOUND,
       });
     }

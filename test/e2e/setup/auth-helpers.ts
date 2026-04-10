@@ -79,8 +79,8 @@ export async function createAuthenticatedAdmin(
   return createAuthenticatedUser(app, {
     email: `admin-${Date.now()}@e2e.example.com`,
     name: 'E2E Admin User',
-    ...overrides,
     role: 'ADMIN',
+    ...overrides,
   });
 }
 

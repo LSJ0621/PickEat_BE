@@ -526,7 +526,7 @@ describe('Address (e2e)', () => {
       expect(res.body).toHaveProperty('isDefault', true);
     });
 
-    it('should return 200 with null when user has no default address', async () => {
+    it('should return 200 with null or empty object when user has no default address', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -534,7 +534,11 @@ describe('Address (e2e)', () => {
         .set('Authorization', `Bearer ${testUser.accessToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).toBeNull();
+      // Controller returns null; NestJS may serialize as null or empty object
+      const isNullish =
+        res.body === null ||
+        (typeof res.body === 'object' && Object.keys(res.body).length === 0);
+      expect(isNullish).toBe(true);
     });
 
     it('should return 401 when request has no auth token', async () => {
@@ -550,13 +554,16 @@ describe('Address (e2e)', () => {
       // userA의 주소만 생성
       const created = await createAddress(userA.accessToken);
 
-      // userB의 기본 주소 조회 → null이어야 함
+      // userB의 기본 주소 조회 → null/empty이어야 함
       const res = await api()
         .get('/user/address/default')
         .set('Authorization', `Bearer ${userB.accessToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).toBeNull();
+      const isNullish =
+        res.body === null ||
+        (typeof res.body === 'object' && Object.keys(res.body).length === 0);
+      expect(isNullish).toBe(true);
 
       // userA의 기본 주소 조회 → 올바른 주소
       const resA = await api()

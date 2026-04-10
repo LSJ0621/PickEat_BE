@@ -30,7 +30,11 @@ import { TwoStageMenuService } from './services/two-stage-menu.service';
  * OpenAiPlacesService와 GeminiPlacesService는 이 모듈의 providers에서 직접 제공합니다.
  *
  * E2E_MOCK=true 모드에서는 MockExternalModule의 Mock 클라이언트가 주입됩니다.
+ * TwoStageMenuService와 하위 서비스들은 MockExternalModule에서 제공되므로
+ * 이 모듈에서는 제외합니다.
  */
+const isE2EMock = process.env.E2E_MOCK === 'true';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -53,11 +57,16 @@ import { TwoStageMenuService } from './services/two-stage-menu.service';
     OpenAiCommunityPlacesService,
     GeminiPlacesService,
     CommunityPlaceService,
-    TwoStageMenuService,
-    Gpt4oMiniValidationService,
-    Gpt51MenuService,
-    WebSearchSummaryService,
-    GptWebSearchMenuService,
+    // TwoStageMenuService and its dependencies are provided by MockExternalModule in E2E mode
+    ...(isE2EMock
+      ? []
+      : [
+          TwoStageMenuService,
+          Gpt4oMiniValidationService,
+          Gpt51MenuService,
+          WebSearchSummaryService,
+          GptWebSearchMenuService,
+        ]),
   ],
 })
 export class MenuModule {}

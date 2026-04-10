@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
@@ -42,6 +44,7 @@ export class UserPlaceController {
    * Check if user can register a new place
    */
   @Post('check')
+  @HttpCode(HttpStatus.OK)
   @Throttle({
     default: {
       limit: USER_PLACE.RATE_LIMITS.READ_PER_MINUTE,

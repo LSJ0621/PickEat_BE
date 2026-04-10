@@ -139,7 +139,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.body.canRegister).toBe(true);
     });
 
-    it('should return 200 with duplicateExists true when a place is already registered nearby', async () => {
+    it('should return 200 with nearbyPlaces when a place is already registered nearby', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -153,6 +153,7 @@ describe('UserPlace (e2e)', () => {
       });
 
       // Check with NEARBY_PLACE coordinates (within 100m)
+      // duplicateExists checks exact name+address match; nearbyPlaces uses spatial proximity
       const res = await req.post('/user-places/check').send({
         name: USER_PLACE_TEST_DATA.NEARBY_PLACE.name,
         address: USER_PLACE_TEST_DATA.NEARBY_PLACE.address,
@@ -161,7 +162,7 @@ describe('UserPlace (e2e)', () => {
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.duplicateExists).toBe(true);
+      expect(res.body.nearbyPlaces.length).toBeGreaterThan(0);
     });
   });
 

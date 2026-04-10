@@ -23,6 +23,7 @@ import { Roles } from '@/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '@/auth/guard/jwt.guard';
 import { RolesGuard } from '@/auth/guard/roles.guard';
 import { ErrorCode } from '@/common/constants/error-codes';
+import { MessageCode } from '@/common/constants/message-codes';
 import { ADMIN_ROLES } from '@/common/constants/roles.constants';
 import { MULTER_OPTIONS } from '@/common/config/multer.config';
 import { ImageValidationPipe } from '@/common/pipes/file-validation.pipe';
@@ -71,7 +72,8 @@ export class AdminUserPlaceController {
   ) {
     const adminUser = await this.getAdminUser(user.email);
     const ipAddress = this.getClientIp(req);
-    return this.adminUserPlaceService.approvePlace(id, adminUser.id, ipAddress);
+    await this.adminUserPlaceService.approvePlace(id, adminUser.id, ipAddress);
+    return { messageCode: MessageCode.USER_PLACE_APPROVED };
   }
 
   /**
@@ -86,12 +88,13 @@ export class AdminUserPlaceController {
   ) {
     const adminUser = await this.getAdminUser(user.email);
     const ipAddress = this.getClientIp(req);
-    return this.adminUserPlaceService.rejectPlace(
+    await this.adminUserPlaceService.rejectPlace(
       id,
       adminUser.id,
       dto,
       ipAddress,
     );
+    return { messageCode: MessageCode.USER_PLACE_REJECTED };
   }
 
   /**

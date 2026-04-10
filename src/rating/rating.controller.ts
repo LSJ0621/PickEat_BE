@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
 import {
   AuthUserPayload,
   CurrentUser,
@@ -36,6 +36,7 @@ export class RatingController {
   }
 
   @Post('submit')
+  @HttpCode(HttpStatus.OK)
   async submitRating(
     @Body() dto: SubmitRatingDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -46,6 +47,7 @@ export class RatingController {
   }
 
   @Post('skip')
+  @HttpCode(HttpStatus.OK)
   async skipRating(
     @Body() dto: SkipRatingDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -56,6 +58,7 @@ export class RatingController {
   }
 
   @Post('dismiss')
+  @HttpCode(HttpStatus.OK)
   async dismissRating(
     @Body() dto: DismissRatingDto,
     @CurrentUser() authUser: AuthUserPayload,

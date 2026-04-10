@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  HttpCode,
   HttpException,
+  HttpStatus,
   Body,
   Controller,
   Get,
@@ -284,6 +286,7 @@ export class MenuController {
 
   // SSE streaming: 메뉴 추천 (retry/status 이벤트 포함)
   @Post('recommend/stream')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async recommendStream(
     @Body() recommendMenuDto: RecommendMenuDto,

@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -42,6 +44,7 @@ export class UserController {
   }
 
   @Post('preferences')
+  @HttpCode(HttpStatus.OK)
   async upsertPreferences(
     @Body() preferencesDto: UpdatePreferencesDto,
     @CurrentUser() authUser: AuthUserPayload,
@@ -165,6 +168,7 @@ export class UserController {
   }
 
   @Post('addresses/batch-delete')
+  @HttpCode(HttpStatus.OK)
   async batchDeleteUserAddresses(
     @Body() dto: DeleteUserAddressesDto,
     @CurrentUser() authUser: AuthUserPayload,

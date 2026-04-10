@@ -95,7 +95,7 @@ export class AuthSocialService {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          error: ErrorCode.AUTH_RE_REGISTER_REQUIRED,
+          errorCode: ErrorCode.AUTH_RE_REGISTER_REQUIRED,
           email: email,
         },
         HttpStatus.BAD_REQUEST,
@@ -178,7 +178,7 @@ export class AuthSocialService {
       throw new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          error: ErrorCode.AUTH_RE_REGISTER_REQUIRED,
+          errorCode: ErrorCode.AUTH_RE_REGISTER_REQUIRED,
           email: email,
         },
         HttpStatus.BAD_REQUEST,

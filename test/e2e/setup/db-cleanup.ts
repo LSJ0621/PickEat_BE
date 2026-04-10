@@ -1,10 +1,15 @@
 import { INestApplication } from '@nestjs/common';
 import { DataSource, EntityTarget, ObjectType } from 'typeorm';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 /**
  * Truncates every table registered in the DataSource's entity metadata.
  * Uses TRUNCATE … RESTART IDENTITY CASCADE to clear all rows and reset
  * auto-increment sequences.
+ *
+ * Also flushes the Redis cache to prevent stale data (e.g. user profiles)
+ * from leaking between tests.
  *
  * Intended for use in `beforeEach` / `afterEach` hooks when full isolation
  * between test cases is required.
@@ -18,6 +23,14 @@ export async function truncateAllTables(app: INestApplication): Promise<void> {
     await repository.query(
       `TRUNCATE TABLE "${metadata.tableName}" RESTART IDENTITY CASCADE`,
     );
+  }
+
+  // Clear Redis cache to prevent stale profiles/tokens from leaking between tests
+  try {
+    const cacheManager = app.get<Cache>(CACHE_MANAGER);
+    await cacheManager.reset();
+  } catch {
+    // CACHE_MANAGER might not be available in all test setups
   }
 }
 

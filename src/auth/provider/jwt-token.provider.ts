@@ -16,7 +16,8 @@ export class JwtTokenProvider {
   }
 
   createToken(userId: number, email: string, role: string): string {
-    const payload = { sub: userId, email, role };
+    const jti = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+    const payload = { sub: userId, email, role, jti };
     return this.jwtService.sign(payload); // secret, expiresIn은 JwtModule에서 설정
   }
 
