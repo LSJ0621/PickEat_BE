@@ -9,8 +9,10 @@ process.env.NODE_ENV = 'test';
 // Load test environment variables from .env.test
 dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
 
-// Increase Jest timeout for integration tests if needed
-jest.setTimeout(10000);
+// Set default timeout — E2E tests override via jest.e2e.config.js testTimeout
+if (!process.env.E2E_MOCK) {
+  jest.setTimeout(10000);
+}
 
 // Global beforeEach to ensure clean state
 beforeEach(() => {
