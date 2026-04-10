@@ -31,7 +31,6 @@ export class UserFactory {
     user.role = overrides?.role ?? 'USER';
     user.preferredLanguage = overrides?.preferredLanguage ?? 'ko';
     user.preferences = overrides?.preferences ?? null;
-    user.refreshToken = overrides?.refreshToken ?? null;
     user.emailVerified = overrides?.emailVerified ?? false;
     user.reRegisterEmailVerified = overrides?.reRegisterEmailVerified ?? false;
     user.lastPasswordChangedAt = overrides?.lastPasswordChangedAt ?? null;
@@ -323,9 +322,7 @@ export class UserPlaceFactory {
         overrides?.latitude ?? 37.5012345,
       ],
     };
-    userPlace.menuTypes = overrides?.menuTypes ?? ['한식', '찌개류'];
     userPlace.photos = overrides?.photos ?? null;
-    userPlace.openingHours = overrides?.openingHours ?? null;
     userPlace.phoneNumber = overrides?.phoneNumber ?? null;
     userPlace.category = overrides?.category ?? null;
     userPlace.description = overrides?.description ?? null;
