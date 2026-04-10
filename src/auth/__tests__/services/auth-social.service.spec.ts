@@ -128,7 +128,7 @@ describe('AuthSocialService', () => {
       await expect(
         authSocialService.kakaoLoginWithToken('test-access-token', buildMockAuthResult),
       ).rejects.toMatchObject({
-        response: { error: ErrorCode.AUTH_RE_REGISTER_REQUIRED },
+        response: { errorCode: ErrorCode.AUTH_RE_REGISTER_REQUIRED },
       });
     });
   });
