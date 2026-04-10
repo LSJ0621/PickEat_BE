@@ -175,4 +175,32 @@ describe('PreferencesRetryBatchScheduler — handleExpiredBatchProcessingItems',
       expect.objectContaining({ status: MenuSelectionStatus.FAILED }),
     );
   });
+
+  it('should call alertFailure when submitRetryBatch throws an error', async () => {
+    const retryError = new Error('OpenAI retry batch failed');
+    mockWithAdvisoryLock.mockImplementation(async (_ds, _name, fn) => ({
+      acquired: true,
+      result: await fn(),
+    }));
+
+    // handleExpiredBatchProcessingItems returns no expired items
+    const mockQb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    mockMenuSelectionRepository.createQueryBuilder.mockReturnValue(mockQb);
+
+    // submitRetryBatch fails
+    mockPreferenceBatchService.submitRetryBatch.mockRejectedValue(retryError);
+    mockSchedulerAlertService.alertFailure.mockResolvedValue(undefined);
+
+    await scheduler.submitRetryBatch();
+
+    expect(mockSchedulerAlertService.alertFailure).toHaveBeenCalledWith(
+      expect.any(String),
+      retryError,
+    );
+  });
 });

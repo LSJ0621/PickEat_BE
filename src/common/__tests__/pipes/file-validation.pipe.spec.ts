@@ -123,4 +123,16 @@ describe('ImageValidationPipe', () => {
     const result = pipe.transform([]);
     expect(result).toEqual([]);
   });
+
+  it('undefined 또는 null이 전달되면 그대로 반환한다 (파일 없음)', () => {
+    const undefinedResult = pipe.transform(
+      undefined as unknown as Express.Multer.File[],
+    );
+    expect(undefinedResult).toBeUndefined();
+
+    const nullResult = pipe.transform(
+      null as unknown as Express.Multer.File[],
+    );
+    expect(nullResult).toBeNull();
+  });
 });

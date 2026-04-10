@@ -6,11 +6,13 @@ import {
   closeE2EApp,
   truncateAllTables,
   createAuthenticatedUser,
+  createAuthenticatedAdmin,
   authenticatedRequest,
   type TestUser,
 } from './setup';
 import { TEST_TIMEOUTS } from '../constants/test.constants';
 import { BugReport } from '@/bug-report/entities/bug-report.entity';
+import { BugReportStatus } from '@/bug-report/enum/bug-report-status.enum';
 import { DiscordWebhookClient } from '@/external/discord/clients/discord-webhook.client';
 
 describe('BugReport (e2e)', () => {
@@ -159,6 +161,82 @@ describe('BugReport (e2e)', () => {
       });
       expect(saved).not.toBeNull();
       expect(saved?.title).toBe('디스코드 실패 테스트');
+    });
+  });
+
+  // =====================
+  // 관리자 버그 관리 (GET /admin/bug-reports, PATCH /admin/bug-reports/:id/status)
+  // =====================
+  describe('Admin Bug Report Management', () => {
+    let adminUser: TestUser;
+    let bugReportId: number;
+
+    /** 테스트용 버그 리포트를 일반 사용자로 생성한다 */
+    async function seedBugReport(): Promise<number> {
+      const testUser = await createAuthenticatedUser(app);
+      const req = authenticatedRequest(app, testUser.accessToken);
+
+      const res = await req
+        .post('/bug-reports')
+        .field('category', 'UI')
+        .field('title', '관리자 테스트용 버그')
+        .field('description', '관리자 테스트를 위한 버그 리포트입니다.');
+
+      return res.body.id as number;
+    }
+
+    beforeEach(async () => {
+      adminUser = await createAuthenticatedAdmin(app);
+      bugReportId = await seedBugReport();
+    });
+
+    it('should return 200 with paginated list when admin queries bug reports', async () => {
+      const req = authenticatedRequest(app, adminUser.accessToken);
+
+      const res = await req.get('/admin/bug-reports?page=1&limit=10');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('items');
+      expect(res.body).toHaveProperty('pageInfo');
+      expect(res.body.pageInfo).toHaveProperty('totalCount');
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should return 200 with detail including status history when admin views a bug report', async () => {
+      const req = authenticatedRequest(app, adminUser.accessToken);
+
+      const res = await req.get(`/admin/bug-reports/${bugReportId}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('id', bugReportId);
+      expect(res.body).toHaveProperty('statusHistory');
+    });
+
+    it('should return 200 and update status when admin changes bug report status', async () => {
+      const req = authenticatedRequest(app, adminUser.accessToken);
+
+      const res = await req
+        .patch(`/admin/bug-reports/${bugReportId}/status`)
+        .send({ status: BugReportStatus.CONFIRMED });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe(BugReportStatus.CONFIRMED);
+    });
+
+    it('should return 403 when a regular user tries to access admin bug report endpoints', async () => {
+      const regularUser = await createAuthenticatedUser(app);
+      const req = authenticatedRequest(app, regularUser.accessToken);
+
+      const listRes = await req.get('/admin/bug-reports');
+      expect(listRes.status).toBe(403);
+
+      const detailRes = await req.get(`/admin/bug-reports/${bugReportId}`);
+      expect(detailRes.status).toBe(403);
+
+      const patchRes = await req
+        .patch(`/admin/bug-reports/${bugReportId}/status`)
+        .send({ status: BugReportStatus.CONFIRMED });
+      expect(patchRes.status).toBe(403);
     });
   });
 });
