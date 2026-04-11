@@ -89,7 +89,7 @@ describe('AuthService', () => {
   // validateUser
   // =====================
   describe('validateUser', () => {
-    it('should return { user, reason: "success" } when email and password are valid', async () => {
+    it('이메일과 비밀번호가 유효하면 { user, reason: "success" }를 반환한다', async () => {
       const user = UserFactory.createWithPassword('test@example.com', 'hashed');
       mockUserRepository.findOne.mockResolvedValue(user);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
@@ -100,7 +100,7 @@ describe('AuthService', () => {
       expect(result.reason).toBe('success');
     });
 
-    it('should return { user: null, reason: "not_found" } when email does not exist', async () => {
+    it('존재하지 않는 이메일이면 { user: null, reason: "not_found" }를 반환한다', async () => {
       mockUserRepository.findOne.mockResolvedValue(null);
 
       const result = await authService.validateUser('none@example.com', 'password');
@@ -109,7 +109,7 @@ describe('AuthService', () => {
       expect(result.reason).toBe('not_found');
     });
 
-    it('should return { user: null, reason: "wrong_password" } when password does not match', async () => {
+    it('비밀번호가 일치하지 않으면 { user: null, reason: "wrong_password" }를 반환한다', async () => {
       const user = UserFactory.createWithPassword('test@example.com', 'hashed');
       mockUserRepository.findOne.mockResolvedValue(user);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
@@ -120,7 +120,7 @@ describe('AuthService', () => {
       expect(result.reason).toBe('wrong_password');
     });
 
-    it('should return { user: null, reason: "deleted" } when user is soft-deleted', async () => {
+    it('소프트 삭제된 사용자이면 { user: null, reason: "deleted" }를 반환한다', async () => {
       const deletedUser = UserFactory.create({
         email: 'deleted@example.com',
         password: 'hashed',
@@ -134,7 +134,7 @@ describe('AuthService', () => {
       expect(result.reason).toBe('deleted');
     });
 
-    it('should return { user: null, reason: "deactivated" } when user account is deactivated', async () => {
+    it('비활성화된 계정이면 { user: null, reason: "deactivated" }를 반환한다', async () => {
       const deactivatedUser = UserFactory.create({
         email: 'deactivated@example.com',
         password: 'hashed',
@@ -148,7 +148,7 @@ describe('AuthService', () => {
       expect(result.reason).toBe('deactivated');
     });
 
-    it('should return { user: null, reason: "no_password" } when user is a social-only account', async () => {
+    it('소셜 전용 계정이면 { user: null, reason: "no_password" }를 반환한다', async () => {
       const socialUser = UserFactory.createWithSocial('social@example.com');
       mockUserRepository.findOne.mockResolvedValue(socialUser);
 
@@ -163,7 +163,7 @@ describe('AuthService', () => {
   // buildAuthResult
   // =====================
   describe('buildAuthResult', () => {
-    it('should return AuthResult with token and profile data', async () => {
+    it('token과 프로필 데이터가 포함된 AuthResult를 반환한다', async () => {
       const user = UserFactory.createWithPassword();
       const mockToken = 'mock-access-token';
 
@@ -187,7 +187,7 @@ describe('AuthService', () => {
   // getUserProfile
   // =====================
   describe('getUserProfile', () => {
-    it('should return cached profile without querying DB when cache hits', async () => {
+    it('캐시 히트 시 DB 조회 없이 캐시된 프로필을 반환한다', async () => {
       const user = UserFactory.createWithPassword();
       const cachedProfile: AuthProfile = {
         email: user.email,
@@ -209,7 +209,7 @@ describe('AuthService', () => {
       expect(mockUserService.getEntityDefaultAddress).not.toHaveBeenCalled();
     });
 
-    it('should query DB and save result to cache when cache misses', async () => {
+    it('캐시 미스 시 DB를 조회하고 결과를 캐시에 저장한다', async () => {
       const user = UserFactory.createWithPassword();
 
       mockUserService.getAuthenticatedEntity.mockResolvedValue(user);

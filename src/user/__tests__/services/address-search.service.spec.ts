@@ -33,7 +33,7 @@ describe('AddressSearchService', () => {
   // searchWithGoogle — 정상 응답 파싱
   // =====================
   describe('searchAddress → searchWithGoogle (정상 응답 파싱)', () => {
-    it('should return parsed AddressSearchResult array from predictions and details', async () => {
+    it('예측과 상세 정보를 파싱해 AddressSearchResult 배열을 반환한다', async () => {
       const suggestions: GooglePlacesAutocompleteSuggestion[] = [
         {
           placePrediction: {
@@ -80,7 +80,7 @@ describe('AddressSearchService', () => {
   // searchWithGoogle — 일부 Details 실패 시 성공한 것만 반환
   // =====================
   describe('searchAddress → searchWithGoogle (일부 Details 실패)', () => {
-    it('should return only successfully resolved results when some getDetails calls fail', async () => {
+    it('일부 getDetails 호출이 실패하면 성공한 결과만 반환한다', async () => {
       const suggestions: GooglePlacesAutocompleteSuggestion[] = [
         {
           placePrediction: {
@@ -117,7 +117,7 @@ describe('AddressSearchService', () => {
   // searchWithGoogle — 결과 없음
   // =====================
   describe('searchAddress → searchWithGoogle (결과 없음)', () => {
-    it('should return empty addresses array when autocomplete returns no suggestions', async () => {
+    it('autocomplete 결과가 없으면 빈 주소 배열을 반환한다', async () => {
       mockGooglePlacesClient.autocomplete.mockResolvedValue([]);
 
       const result = await service.searchAddress({ query: '결과없는주소xyz' });
@@ -127,7 +127,7 @@ describe('AddressSearchService', () => {
       expect(result.meta.is_end).toBe(true);
     });
 
-    it('should return empty addresses array when all suggestions have no placePrediction', async () => {
+    it('모든 제안에 placePrediction이 없으면 빈 주소 배열을 반환한다', async () => {
       const suggestions: GooglePlacesAutocompleteSuggestion[] = [
         { placePrediction: undefined },
         { placePrediction: undefined },
@@ -146,7 +146,7 @@ describe('AddressSearchService', () => {
   // mapToAddressResult — 위도/경도 없는 결과 → null
   // =====================
   describe('mapToAddressResult (via searchAddress)', () => {
-    it('should filter out results where getDetails returns null location', async () => {
+    it('getDetails가 null location을 반환하면 해당 결과를 필터링한다', async () => {
       const suggestions: GooglePlacesAutocompleteSuggestion[] = [
         {
           placePrediction: {
@@ -169,7 +169,7 @@ describe('AddressSearchService', () => {
       expect(result.addresses).toHaveLength(0);
     });
 
-    it('should filter out results where getDetails returns null', async () => {
+    it('getDetails가 null을 반환하면 해당 결과를 필터링한다', async () => {
       const suggestions: GooglePlacesAutocompleteSuggestion[] = [
         {
           placePrediction: {
@@ -187,7 +187,7 @@ describe('AddressSearchService', () => {
       expect(result.addresses).toHaveLength(0);
     });
 
-    it('should use formattedAddress when available, otherwise fall back to prediction.text.text', async () => {
+    it('formattedAddress가 있으면 사용하고 없으면 prediction.text.text로 폴백한다', async () => {
       const suggestions: GooglePlacesAutocompleteSuggestion[] = [
         {
           placePrediction: {

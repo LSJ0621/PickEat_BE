@@ -78,7 +78,7 @@ describe('Auth (e2e)', () => {
       gender: 'male' as const,
     };
 
-    it('should return 201 with messageCode when all fields are valid', async () => {
+    it('모든 필드가 유효하면 201 + messageCode를 반환한다', async () => {
       await setupVerifiedEmail(email);
 
       const res = await api().post('/auth/register').send(validPayload);
@@ -87,7 +87,7 @@ describe('Auth (e2e)', () => {
       expect(res.body).toHaveProperty('messageCode');
     });
 
-    it('should return 400 with message when email is missing', async () => {
+    it('이메일 누락 시 400 에러를 반환한다', async () => {
       const { email: _e, ...withoutEmail } = validPayload;
 
       const res = await api().post('/auth/register').send(withoutEmail);
@@ -96,7 +96,7 @@ describe('Auth (e2e)', () => {
       expect(res.body).toHaveProperty('message');
     });
 
-    it('should return 400 when password is shorter than 8 characters', async () => {
+    it('비밀번호가 8자 미만이면 400 에러를 반환한다', async () => {
       await setupVerifiedEmail(email);
 
       const res = await api()
@@ -106,7 +106,7 @@ describe('Auth (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 with AUTH_EMAIL_ALREADY_EXISTS when email is already registered', async () => {
+    it('이미 등록된 이메일이면 400 + AUTH_EMAIL_ALREADY_EXISTS를 반환한다', async () => {
       await registerUser(email);
 
       const res = await api().post('/auth/register').send(validPayload);
@@ -115,14 +115,14 @@ describe('Auth (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.AUTH_EMAIL_ALREADY_EXISTS);
     });
 
-    it('should return 400 with AUTH_EMAIL_NOT_VERIFIED when email is not verified', async () => {
+    it('이메일 미인증 시 400 + AUTH_EMAIL_NOT_VERIFIED를 반환한다', async () => {
       const res = await api().post('/auth/register').send(validPayload);
 
       expect(res.status).toBe(400);
       expect(res.body.errorCode).toBe(ErrorCode.AUTH_EMAIL_NOT_VERIFIED);
     });
 
-    it('should not include password field in registration response', async () => {
+    it('회원가입 응답에 password가 포함되지 않는다', async () => {
       await setupVerifiedEmail(email);
 
       const res = await api().post('/auth/register').send(validPayload);
@@ -139,7 +139,7 @@ describe('Auth (e2e)', () => {
     const email = 'login@test.example.com';
     const password = 'ValidPass1!';
 
-    it('should return 201 with token when credentials are valid', async () => {
+    it('유효한 자격증명이면 201 + token을 반환한다', async () => {
       await registerUser(email, password);
 
       const res = await loginUser(email, password);
@@ -149,7 +149,7 @@ describe('Auth (e2e)', () => {
       expect(typeof res.body.token).toBe('string');
     });
 
-    it('should return 401 when password is incorrect', async () => {
+    it('비밀번호가 틀리면 401 에러를 반환한다', async () => {
       await registerUser(email, password);
 
       const res = await loginUser(email, 'WrongPassword1!');
@@ -158,14 +158,14 @@ describe('Auth (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.AUTH_INVALID_CREDENTIALS);
     });
 
-    it('should return 401 when email does not exist', async () => {
+    it('존재하지 않는 이메일이면 401 에러를 반환한다', async () => {
       const res = await loginUser('nonexistent@test.example.com', password);
 
       expect(res.status).toBe(401);
       expect(res.body.errorCode).toBe(ErrorCode.AUTH_INVALID_CREDENTIALS);
     });
 
-    it('should return 401 when user is soft-deleted', async () => {
+    it('소프트 삭제된 사용자이면 401 에러를 반환한다', async () => {
       await registerUser(email, password);
       await app.get(DataSource).getRepository(User).softDelete({ email });
 
@@ -174,7 +174,7 @@ describe('Auth (e2e)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('should return 401 when user account is deactivated', async () => {
+    it('비활성화된 계정이면 401 에러를 반환한다', async () => {
       await registerUser(email, password);
       await app
         .get(DataSource)
@@ -186,7 +186,7 @@ describe('Auth (e2e)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('should not include password field in login response', async () => {
+    it('로그인 응답에 password가 포함되지 않는다', async () => {
       await registerUser(email, password);
 
       const res = await loginUser(email, password);
@@ -200,7 +200,7 @@ describe('Auth (e2e)', () => {
   // 이메일 중복 확인 (GET /auth/check-email)
   // =====================
   describe('GET /auth/check-email', () => {
-    it('should return available: true for an unused email', async () => {
+    it('미사용 이메일이면 available: true를 반환한다', async () => {
       const res = await api()
         .get('/auth/check-email')
         .query({ email: 'available@test.example.com' });
@@ -209,7 +209,7 @@ describe('Auth (e2e)', () => {
       expect(res.body.available).toBe(true);
     });
 
-    it('should return available: false for an already registered email', async () => {
+    it('이미 등록된 이메일이면 available: false를 반환한다', async () => {
       const email = 'taken@test.example.com';
       await registerUser(email);
 
@@ -219,7 +219,7 @@ describe('Auth (e2e)', () => {
       expect(res.body.available).toBe(false);
     });
 
-    it('should return 400 when the value is not a valid email format', async () => {
+    it('유효하지 않은 이메일 형식이면 400 에러를 반환한다', async () => {
       const res = await api()
         .get('/auth/check-email')
         .query({ email: 'not-an-email' });
@@ -233,7 +233,7 @@ describe('Auth (e2e)', () => {
   // =====================
   describe('이메일 인증', () => {
     describe('POST /auth/email/send-code', () => {
-      it('should return 201 with success when sending code for SIGNUP purpose', async () => {
+      it('SIGNUP 목적으로 코드 전송 시 201 + success를 반환한다', async () => {
         const res = await sendEmailCode('sendcode@test.example.com', 'SIGNUP');
 
         expect(res.status).toBe(201);
@@ -241,7 +241,7 @@ describe('Auth (e2e)', () => {
         expect(res.body.messageCode).toBe(MessageCode.AUTH_VERIFICATION_CODE_SENT);
       });
 
-      it('should return 201 with success when sending code for RE_REGISTER purpose', async () => {
+      it('RE_REGISTER 목적으로 코드 전송 시 201 + success를 반환한다', async () => {
         const res = await sendEmailCode('reregister@test.example.com', 'RE_REGISTER');
 
         expect(res.status).toBe(201);
@@ -250,7 +250,7 @@ describe('Auth (e2e)', () => {
     });
 
     describe('POST /auth/email/verify-code', () => {
-      it('should return 201 with messageCode when code is correct', async () => {
+      it('올바른 코드이면 201 + messageCode를 반환한다', async () => {
         const email = 'verify@test.example.com';
         await sendEmailCode(email, 'SIGNUP');
 
@@ -261,7 +261,7 @@ describe('Auth (e2e)', () => {
         expect(res.body.messageCode).toBe(MessageCode.AUTH_EMAIL_VERIFICATION_COMPLETED);
       });
 
-      it('should return 400 when verification code is wrong', async () => {
+      it('인증 코드가 틀리면 400 에러를 반환한다', async () => {
         const email = 'wrongcode@test.example.com';
         await sendEmailCode(email, 'SIGNUP');
 
@@ -270,7 +270,7 @@ describe('Auth (e2e)', () => {
         expect(res.status).toBe(400);
       });
 
-      it('should return 400 with AUTH_NO_REREGISTER_ACCOUNT when verifying RE_REGISTER for non-existent deleted user', async () => {
+      it('삭제된 사용자가 없는 상태에서 RE_REGISTER 인증 시 400 + AUTH_NO_REREGISTER_ACCOUNT를 반환한다', async () => {
         const email = 'noreregister@test.example.com';
         await sendEmailCode(email, 'RE_REGISTER');
 
@@ -287,7 +287,7 @@ describe('Auth (e2e)', () => {
   // =====================
   describe('토큰 관리', () => {
     describe('POST /auth/refresh', () => {
-      it('should return new access token when refresh token is valid in Redis (Token Rotation)', async () => {
+      it('Redis에 유효한 리프레시 토큰이 있으면 새 액세스 토큰을 반환한다 (Token Rotation)', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
 
         const res = await api()
@@ -300,14 +300,14 @@ describe('Auth (e2e)', () => {
         expect(res.body.token).not.toBe(testUser.accessToken);
       });
 
-      it('should return 401 with AUTH_MISSING_ACCESS_TOKEN when Authorization header is absent', async () => {
+      it('Authorization 헤더 없이 요청하면 401 + AUTH_MISSING_ACCESS_TOKEN을 반환한다', async () => {
         const res = await api().post('/auth/refresh');
 
         expect(res.status).toBe(401);
         expect(res.body.errorCode).toBe(ErrorCode.AUTH_MISSING_ACCESS_TOKEN);
       });
 
-      it('should return 401 with AUTH_INVALID_REFRESH_TOKEN when access token has invalid signature', async () => {
+      it('잘못된 서명의 토큰이면 401 + AUTH_INVALID_REFRESH_TOKEN을 반환한다', async () => {
         const res = await api()
           .post('/auth/refresh')
           .set('Authorization', 'Bearer invalid.jwt.token');
@@ -316,7 +316,7 @@ describe('Auth (e2e)', () => {
         expect(res.body.errorCode).toBe(ErrorCode.AUTH_INVALID_REFRESH_TOKEN);
       });
 
-      it('should return 401 with AUTH_INVALID_REFRESH_TOKEN when no refresh token exists in Redis', async () => {
+      it('Redis에 리프레시 토큰이 없으면 401 + AUTH_INVALID_REFRESH_TOKEN을 반환한다', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
         await app.get(RedisCacheService).deleteRefreshToken(testUser.user.id);
 
@@ -328,7 +328,7 @@ describe('Auth (e2e)', () => {
         expect(res.body.errorCode).toBe(ErrorCode.AUTH_INVALID_REFRESH_TOKEN);
       });
 
-      it('should return 401 and delete Redis entry when stored refresh token is expired or invalid', async () => {
+      it('저장된 리프레시 토큰이 만료/무효이면 401을 반환하고 Redis 항목을 삭제한다', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
         const cacheService = app.get(RedisCacheService);
         await cacheService.setRefreshToken(testUser.user.id, 'expired.or.invalid.jwt');
@@ -342,7 +342,7 @@ describe('Auth (e2e)', () => {
         expect(await cacheService.getRefreshToken(testUser.user.id)).toBeNull();
       });
 
-      it('should return 401 and delete Redis entry when user is soft-deleted', async () => {
+      it('소프트 삭제된 사용자이면 401을 반환하고 Redis 항목을 삭제한다', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
         await app.get(DataSource).getRepository(User).softDelete({ id: testUser.user.id });
 
@@ -355,7 +355,7 @@ describe('Auth (e2e)', () => {
         expect(await app.get(RedisCacheService).getRefreshToken(testUser.user.id)).toBeNull();
       });
 
-      it('should return 403 with AUTH_ACCOUNT_DEACTIVATED and delete Redis entry when user is deactivated', async () => {
+      it('비활성화된 사용자이면 403 + AUTH_ACCOUNT_DEACTIVATED를 반환하고 Redis 항목을 삭제한다', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
         await app
           .get(DataSource)
@@ -373,7 +373,7 @@ describe('Auth (e2e)', () => {
     });
 
     describe('POST /auth/logout', () => {
-      it('should return 200 with messageCode and remove refresh token from Redis', async () => {
+      it('로그아웃 시 200 + messageCode를 반환하고 Redis 리프레시 토큰을 제거한다', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
 
         const res = await api()
@@ -385,7 +385,7 @@ describe('Auth (e2e)', () => {
         expect(await app.get(RedisCacheService).getRefreshToken(testUser.user.id)).toBeNull();
       });
 
-      it('should return 401 when no Authorization header is provided on logout', async () => {
+      it('인증 없이 로그아웃 요청하면 401 에러를 반환한다', async () => {
         const res = await api().post('/auth/logout');
 
         expect(res.status).toBe(401);
@@ -393,7 +393,7 @@ describe('Auth (e2e)', () => {
     });
 
     describe('GET /auth/me', () => {
-      it('should return user profile without password when authenticated', async () => {
+      it('인증된 사용자가 요청하면 password 없는 프로필을 반환한다', async () => {
         const testUser: TestUser = await createAuthenticatedUser(app);
 
         const res = await api()
@@ -405,7 +405,7 @@ describe('Auth (e2e)', () => {
         expect(res.body).not.toHaveProperty('password');
       });
 
-      it('should return 401 when no Authorization header is provided', async () => {
+      it('인증 없이 요청하면 401 에러를 반환한다', async () => {
         const res = await api().get('/auth/me');
 
         expect(res.status).toBe(401);
@@ -420,7 +420,7 @@ describe('Auth (e2e)', () => {
     const email = 'pwreset@test.example.com';
     const password = 'ValidPass1!';
 
-    it('should return 201 when sending reset code for a registered email', async () => {
+    it('등록된 이메일로 재설정 코드 전송 시 201을 반환한다', async () => {
       await registerUser(email, password);
 
       const res = await api()
@@ -431,7 +431,7 @@ describe('Auth (e2e)', () => {
       expect(res.body.success).toBe(true);
     });
 
-    it('should return 201 when verifying a valid password reset code', async () => {
+    it('유효한 비밀번호 재설정 코드 인증 시 201을 반환한다', async () => {
       await registerUser(email, password);
       await api().post('/auth/password/reset/send-code').send({ email });
 
@@ -443,7 +443,7 @@ describe('Auth (e2e)', () => {
       expect(res.body.success).toBe(true);
     });
 
-    it('should return 201 and allow login with new password after complete reset flow', async () => {
+    it('비밀번호 재설정 완료 후 새 비밀번호로 로그인할 수 있다', async () => {
       await registerUser(email, password);
       await api().post('/auth/password/reset/send-code').send({ email });
       await api()
@@ -461,7 +461,7 @@ describe('Auth (e2e)', () => {
       expect(loginRes.status).toBe(201);
     });
 
-    it('should return 400 with AUTH_EMAIL_NOT_REGISTERED when email does not exist', async () => {
+    it('미등록 이메일이면 400 + AUTH_EMAIL_NOT_REGISTERED를 반환한다', async () => {
       const res = await api()
         .post('/auth/password/reset/send-code')
         .send({ email: 'notexist@test.example.com' });
@@ -476,7 +476,7 @@ describe('Auth (e2e)', () => {
   // =====================
   describe('OAuth', () => {
     describe('POST /auth/kakao/doLogin', () => {
-      it('should return 201 with token when Kakao web login succeeds with authorization code', async () => {
+      it('카카오 웹 로그인 인가 코드가 유효하면 201 + token을 반환한다', async () => {
         const res = await api()
           .post('/auth/kakao/doLogin')
           .send({ code: 'test-valid-code' });
@@ -485,7 +485,7 @@ describe('Auth (e2e)', () => {
         expect(res.body).toHaveProperty('token');
       });
 
-      it('should auto-register new social user and return token on first Kakao login', async () => {
+      it('최초 카카오 로그인 시 자동 회원가입 후 token을 반환한다', async () => {
         const res = await api()
           .post('/auth/kakao/doLogin')
           .send({ code: 'test-valid-code' });
@@ -499,7 +499,7 @@ describe('Auth (e2e)', () => {
         expect(createdUser).not.toBeNull();
       });
 
-      it('should return error with AUTH_RE_REGISTER_REQUIRED when Kakao social user is soft-deleted', async () => {
+      it('소프트 삭제된 카카오 사용자이면 AUTH_RE_REGISTER_REQUIRED 에러를 반환한다', async () => {
         const userRepo = app.get(DataSource).getRepository(User);
         const deletedUser = userRepo.create({
           email: 'oauth-kakao@test-oauth.example.com',
@@ -524,7 +524,7 @@ describe('Auth (e2e)', () => {
     });
 
     describe('POST /auth/kakao/appLogin', () => {
-      it('should return 201 with token when Kakao app login succeeds with accessToken', async () => {
+      it('카카오 앱 로그인 accessToken이 유효하면 201 + token을 반환한다', async () => {
         const res = await api()
           .post('/auth/kakao/appLogin')
           .send({ accessToken: 'test-kakao-valid-token' });
@@ -535,7 +535,7 @@ describe('Auth (e2e)', () => {
     });
 
     describe('POST /auth/google/doLogin', () => {
-      it('should return 201 with token when Google OAuth login succeeds', async () => {
+      it('Google OAuth 로그인 성공 시 201 + token을 반환한다', async () => {
         const res = await api()
           .post('/auth/google/doLogin')
           .send({ code: 'test-valid-code' });
@@ -551,7 +551,7 @@ describe('Auth (e2e)', () => {
   // =====================
   describe('재가입', () => {
     describe('POST /auth/re-register', () => {
-      it('should return 201 with messageCode when email user re-registers after withdrawal', async () => {
+      it('탈퇴한 이메일 사용자가 재가입하면 201 + messageCode를 반환한다', async () => {
         const email = 'reregister-email@test.example.com';
         const password = 'ValidPass1!';
 
@@ -571,7 +571,7 @@ describe('Auth (e2e)', () => {
     });
 
     describe('POST /auth/re-register/social', () => {
-      it('should return 201 with messageCode when social user re-registers after withdrawal', async () => {
+      it('탈퇴한 소셜 사용자가 재가입하면 201 + messageCode를 반환한다', async () => {
         const email = 'reregister-social@test-oauth.example.com';
         const userRepo = app.get(DataSource).getRepository(User);
 

@@ -76,7 +76,7 @@ describe('MenuRecommendationService', () => {
   // ─── recommend ───────────────────────────────────────────────────────────────
 
   describe('recommend', () => {
-    it('should return recommendation result and save record when default address exists', async () => {
+    it('기본 주소가 있으면 추천 결과를 반환하고 레코드를 저장한다', async () => {
       const user = UserFactory.createWithPassword();
       const mockRecord = {
         id: 42,
@@ -101,7 +101,7 @@ describe('MenuRecommendationService', () => {
       expect(mockRepository.save).toHaveBeenCalledWith(mockRecord);
     });
 
-    it('should pass user likes and dislikes to generateMenuRecommendations', async () => {
+    it('사용자의 likes와 dislikes를 generateMenuRecommendations에 전달한다', async () => {
       const user = UserFactory.create({
         email: 'test@example.com',
         preferences: {
@@ -133,7 +133,7 @@ describe('MenuRecommendationService', () => {
       expect(calledDislikes).toEqual(['달콤한 음식']);
     });
 
-    it('should throw BadRequestException with MENU_DEFAULT_ADDRESS_REQUIRED when user has no default address', async () => {
+    it('기본 주소가 없으면 MENU_DEFAULT_ADDRESS_REQUIRED BadRequestException을 던진다', async () => {
       const user = UserFactory.createWithPassword();
       mockUserTasteAnalysisService.getByUserId.mockResolvedValue(null);
       mockUserAddressService.getDefaultAddress.mockResolvedValue(null);
@@ -143,7 +143,7 @@ describe('MenuRecommendationService', () => {
       });
     });
 
-    it('should continue with recommendation even when tasteAnalysis fetch fails', async () => {
+    it('tasteAnalysis 조회 실패 시에도 추천을 계속 진행한다', async () => {
       const user = UserFactory.createWithPassword();
       const mockRecord = {
         id: 1,
@@ -170,7 +170,7 @@ describe('MenuRecommendationService', () => {
   // ─── getHistory ───────────────────────────────────────────────────────────────
 
   describe('getHistory', () => {
-    it('should return correct pageInfo with hasNext=true when there are more items beyond current page', async () => {
+    it('현재 페이지 이후 항목이 더 있으면 hasNext=true인 pageInfo를 반환한다', async () => {
       const user = UserFactory.createWithPassword();
       const mockItems = [
         { id: 1, placeRecommendations: [] } as unknown as MenuRecommendation,
@@ -190,7 +190,7 @@ describe('MenuRecommendationService', () => {
       expect(result.items).toHaveLength(2);
     });
 
-    it('should return empty items with zero totalCount when date filter matches no records', async () => {
+    it('날짜 필터에 해당하는 레코드가 없으면 빈 items와 totalCount 0을 반환한다', async () => {
       const user = UserFactory.createWithPassword();
       const mockQb = buildMockQueryBuilder();
       mockQb.getManyAndCount.mockResolvedValue([[], 0]);
@@ -207,7 +207,7 @@ describe('MenuRecommendationService', () => {
   // ─── findById ─────────────────────────────────────────────────────────────────
 
   describe('findById', () => {
-    it('should throw BadRequestException with MENU_HISTORY_NOT_FOUND when recommendation belongs to different user', async () => {
+    it('다른 사용자의 추천이면 MENU_HISTORY_NOT_FOUND BadRequestException을 던진다', async () => {
       const user = UserFactory.createWithPassword();
       const mockQb = buildMockQueryBuilder(null); // returns null = not found for this user
       mockRepository.createQueryBuilder.mockReturnValue(mockQb);

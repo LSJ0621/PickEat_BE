@@ -16,7 +16,7 @@ describe('Application (E2E smoke test)', () => {
   });
 
   describe('GET /nonexistent', () => {
-    it('should return 404 for an unknown route', async () => {
+    it('존재하지 않는 경로이면 404를 반환한다', async () => {
       const response = await supertest(app.getHttpServer()).get('/nonexistent');
 
       E2EAssertions.expectErrorResponse(response, 404);

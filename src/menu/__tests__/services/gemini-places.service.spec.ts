@@ -54,7 +54,7 @@ describe('GeminiPlacesService', () => {
   // ─── recommendRestaurants ────────────────────────────────────────────────────
 
   describe('recommendRestaurants', () => {
-    it('should extract recommendations with placeId and metadata from Gemini response', async () => {
+    it('Gemini 응답에서 placeId와 메타데이터가 포함된 추천을 추출한다', async () => {
       const restaurant = buildMockGeminiRestaurant();
       mockGeminiClient.searchRestaurantsUnified.mockResolvedValue({
         restaurants: [restaurant],
@@ -77,7 +77,7 @@ describe('GeminiPlacesService', () => {
       expect(result.googleMapsWidgetContextToken).toBe('mock-widget-token');
     });
 
-    it('should set searchName and searchAddress for name-based matching when placeId is null', async () => {
+    it('placeId가 null이면 이름 기반 매칭을 위해 searchName과 searchAddress를 설정한다', async () => {
       const restaurant = buildMockGeminiRestaurant({
         placeId: null,
         nameKo: '검색할 식당',

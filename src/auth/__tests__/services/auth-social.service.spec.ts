@@ -78,7 +78,7 @@ describe('AuthSocialService', () => {
       mockKakaoClient.getUserProfile.mockResolvedValue(mockKakaoProfile);
     });
 
-    it('should create a new user and return auth result when Kakao user does not exist', async () => {
+    it('카카오 사용자가 없으면 새 사용자를 생성하고 인증 결과를 반환한다', async () => {
       const newUser = UserFactory.createWithSocial(
         'kakao-user@example.com',
         '123456789',
@@ -97,7 +97,7 @@ describe('AuthSocialService', () => {
       expect(mockUserService.createOauth).toHaveBeenCalled();
     });
 
-    it('should return auth result without creating user when Kakao user already exists', async () => {
+    it('카카오 사용자가 이미 존재하면 사용자 생성 없이 인증 결과를 반환한다', async () => {
       const existingUser = UserFactory.createWithSocial(
         'kakao-user@example.com',
         '123456789',
@@ -115,7 +115,7 @@ describe('AuthSocialService', () => {
       expect(mockUserService.createOauth).not.toHaveBeenCalled();
     });
 
-    it('should throw HttpException with AUTH_RE_REGISTER_REQUIRED when Kakao user is soft-deleted', async () => {
+    it('소프트 삭제된 카카오 사용자이면 AUTH_RE_REGISTER_REQUIRED HttpException을 던진다', async () => {
       const deletedUser = UserFactory.createWithSocial(
         'kakao-user@example.com',
         '123456789',
@@ -137,7 +137,7 @@ describe('AuthSocialService', () => {
   // processGoogleProfile (tested via googleLogin)
   // =====================
   describe('Google OAuth', () => {
-    it('should create a new user and return auth result when Google user does not exist', async () => {
+    it('Google 사용자가 없으면 새 사용자를 생성하고 인증 결과를 반환한다', async () => {
       const mockGoogleProfile = {
         sub: 'google-sub-123',
         email: 'google-user@example.com',
@@ -167,7 +167,7 @@ describe('AuthSocialService', () => {
       expect(mockUserService.createOauth).toHaveBeenCalled();
     });
 
-    it('should return auth result without creating user when Google user already exists', async () => {
+    it('Google 사용자가 이미 존재하면 사용자 생성 없이 인증 결과를 반환한다', async () => {
       const mockGoogleProfile = {
         sub: 'google-sub-123',
         email: 'google-user@example.com',
@@ -201,7 +201,7 @@ describe('AuthSocialService', () => {
   // reRegisterSocial
   // =====================
   describe('reRegisterSocial', () => {
-    it('should restore deleted social user and return success messageCode', async () => {
+    it('삭제된 소셜 사용자를 복구하고 success messageCode를 반환한다', async () => {
       const email = 'deleted-social@example.com';
       const deletedUser = UserFactory.createWithSocial(email, 'kakao-id-999', 'kakao');
       deletedUser.deletedAt = new Date();
@@ -218,7 +218,7 @@ describe('AuthSocialService', () => {
       expect(mockUserService.restoreSocialUser).toHaveBeenCalledWith(email);
     });
 
-    it('should throw BadRequestException when no deleted social user exists for re-registration', async () => {
+    it('재가입 대상 삭제된 소셜 사용자가 없으면 BadRequestException을 던진다', async () => {
       mockUserService.findBySocialEmailWithDeleted.mockResolvedValue(null);
 
       await expect(

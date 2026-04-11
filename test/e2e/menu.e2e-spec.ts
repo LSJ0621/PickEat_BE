@@ -122,7 +122,7 @@ describe('Menu (e2e)', () => {
   // ─── POST /menu/recommend ────────────────────────────────────────────────────
 
   describe('POST /menu/recommend', () => {
-    it('should return 201 with recommendation result when user has default address', async () => {
+    it('기본 주소가 있으면 201 + 추천 결과를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
 
@@ -138,7 +138,7 @@ describe('Menu (e2e)', () => {
       expect(res.body.recommendations.length).toBeGreaterThan(0);
     });
 
-    it('should return 400 when prompt is missing', async () => {
+    it('prompt 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -149,7 +149,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when prompt exceeds 2000 characters', async () => {
+    it('prompt가 2000자를 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -160,7 +160,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .post('/menu/recommend')
         .send({ prompt: '오늘 점심 뭐 먹지?' });
@@ -168,7 +168,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('should return 400 with MENU_DEFAULT_ADDRESS_REQUIRED when user has no default address', async () => {
+    it('기본 주소가 없으면 400 + MENU_DEFAULT_ADDRESS_REQUIRED를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -184,7 +184,7 @@ describe('Menu (e2e)', () => {
   // ─── POST /menu/recommend/stream ─────────────────────────────────────────────
 
   describe('POST /menu/recommend/stream', () => {
-    it('should stream SSE with a result event when user has default address', async () => {
+    it('기본 주소가 있으면 SSE로 result 이벤트를 스트리밍한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
 
@@ -204,7 +204,7 @@ describe('Menu (e2e)', () => {
       ).toBeDefined();
     });
 
-    it('should return 400 when prompt is missing', async () => {
+    it('prompt 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -215,7 +215,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .post('/menu/recommend/stream')
         .send({ prompt: '오늘 저녁 추천해줘' });
@@ -227,7 +227,7 @@ describe('Menu (e2e)', () => {
   // ─── POST /menu/selections ───────────────────────────────────────────────────
 
   describe('POST /menu/selections', () => {
-    it('should return 201 with selection data when menus array is valid', async () => {
+    it('유효한 menus 배열이면 201 + 선택 데이터를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -241,7 +241,7 @@ describe('Menu (e2e)', () => {
       expect(res.body.selection).toHaveProperty('menuPayload');
     });
 
-    it('should return 400 when menus array is empty', async () => {
+    it('menus 배열이 비어있으면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -252,7 +252,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when slot value is invalid', async () => {
+    it('slot 값이 유효하지 않으면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -263,7 +263,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .post('/menu/selections')
         .send({ menus: [{ slot: 'lunch', name: '김치찌개' }] });
@@ -275,7 +275,7 @@ describe('Menu (e2e)', () => {
   // ─── PATCH /menu/selections/:id ──────────────────────────────────────────────
 
   describe('PATCH /menu/selections/:id', () => {
-    it('should return 200 with updated selection when owner updates their selection', async () => {
+    it('소유자가 자신의 선택을 수정하면 200 + 수정된 데이터를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const selectionId = await createSelection(app, testUser.accessToken);
 
@@ -289,7 +289,7 @@ describe('Menu (e2e)', () => {
       expect(res.body.selection).toHaveProperty('id', selectionId);
     });
 
-    it('should return 400 when selection id does not exist', async () => {
+    it('존재하지 않는 selection ID이면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -300,7 +300,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when user tries to update another users selection', async () => {
+    it('다른 사용자의 선택을 수정하려 하면 400 에러를 반환한다', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
       const selectionId = await createSelection(app, owner.accessToken);
@@ -318,7 +318,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/selections/history ────────────────────────────────────────────
 
   describe('GET /menu/selections/history', () => {
-    it('should return 200 with selections array when authenticated', async () => {
+    it('인증된 사용자가 요청하면 200 + selections 배열을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -330,7 +330,7 @@ describe('Menu (e2e)', () => {
       expect(Array.isArray(res.body.selections)).toBe(true);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().get('/menu/selections/history');
 
       expect(res.status).toBe(401);
@@ -340,7 +340,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommendations/history ───────────────────────────────────────
 
   describe('GET /menu/recommendations/history', () => {
-    it('should return 200 with paginated items and pageInfo when authenticated', async () => {
+    it('인증된 사용자가 요청하면 200 + 페이지네이션된 items와 pageInfo를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -354,7 +354,7 @@ describe('Menu (e2e)', () => {
       expect(Array.isArray(res.body.items)).toBe(true);
     });
 
-    it('should return only matching items when date filter is applied', async () => {
+    it('날짜 필터 적용 시 해당 날짜의 항목만 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       await createRecommendation(app, testUser.accessToken);
@@ -370,7 +370,7 @@ describe('Menu (e2e)', () => {
       expect(res.body.items.length).toBeGreaterThan(0);
     });
 
-    it('should return 200 with empty items array when user has no recommendations', async () => {
+    it('추천 이력이 없으면 200 + 빈 items 배열을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -385,7 +385,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommendations/:id ───────────────────────────────────────────
 
   describe('GET /menu/recommendations/:id', () => {
-    it('should return 200 with recommendation detail when owner requests their recommendation', async () => {
+    it('소유자가 자신의 추천 상세를 요청하면 200 + 상세 정보를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       const recId = await createRecommendation(app, testUser.accessToken);
@@ -400,7 +400,7 @@ describe('Menu (e2e)', () => {
       expect(res.body.history).toHaveProperty('recommendations');
     });
 
-    it('should return 400 when recommendation id does not exist', async () => {
+    it('존재하지 않는 추천 ID이면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -410,7 +410,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when user requests another users recommendation', async () => {
+    it('다른 사용자의 추천을 요청하면 400 에러를 반환한다', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, owner.user);
@@ -428,7 +428,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommend/places/v2 ───────────────────────────────────────────
 
   describe('GET /menu/recommend/places/v2', () => {
-    it('should return 200 with place recommendations when all required params are provided', async () => {
+    it('필수 파라미터가 모두 있으면 200 + 장소 추천 결과를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       const recId = await createRecommendation(app, testUser.accessToken);
@@ -448,7 +448,7 @@ describe('Menu (e2e)', () => {
       expect(res.body).toHaveProperty('recommendations');
     });
 
-    it('should return 400 when required query params are missing', async () => {
+    it('필수 쿼리 파라미터 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -459,7 +459,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .get('/menu/recommend/places/v2')
         .query({
@@ -477,7 +477,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommend/places/search ───────────────────────────────────────
 
   describe('GET /menu/recommend/places/search', () => {
-    it('should return 200 with place recommendations when all params are valid', async () => {
+    it('모든 파라미터가 유효하면 200 + 장소 추천 결과를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       const recId = await createRecommendation(app, testUser.accessToken);
@@ -496,7 +496,7 @@ describe('Menu (e2e)', () => {
       expect(res.body).toHaveProperty('recommendations');
     });
 
-    it('should return 400 when required query params are missing', async () => {
+    it('필수 쿼리 파라미터 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -507,7 +507,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .get('/menu/recommend/places/search')
         .query({
@@ -524,7 +524,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommend/places/search/stream ─────────────────────────────────
 
   describe('GET /menu/recommend/places/search/stream', () => {
-    it('should stream SSE with a result event when all params are valid', async () => {
+    it('모든 파라미터가 유효하면 SSE로 result 이벤트를 스트리밍한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       const recId = await createRecommendation(app, testUser.accessToken);
@@ -547,7 +547,7 @@ describe('Menu (e2e)', () => {
       expect(resultEvent).toBeDefined();
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .get('/menu/recommend/places/search/stream')
         .query({
@@ -564,7 +564,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommend/places/community ────────────────────────────────────
 
   describe('GET /menu/recommend/places/community', () => {
-    it('should return 200 with community place recommendations when authenticated', async () => {
+    it('인증된 사용자가 요청하면 200 + 커뮤니티 장소 추천을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       const recId = await createRecommendation(app, testUser.accessToken);
@@ -584,7 +584,7 @@ describe('Menu (e2e)', () => {
       expect(Array.isArray(res.body.recommendations)).toBe(true);
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .get('/menu/recommend/places/community')
         .query({
@@ -601,7 +601,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/recommend/places/community/stream ──────────────────────────────
 
   describe('GET /menu/recommend/places/community/stream', () => {
-    it('should stream SSE with a result event when authenticated and params are valid', async () => {
+    it('인증된 사용자가 유효한 파라미터로 요청하면 SSE로 result 이벤트를 스트리밍한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       await setupDefaultAddress(app, testUser.user);
       const recId = await createRecommendation(app, testUser.accessToken);
@@ -624,7 +624,7 @@ describe('Menu (e2e)', () => {
       expect(resultEvent).toBeDefined();
     });
 
-    it('should return 401 when no authentication token is provided', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .get('/menu/recommend/places/community/stream')
         .query({
@@ -641,7 +641,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/places/:placeId/detail ────────────────────────────────────────
 
   describe('GET /menu/places/:placeId/detail', () => {
-    it('should return 200 with place detail when placeId is valid', async () => {
+    it('유효한 placeId이면 200 + 장소 상세 정보를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -651,7 +651,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 200 with place detail for any placeId because mock always returns data', async () => {
+    it('mock 환경에서는 모든 placeId에 대해 200 + 장소 상세를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -665,7 +665,7 @@ describe('Menu (e2e)', () => {
   // ─── GET /menu/restaurant/blogs ──────────────────────────────────────────────
 
   describe('GET /menu/restaurant/blogs', () => {
-    it('should return 200 with blog results when query and restaurantName are provided', async () => {
+    it('query와 restaurantName이 제공되면 200 + 블로그 결과를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -676,7 +676,7 @@ describe('Menu (e2e)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 400 when query param is missing', async () => {
+    it('query 파라미터 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await api()

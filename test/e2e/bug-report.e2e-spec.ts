@@ -37,7 +37,7 @@ describe('BugReport (e2e)', () => {
   // 버그 제보 (POST /bug-reports)
   // =====================
   describe('POST /bug-reports', () => {
-    it('should return 201 with id when category, title, description are valid', async () => {
+    it('category, title, description이 유효하면 201 + id를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -51,7 +51,7 @@ describe('BugReport (e2e)', () => {
       expect(res.body).toHaveProperty('id');
     });
 
-    it('should return 400 when title exceeds 30 characters', async () => {
+    it('title이 30자를 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -64,7 +64,7 @@ describe('BugReport (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when description exceeds 500 characters', async () => {
+    it('description이 500자를 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -77,7 +77,7 @@ describe('BugReport (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when more than 5 images are attached', async () => {
+    it('이미지가 5장을 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -107,7 +107,7 @@ describe('BugReport (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .post('/bug-reports')
         .field('category', 'UI')
@@ -117,7 +117,7 @@ describe('BugReport (e2e)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('should call Discord sendMessage once after creating a bug report', async () => {
+    it('버그 리포트 생성 후 Discord sendMessage가 1회 호출된다', async () => {
       const discordClient = app.get(DiscordWebhookClient);
       const spy = jest.spyOn(discordClient, 'sendMessage');
 
@@ -136,7 +136,7 @@ describe('BugReport (e2e)', () => {
       expect(spy).toHaveBeenCalledTimes(1);
     });
 
-    it('should save bug report even when Discord notification fails', async () => {
+    it('Discord 알림 실패 시에도 버그 리포트가 저장된다', async () => {
       const discordClient = app.get(DiscordWebhookClient);
       jest
         .spyOn(discordClient, 'sendMessage')
@@ -190,7 +190,7 @@ describe('BugReport (e2e)', () => {
       bugReportId = await seedBugReport();
     });
 
-    it('should return 200 with paginated list when admin queries bug reports', async () => {
+    it('관리자가 조회하면 200 + 페이지네이션된 목록을 반환한다', async () => {
       const req = authenticatedRequest(app, adminUser.accessToken);
 
       const res = await req.get('/admin/bug-reports?page=1&limit=10');
@@ -202,7 +202,7 @@ describe('BugReport (e2e)', () => {
       expect(res.body.items.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should return 200 with detail including status history when admin views a bug report', async () => {
+    it('관리자가 상세 조회하면 200 + statusHistory 포함 상세 정보를 반환한다', async () => {
       const req = authenticatedRequest(app, adminUser.accessToken);
 
       const res = await req.get(`/admin/bug-reports/${bugReportId}`);
@@ -212,7 +212,7 @@ describe('BugReport (e2e)', () => {
       expect(res.body).toHaveProperty('statusHistory');
     });
 
-    it('should return 200 and update status when admin changes bug report status', async () => {
+    it('관리자가 상태 변경하면 200 + 변경된 상태를 반환한다', async () => {
       const req = authenticatedRequest(app, adminUser.accessToken);
 
       const res = await req
@@ -223,7 +223,7 @@ describe('BugReport (e2e)', () => {
       expect(res.body.status).toBe(BugReportStatus.CONFIRMED);
     });
 
-    it('should return 403 when a regular user tries to access admin bug report endpoints', async () => {
+    it('일반 사용자가 관리자 버그 리포트 엔드포인트에 접근하면 403 에러를 반환한다', async () => {
       const regularUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, regularUser.accessToken);
 

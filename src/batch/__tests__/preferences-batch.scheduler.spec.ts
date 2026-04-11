@@ -57,7 +57,7 @@ describe('PreferencesBatchScheduler', () => {
   });
 
   describe('submitDailyBatch', () => {
-    it('should call submitBatch when advisory lock is successfully acquired', async () => {
+    it('advisory lock 획득 시 submitBatch를 호출한다', async () => {
       mockWithAdvisoryLock.mockImplementation(async (_ds, _name, fn) => ({
         acquired: true,
         result: await fn(),
@@ -73,7 +73,7 @@ describe('PreferencesBatchScheduler', () => {
       expect(mockPreferenceBatchService.submitBatch).toHaveBeenCalledTimes(1);
     });
 
-    it('should NOT call submitBatch when advisory lock is already held by another instance', async () => {
+    it('다른 인스턴스가 advisory lock을 보유 중이면 submitBatch를 호출하지 않는다', async () => {
       mockWithAdvisoryLock.mockResolvedValue({ acquired: false });
 
       await scheduler.submitDailyBatch();
@@ -81,7 +81,7 @@ describe('PreferencesBatchScheduler', () => {
       expect(mockPreferenceBatchService.submitBatch).not.toHaveBeenCalled();
     });
 
-    it('should call schedulerAlertService.alertFailure with the error when submitBatch throws', async () => {
+    it('submitBatch 실패 시 schedulerAlertService.alertFailure를 호출한다', async () => {
       const batchError = new Error('OpenAI API unavailable');
       mockWithAdvisoryLock.mockImplementation(async (_ds, _name, fn) => ({
         acquired: true,
@@ -146,7 +146,7 @@ describe('PreferencesRetryBatchScheduler — handleExpiredBatchProcessingItems',
     scheduler = module.get<PreferencesRetryBatchScheduler>(PreferencesRetryBatchScheduler);
   });
 
-  it('should reset expired BATCH_PROCESSING items with failed batch jobs to FAILED status', async () => {
+  it('실패한 배치 작업의 만료된 BATCH_PROCESSING 항목을 FAILED 상태로 변경한다', async () => {
     const expiredItem = {
       id: 7,
       status: MenuSelectionStatus.BATCH_PROCESSING,
@@ -176,7 +176,7 @@ describe('PreferencesRetryBatchScheduler — handleExpiredBatchProcessingItems',
     );
   });
 
-  it('should call alertFailure when submitRetryBatch throws an error', async () => {
+  it('submitRetryBatch 실패 시 alertFailure를 호출한다', async () => {
     const retryError = new Error('OpenAI retry batch failed');
     mockWithAdvisoryLock.mockImplementation(async (_ds, _name, fn) => ({
       acquired: true,

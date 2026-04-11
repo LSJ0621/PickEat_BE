@@ -43,7 +43,7 @@ describe('UserPlace (e2e)', () => {
   // 가게 등록 (POST /user-places)
   // =====================
   describe('POST /user-places', () => {
-    it('should return 201 with created place when required fields are valid', async () => {
+    it('필수 필드가 유효하면 201 + 생성된 가게를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -61,7 +61,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.body.status).toBe('PENDING');
     });
 
-    it('should return 400 when required field name is missing', async () => {
+    it('필수 필드 name 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -75,7 +75,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when menuItems is an empty array', async () => {
+    it('menuItems가 빈 배열이면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -90,7 +90,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when more than 5 photos are provided', async () => {
+    it('사진이 5장을 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -106,7 +106,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().post('/user-places').send({
         name: USER_PLACE_TEST_DATA.VALID_PLACE.name,
         address: USER_PLACE_TEST_DATA.VALID_PLACE.address,
@@ -123,7 +123,7 @@ describe('UserPlace (e2e)', () => {
   // 등록 가능 여부 확인 (POST /user-places/check)
   // =====================
   describe('POST /user-places/check', () => {
-    it('should return 200 with canRegister true when the location is new', async () => {
+    it('새로운 위치이면 200 + canRegister: true를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -139,7 +139,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.body.canRegister).toBe(true);
     });
 
-    it('should return 200 with nearbyPlaces when a place is already registered nearby', async () => {
+    it('근처에 등록된 가게가 있으면 200 + nearbyPlaces를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -170,7 +170,7 @@ describe('UserPlace (e2e)', () => {
   // 가게 목록 조회 (GET /user-places)
   // =====================
   describe('GET /user-places', () => {
-    it('should return 200 with paginated list of user places', async () => {
+    it('200 + 페이지네이션된 가게 목록을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -197,7 +197,7 @@ describe('UserPlace (e2e)', () => {
   // 가게 상세 조회 (GET /user-places/:id)
   // =====================
   describe('GET /user-places/:id', () => {
-    it('should return 200 with place details', async () => {
+    it('200 + 가게 상세 정보를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -218,7 +218,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.body.name).toBe(USER_PLACE_TEST_DATA.VALID_PLACE.name);
     });
 
-    it('should return 403 or 404 when accessing another user\'s place', async () => {
+    it('다른 사용자의 가게에 접근하면 403 또는 404를 반환한다', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
 
@@ -243,7 +243,7 @@ describe('UserPlace (e2e)', () => {
   // 가게 수정 (PATCH /user-places/:id)
   // =====================
   describe('PATCH /user-places/:id', () => {
-    it('should return 200 with updated place when version is correct', async () => {
+    it('올바른 version이면 200 + 수정된 가게를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -267,7 +267,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.body.name).toBe('수정된 식당 이름');
     });
 
-    it('should return 403 when attempting to modify another user\'s place', async () => {
+    it('다른 사용자의 가게를 수정하려 하면 403 에러를 반환한다', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
 
@@ -298,7 +298,7 @@ describe('UserPlace (e2e)', () => {
   // 가게 삭제 (DELETE /user-places/:id)
   // =====================
   describe('DELETE /user-places/:id', () => {
-    it('should return 200 with messageCode when deleting own place', async () => {
+    it('자신의 가게를 삭제하면 200 + messageCode를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -318,7 +318,7 @@ describe('UserPlace (e2e)', () => {
       expect(res.body).toHaveProperty('messageCode', MessageCode.USER_PLACE_DELETED);
     });
 
-    it('should return 403 when attempting to delete another user\'s place', async () => {
+    it('다른 사용자의 가게를 삭제하려 하면 403 에러를 반환한다', async () => {
       const owner: TestUser = await createAuthenticatedUser(app);
       const other: TestUser = await createAuthenticatedUser(app);
 

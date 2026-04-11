@@ -34,7 +34,7 @@ describe('User (e2e)', () => {
   // 프로필 수정 (PATCH /user)
   // =====================
   describe('PATCH /user', () => {
-    it('should return 200 with updated fields when name, birthDate, gender are valid', async () => {
+    it('name, birthDate, gender가 유효하면 200 + 수정된 필드를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -50,7 +50,7 @@ describe('User (e2e)', () => {
       expect(res.body.gender).toBe('female');
     });
 
-    it('should return 400 when name exceeds 100 characters', async () => {
+    it('name이 100자를 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -61,7 +61,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when birthDate format is not YYYY-MM-DD', async () => {
+    it('birthDate 형식이 YYYY-MM-DD가 아니면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -72,7 +72,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when gender has an invalid value', async () => {
+    it('gender 값이 유효하지 않으면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -83,7 +83,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().patch('/user').send({ name: '테스트' });
 
       expect(res.status).toBe(401);
@@ -94,7 +94,7 @@ describe('User (e2e)', () => {
   // 회원 탈퇴 (DELETE /user/me)
   // =====================
   describe('DELETE /user/me', () => {
-    it('should return 200 with messageCode and soft-delete the user record', async () => {
+    it('200 + messageCode를 반환하고 사용자를 소프트 삭제한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -112,7 +112,7 @@ describe('User (e2e)', () => {
       expect(deletedUser?.deletedAt).not.toBeNull();
     });
 
-    it('should return 401 when the deleted user attempts to log in', async () => {
+    it('삭제된 사용자가 로그인을 시도하면 401 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -126,7 +126,7 @@ describe('User (e2e)', () => {
       expect(loginRes.status).toBe(401);
     });
 
-    it('should return 401 when using the same token after withdrawal', async () => {
+    it('탈퇴 후 동일 토큰으로 요청하면 401 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -137,7 +137,7 @@ describe('User (e2e)', () => {
       expect([401, 404]).toContain(res.status);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().delete('/user/me');
 
       expect(res.status).toBe(401);
@@ -148,7 +148,7 @@ describe('User (e2e)', () => {
   // 선호도 관리 (GET /user/preferences, POST /user/preferences)
   // =====================
   describe('GET /user/preferences', () => {
-    it('should return 200 with likes and dislikes arrays', async () => {
+    it('200 + likes와 dislikes 배열을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -162,7 +162,7 @@ describe('User (e2e)', () => {
       expect(Array.isArray(res.body.preferences.dislikes)).toBe(true);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().get('/user/preferences');
 
       expect(res.status).toBe(401);
@@ -170,7 +170,7 @@ describe('User (e2e)', () => {
   });
 
   describe('POST /user/preferences', () => {
-    it('should return 200 when likes and dislikes are updated', async () => {
+    it('likes와 dislikes를 수정하면 200을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -182,7 +182,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 400 when likes array exceeds 50 items', async () => {
+    it('likes 배열이 50개를 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -195,7 +195,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when any item in likes exceeds 50 characters', async () => {
+    it('likes 항목이 50자를 초과하면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -206,7 +206,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().post('/user/preferences').send({
         likes: ['한식'],
       });
@@ -219,7 +219,7 @@ describe('User (e2e)', () => {
   // 언어 설정 (PATCH /user/language)
   // =====================
   describe('PATCH /user/language', () => {
-    it('should return 200 with messageCode when language is changed from ko to en', async () => {
+    it('ko에서 en으로 언어 변경 시 200 + messageCode를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -229,7 +229,7 @@ describe('User (e2e)', () => {
       expect(res.body).toHaveProperty('messageCode', MessageCode.USER_LANGUAGE_CHANGED);
     });
 
-    it('should return 400 when an unsupported language value is provided', async () => {
+    it('지원하지 않는 언어 값이면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -238,7 +238,7 @@ describe('User (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().patch('/user/language').send({ language: 'en' });
 
       expect(res.status).toBe(401);

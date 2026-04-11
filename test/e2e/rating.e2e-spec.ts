@@ -42,7 +42,7 @@ describe('Rating (e2e)', () => {
   // 평점 대상 선택 (POST /ratings/select)
   // =====================
   describe('POST /ratings/select', () => {
-    it('should return 201 when placeId and placeName are provided', async () => {
+    it('placeId와 placeName이 제공되면 201을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const res = await selectPlace(testUser.accessToken);
@@ -53,7 +53,7 @@ describe('Rating (e2e)', () => {
       expect(res.body).toHaveProperty('placeName');
     });
 
-    it('should return 400 when placeId is missing', async () => {
+    it('placeId 누락 시 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -64,7 +64,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request is made without authentication', async () => {
+    it('인증 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().post('/ratings/select').send({
         placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
         placeName: '테스트 식당',
@@ -78,7 +78,7 @@ describe('Rating (e2e)', () => {
   // 평점 제출 (POST /ratings/submit)
   // =====================
   describe('POST /ratings/submit', () => {
-    it('should return 200 when placeRatingId and rating between 1-5 are valid', async () => {
+    it('유효한 placeRatingId와 1~5 범위의 rating이면 200을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const selectRes = await selectPlace(testUser.accessToken);
@@ -93,7 +93,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 400 when rating is 0 (below minimum)', async () => {
+    it('rating이 0(최솟값 미만)이면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const selectRes = await selectPlace(testUser.accessToken);
@@ -108,7 +108,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 400 when rating is 6 (above maximum)', async () => {
+    it('rating이 6(최댓값 초과)이면 400 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const selectRes = await selectPlace(testUser.accessToken);
@@ -123,7 +123,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 404 when placeRatingId does not exist', async () => {
+    it('존재하지 않는 placeRatingId이면 404 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
@@ -135,7 +135,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('should return 403 when submitting rating for another user\'s placeRatingId', async () => {
+    it('다른 사용자의 placeRatingId에 평점을 제출하면 403 에러를 반환한다', async () => {
       const userA: TestUser = await createAuthenticatedUser(app);
       const userB: TestUser = await createAuthenticatedUser(app);
 
@@ -153,7 +153,7 @@ describe('Rating (e2e)', () => {
   // 평점 건너뛰기 (POST /ratings/skip)
   // =====================
   describe('POST /ratings/skip', () => {
-    it('should return 200 when skipping a pending rating', async () => {
+    it('대기 중인 평점을 건너뛰면 200을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const selectRes = await selectPlace(testUser.accessToken);
@@ -165,7 +165,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 403 when skipping another user\'s placeRatingId', async () => {
+    it('다른 사용자의 placeRatingId를 건너뛰면 403 에러를 반환한다', async () => {
       const userA: TestUser = await createAuthenticatedUser(app);
       const userB: TestUser = await createAuthenticatedUser(app);
 
@@ -183,7 +183,7 @@ describe('Rating (e2e)', () => {
   // 평점 무시 (POST /ratings/dismiss)
   // =====================
   describe('POST /ratings/dismiss', () => {
-    it('should return 200 when dismissing a pending rating prompt', async () => {
+    it('대기 중인 평점 프롬프트를 무시하면 200을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       const selectRes = await selectPlace(testUser.accessToken);
@@ -195,7 +195,7 @@ describe('Rating (e2e)', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 403 when dismissing another user\'s placeRatingId', async () => {
+    it('다른 사용자의 placeRatingId를 무시하면 403 에러를 반환한다', async () => {
       const userA: TestUser = await createAuthenticatedUser(app);
       const userB: TestUser = await createAuthenticatedUser(app);
 
@@ -213,7 +213,7 @@ describe('Rating (e2e)', () => {
   // 평점 이력 (GET /ratings/history)
   // =====================
   describe('GET /ratings/history', () => {
-    it('should return 200 with paginated rating history', async () => {
+    it('200 + 페이지네이션된 평점 이력을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       // Create and submit a rating
@@ -229,7 +229,7 @@ describe('Rating (e2e)', () => {
       expect(Array.isArray(res.body.items)).toBe(true);
     });
 
-    it('should not include other users\' ratings in history response', async () => {
+    it('평점 이력에 다른 사용자의 평점이 포함되지 않는다', async () => {
       const userA: TestUser = await createAuthenticatedUser(app);
       const userB: TestUser = await createAuthenticatedUser(app);
 
@@ -247,7 +247,7 @@ describe('Rating (e2e)', () => {
       expect(ids).not.toContain(selectResA.body.id);
     });
 
-    it('should return only ratings on the given date when selectedDate filter is applied', async () => {
+    it('selectedDate 필터 적용 시 해당 날짜의 평점만 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       // Create and submit a rating
@@ -269,7 +269,7 @@ describe('Rating (e2e)', () => {
   // 대기 중인 평점 (GET /ratings/pending)
   // =====================
   describe('GET /ratings/pending', () => {
-    it('should return 200 with pending place list', async () => {
+    it('200 + 대기 중인 장소 목록을 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
 
       // Create a rating entry (not yet submitted)

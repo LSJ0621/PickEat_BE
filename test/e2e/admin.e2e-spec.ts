@@ -41,7 +41,7 @@ describe('Admin (e2e)', () => {
     };
 
     describe('POST /admin/notifications', () => {
-      it('should return 201 when admin creates a notification with valid fields', async () => {
+      it('관리자가 유효한 필드로 공지사항을 생성하면 201을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, admin.accessToken);
 
@@ -52,7 +52,7 @@ describe('Admin (e2e)', () => {
         expect(res.body.title).toBe(validNotification.title);
       });
 
-      it('should return 403 when a regular user accesses the endpoint', async () => {
+      it('일반 사용자가 접근하면 403 에러를 반환한다', async () => {
         const user: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, user.accessToken);
 
@@ -63,7 +63,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('GET /admin/notifications', () => {
-      it('should return 200 with paginated notification list', async () => {
+      it('200 + 페이지네이션된 공지사항 목록을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
 
@@ -78,7 +78,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('GET /admin/notifications/:id', () => {
-      it('should return 200 with notification detail', async () => {
+      it('200 + 공지사항 상세 정보를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
 
@@ -94,7 +94,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('PATCH /admin/notifications/:id', () => {
-      it('should return 200 with updated notification', async () => {
+      it('200 + 수정된 공지사항을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
 
@@ -111,7 +111,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('DELETE /admin/notifications/:id', () => {
-      it('should return 200 and soft-delete the notification record', async () => {
+      it('200을 반환하고 공지사항을 소프트 삭제한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
 
@@ -135,7 +135,7 @@ describe('Admin (e2e)', () => {
   // =====================
   describe('Admin Dashboard', () => {
     describe('GET /admin/dashboard/summary', () => {
-      it('should return 200 with dashboard summary statistics', async () => {
+      it('200 + 대시보드 요약 통계를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, admin.accessToken);
 
@@ -149,7 +149,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('GET /admin/dashboard/recent-activities', () => {
-      it('should return 200 with recent activity data', async () => {
+      it('200 + 최근 활동 데이터를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, admin.accessToken);
 
@@ -162,7 +162,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('GET /admin/dashboard/trends', () => {
-      it('should return 200 with trend data for the given period', async () => {
+      it('지정된 기간의 200 + 트렌드 데이터를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, admin.accessToken);
 
@@ -175,7 +175,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('Forbidden for regular users', () => {
-      it('should return 403 when a regular user accesses admin dashboard', async () => {
+      it('일반 사용자가 관리자 대시보드에 접근하면 403 에러를 반환한다', async () => {
         const user: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, user.accessToken);
 
@@ -191,7 +191,7 @@ describe('Admin (e2e)', () => {
   // =====================
   describe('Admin User Management', () => {
     describe('GET /admin/users', () => {
-      it('should return 200 with paginated user list', async () => {
+      it('200 + 페이지네이션된 사용자 목록을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, admin.accessToken);
 
@@ -204,7 +204,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('GET /admin/users/:id', () => {
-      it('should return 200 with user detail', async () => {
+      it('200 + 사용자 상세 정보를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const targetUser: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, admin.accessToken);
@@ -218,7 +218,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('PATCH /admin/users/:id/deactivate', () => {
-      it('should return 200 with messageCode when deactivating a user', async () => {
+      it('사용자를 비활성화하면 200 + messageCode를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const targetUser: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, admin.accessToken);
@@ -229,7 +229,7 @@ describe('Admin (e2e)', () => {
         expect(res.body).toHaveProperty('messageCode', MessageCode.ADMIN_USER_DEACTIVATED);
       });
 
-      it('should block deactivated user from accessing API', async () => {
+      it('비활성화된 사용자의 API 접근이 차단된다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const targetUser: TestUser = await createAuthenticatedUser(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
@@ -246,7 +246,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('PATCH /admin/users/:id/activate', () => {
-      it('should return 200 with messageCode when activating a deactivated user', async () => {
+      it('비활성화된 사용자를 활성화하면 200 + messageCode를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const targetUser: TestUser = await createAuthenticatedUser(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
@@ -263,7 +263,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('Forbidden for regular users', () => {
-      it('should return 403 when a regular user accesses admin user management', async () => {
+      it('일반 사용자가 관리자 사용자 관리에 접근하면 403 에러를 반환한다', async () => {
         const user: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, user.accessToken);
 
@@ -290,7 +290,7 @@ describe('Admin (e2e)', () => {
     }
 
     describe('GET /admin/user-places', () => {
-      it('should return 200 with paginated user place list', async () => {
+      it('200 + 페이지네이션된 사용자 장소 목록을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const user: TestUser = await createAuthenticatedUser(app);
 
@@ -306,7 +306,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('GET /admin/user-places/:id', () => {
-      it('should return 200 with user place detail', async () => {
+      it('200 + 사용자 장소 상세 정보를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const user: TestUser = await createAuthenticatedUser(app);
 
@@ -322,7 +322,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('PATCH /admin/user-places/:id/approve', () => {
-      it('should return 200 with messageCode when approving a user place', async () => {
+      it('사용자 장소를 승인하면 200 + messageCode를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const user: TestUser = await createAuthenticatedUser(app);
 
@@ -338,7 +338,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('PATCH /admin/user-places/:id/reject', () => {
-      it('should return 200 with messageCode when rejecting a user place with reason', async () => {
+      it('사유와 함께 사용자 장소를 반려하면 200 + messageCode를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const user: TestUser = await createAuthenticatedUser(app);
 
@@ -356,7 +356,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('PATCH /admin/user-places/:id', () => {
-      it('should return 200 when admin updates user place information', async () => {
+      it('관리자가 사용자 장소 정보를 수정하면 200을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const user: TestUser = await createAuthenticatedUser(app);
 
@@ -378,7 +378,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('Forbidden for regular users', () => {
-      it('should return 403 when a regular user accesses admin user place management', async () => {
+      it('일반 사용자가 관리자 장소 관리에 접근하면 403 에러를 반환한다', async () => {
         const user: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, user.accessToken);
 
@@ -401,7 +401,7 @@ describe('Admin (e2e)', () => {
     }
 
     describe('GET /admin/settings/admins', () => {
-      it('should return 200 with admin list when accessed by SuperAdmin', async () => {
+      it('SuperAdmin이 접근하면 200 + 관리자 목록을 반환한다', async () => {
         const superAdmin: TestUser = await createSuperAdmin();
         const req = authenticatedRequest(app, superAdmin.accessToken);
 
@@ -413,7 +413,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('POST /admin/settings/admins', () => {
-      it('should return 201 when SuperAdmin promotes a user to admin', async () => {
+      it('SuperAdmin이 사용자를 관리자로 승격하면 201을 반환한다', async () => {
         const superAdmin: TestUser = await createSuperAdmin();
         const targetUser: TestUser = await createAuthenticatedUser(app);
         const req = authenticatedRequest(app, superAdmin.accessToken);
@@ -428,7 +428,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('DELETE /admin/settings/admins/:id', () => {
-      it('should return 200 when SuperAdmin demotes an admin', async () => {
+      it('SuperAdmin이 관리자를 강등하면 200을 반환한다', async () => {
         const superAdmin: TestUser = await createSuperAdmin();
         const targetAdmin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, superAdmin.accessToken);
@@ -440,7 +440,7 @@ describe('Admin (e2e)', () => {
     });
 
     describe('Forbidden for regular Admin', () => {
-      it('should return 403 when a regular admin accesses admin settings', async () => {
+      it('일반 관리자가 관리자 설정에 접근하면 403 에러를 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const req = authenticatedRequest(app, admin.accessToken);
 

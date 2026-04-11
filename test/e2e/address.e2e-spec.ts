@@ -85,7 +85,7 @@ describe('Address (e2e)', () => {
   // 주소 검색 (GET /user/address/search)
   // =====================
   describe('GET /user/address/search', () => {
-    it('should return 200 with address list when query is provided', async () => {
+    it('검색어가 있으면 200 + 주소 목록을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -98,7 +98,7 @@ describe('Address (e2e)', () => {
       expect(Array.isArray(res.body.addresses)).toBe(true);
     });
 
-    it('should return 200 with empty addresses when no results found', async () => {
+    it('검색 결과가 없으면 200 + 빈 주소 배열을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -112,7 +112,7 @@ describe('Address (e2e)', () => {
       expect(res.body.meta.total_count).toBe(0);
     });
 
-    it('should return 400 when query is missing', async () => {
+    it('검색어 누락 시 400 에러를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -122,7 +122,7 @@ describe('Address (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .get('/user/address/search')
         .query({ query: '강남역' });
@@ -135,7 +135,7 @@ describe('Address (e2e)', () => {
   // 단일 주소 업데이트 (PATCH /user/address)
   // =====================
   describe('PATCH /user/address', () => {
-    it('should return 200 with updated address when selectedAddress is valid', async () => {
+    it('유효한 selectedAddress이면 200 + 수정된 주소를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -147,7 +147,7 @@ describe('Address (e2e)', () => {
       expect(res.body).toHaveProperty('roadAddress', sampleAddress.roadAddress);
     });
 
-    it('should return 400 when selectedAddress is missing', async () => {
+    it('selectedAddress 누락 시 400 에러를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -158,7 +158,7 @@ describe('Address (e2e)', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .patch('/user/address')
         .send({ selectedAddress: sampleAddress });
@@ -171,7 +171,7 @@ describe('Address (e2e)', () => {
   // 주소 추가 (POST /user/addresses)
   // =====================
   describe('POST /user/addresses', () => {
-    it('should return 201 with created address when request is valid', async () => {
+    it('유효한 요청이면 201 + 생성된 주소를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await createAddress(testUser.accessToken);
@@ -181,7 +181,7 @@ describe('Address (e2e)', () => {
       expect(res.body).toHaveProperty('roadAddress', sampleAddress.roadAddress);
     });
 
-    it('should set isDefault and isSearchAddress to true for the first address', async () => {
+    it('첫 번째 주소는 isDefault와 isSearchAddress가 true로 설정된다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await createAddress(testUser.accessToken);
@@ -191,7 +191,7 @@ describe('Address (e2e)', () => {
       expect(res.body.isSearchAddress).toBe(true);
     });
 
-    it(`should return 400 with ADDRESS_MAX_LIMIT when addresses exceed ${USER_LIMITS.MAX_ADDRESSES}`, async () => {
+    it(`주소가 ${USER_LIMITS.MAX_ADDRESSES}개를 초과하면 400 + ADDRESS_MAX_LIMIT을 반환한다`, async () => {
       const testUser = await createAuthenticatedUser(app);
 
       await createMaxAddresses(testUser);
@@ -208,7 +208,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_MAX_LIMIT);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .post('/user/addresses')
         .send({ selectedAddress: sampleAddress });
@@ -221,7 +221,7 @@ describe('Address (e2e)', () => {
   // 주소 수정 (PATCH /user/addresses/:id)
   // =====================
   describe('PATCH /user/addresses/:id', () => {
-    it('should return 200 with updated address when request is valid', async () => {
+    it('유효한 요청이면 200 + 수정된 주소를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
       const created = await createAddress(testUser.accessToken);
 
@@ -234,7 +234,7 @@ describe('Address (e2e)', () => {
       expect(res.body).toHaveProperty('roadAddress', '서울특별시 종로구 수정도로 1');
     });
 
-    it('should return 404 with ADDRESS_NOT_FOUND when address id does not exist', async () => {
+    it('존재하지 않는 주소 ID이면 404 + ADDRESS_NOT_FOUND를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -246,7 +246,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 404 when accessing another user address', async () => {
+    it('다른 사용자의 주소에 접근하면 404 에러를 반환한다', async () => {
       const userA = await createAuthenticatedUser(app);
       const userB = await createAuthenticatedUser(app);
       const created = await createAddress(userA.accessToken);
@@ -260,7 +260,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .patch(`/user/addresses/${TEST_IDS.NON_EXISTENT}`)
         .send({ roadAddress: '수정 주소' });
@@ -273,7 +273,7 @@ describe('Address (e2e)', () => {
   // 주소 일괄 삭제 (POST /user/addresses/batch-delete)
   // =====================
   describe('POST /user/addresses/batch-delete', () => {
-    it('should return 200 when deleting non-default addresses', async () => {
+    it('기본 주소가 아닌 주소를 삭제하면 200을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       // 첫 번째 주소 생성 (기본 주소)
@@ -296,7 +296,7 @@ describe('Address (e2e)', () => {
       expect(listRes.body.addresses[0].id).toBe(first.body.id);
     });
 
-    it('should return 400 with ADDRESS_CANNOT_DELETE_DEFAULT when trying to delete default address', async () => {
+    it('기본 주소를 삭제하려 하면 400 + ADDRESS_CANNOT_DELETE_DEFAULT를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
       const created = await createAddress(testUser.accessToken);
 
@@ -309,7 +309,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_CANNOT_DELETE_DEFAULT);
     });
 
-    it('should return 404 with ADDRESS_NOT_FOUND when id does not exist', async () => {
+    it('존재하지 않는 ID이면 404 + ADDRESS_NOT_FOUND를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -321,7 +321,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 404 when trying to delete another user address', async () => {
+    it('다른 사용자의 주소를 삭제하려 하면 404 에러를 반환한다', async () => {
       const userA = await createAuthenticatedUser(app);
       const userB = await createAuthenticatedUser(app);
       const created = await createAddress(userA.accessToken);
@@ -335,7 +335,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api()
         .post('/user/addresses/batch-delete')
         .send({ ids: [TEST_IDS.NON_EXISTENT] });
@@ -348,7 +348,7 @@ describe('Address (e2e)', () => {
   // 기본 주소 설정 (PATCH /user/addresses/:id/default)
   // =====================
   describe('PATCH /user/addresses/:id/default', () => {
-    it('should return 200 and switch default address', async () => {
+    it('기본 주소를 변경하면 200을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const first = await createAddress(testUser.accessToken);
@@ -371,7 +371,7 @@ describe('Address (e2e)', () => {
       expect(firstAddr.isDefault).toBe(false);
     });
 
-    it('should return 404 with ADDRESS_NOT_FOUND when address id does not exist', async () => {
+    it('존재하지 않는 주소 ID이면 404 + ADDRESS_NOT_FOUND를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -382,7 +382,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 404 when setting another user address as default', async () => {
+    it('다른 사용자의 주소를 기본 주소로 설정하면 404 에러를 반환한다', async () => {
       const userA = await createAuthenticatedUser(app);
       const userB = await createAuthenticatedUser(app);
       const created = await createAddress(userA.accessToken);
@@ -395,7 +395,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().patch(`/user/addresses/${TEST_IDS.NON_EXISTENT}/default`);
 
       expect(res.status).toBe(401);
@@ -406,7 +406,7 @@ describe('Address (e2e)', () => {
   // 검색 주소 설정 (PATCH /user/addresses/:id/search)
   // =====================
   describe('PATCH /user/addresses/:id/search', () => {
-    it('should return 200 and switch search address', async () => {
+    it('검색 주소를 변경하면 200을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const first = await createAddress(testUser.accessToken);
@@ -429,7 +429,7 @@ describe('Address (e2e)', () => {
       expect(firstAddr.isSearchAddress).toBe(false);
     });
 
-    it('should return 404 with ADDRESS_NOT_FOUND when address id does not exist', async () => {
+    it('존재하지 않는 주소 ID이면 404 + ADDRESS_NOT_FOUND를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -440,7 +440,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 404 when setting another user address as search address', async () => {
+    it('다른 사용자의 주소를 검색 주소로 설정하면 404 에러를 반환한다', async () => {
       const userA = await createAuthenticatedUser(app);
       const userB = await createAuthenticatedUser(app);
       const created = await createAddress(userA.accessToken);
@@ -453,7 +453,7 @@ describe('Address (e2e)', () => {
       expect(res.body.errorCode).toBe(ErrorCode.ADDRESS_NOT_FOUND);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().patch(`/user/addresses/${TEST_IDS.NON_EXISTENT}/search`);
 
       expect(res.status).toBe(401);
@@ -464,7 +464,7 @@ describe('Address (e2e)', () => {
   // 주소 목록 조회 (GET /user/addresses)
   // =====================
   describe('GET /user/addresses', () => {
-    it('should return 200 with addresses array when authenticated', async () => {
+    it('인증된 사용자가 요청하면 200 + 주소 배열을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
       await createAddress(testUser.accessToken);
       await createAddress(testUser.accessToken, altAddress);
@@ -478,7 +478,7 @@ describe('Address (e2e)', () => {
       expect(res.body.addresses).toHaveLength(2);
     });
 
-    it('should return 200 with empty addresses array when user has no addresses', async () => {
+    it('주소가 없으면 200 + 빈 주소 배열을 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -489,13 +489,13 @@ describe('Address (e2e)', () => {
       expect(res.body.addresses).toHaveLength(0);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().get('/user/addresses');
 
       expect(res.status).toBe(401);
     });
 
-    it('should not return addresses belonging to other users', async () => {
+    it('다른 사용자의 주소는 반환하지 않는다', async () => {
       const userA = await createAuthenticatedUser(app);
       const userB = await createAuthenticatedUser(app);
 
@@ -514,7 +514,7 @@ describe('Address (e2e)', () => {
   // 기본 주소 조회 (GET /user/address/default)
   // =====================
   describe('GET /user/address/default', () => {
-    it('should return 200 with default address when it exists', async () => {
+    it('기본 주소가 있으면 200 + 기본 주소를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
       await createAddress(testUser.accessToken);
 
@@ -526,7 +526,7 @@ describe('Address (e2e)', () => {
       expect(res.body).toHaveProperty('isDefault', true);
     });
 
-    it('should return 200 with null or empty object when user has no default address', async () => {
+    it('기본 주소가 없으면 200 + null 또는 빈 객체를 반환한다', async () => {
       const testUser = await createAuthenticatedUser(app);
 
       const res = await api()
@@ -541,13 +541,13 @@ describe('Address (e2e)', () => {
       expect(isNullish).toBe(true);
     });
 
-    it('should return 401 when request has no auth token', async () => {
+    it('인증 토큰 없이 요청하면 401 에러를 반환한다', async () => {
       const res = await api().get('/user/address/default');
 
       expect(res.status).toBe(401);
     });
 
-    it('should only return the default address of the requesting user', async () => {
+    it('요청한 사용자의 기본 주소만 반환한다', async () => {
       const userA = await createAuthenticatedUser(app);
       const userB = await createAuthenticatedUser(app);
 
