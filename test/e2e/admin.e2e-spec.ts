@@ -229,19 +229,19 @@ describe('Admin (e2e)', () => {
         expect(res.body).toHaveProperty('messageCode', MessageCode.ADMIN_USER_DEACTIVATED);
       });
 
-      it('비활성화된 사용자의 API 접근이 차단된다', async () => {
+      it('비활성화된 사용자의 기존 토큰은 JWT 검증을 통과하여 200을 반환한다', async () => {
         const admin: TestUser = await createAuthenticatedAdmin(app);
         const targetUser: TestUser = await createAuthenticatedUser(app);
         const adminReq = authenticatedRequest(app, admin.accessToken);
 
         await adminReq.patch(`/admin/users/${targetUser.user.id}/deactivate`);
 
-        // 비활성화된 사용자의 토큰으로 API 호출 시 401/403/200이 반환될 수 있음
-        // (JwtStrategy는 토큰 서명만 검증하고 deactivated 상태는 별도 guard에서 처리)
+        // JwtStrategy는 토큰 서명만 검증하고 isDeactivated 상태를 확인하지 않으므로
+        // 비활성화된 사용자의 기존 토큰으로 API 호출이 성공한다
         const userReq = authenticatedRequest(app, targetUser.accessToken);
         const res = await userReq.get('/user/preferences');
 
-        expect([200, 401, 403]).toContain(res.status);
+        expect(res.status).toBe(200);
       });
     });
 

@@ -83,3 +83,36 @@
 - [x] processGoogleProfile — 기존 사용자 → 로그인 처리
 - [x] reRegisterSocial — 삭제된 사용자 복구 (deletedAt = null)
 - [x] reRegisterSocial — 삭제된 소셜 사용자 없으면 → BadRequestException
+
+### EmailVerificationService
+
+#### sendCode — 정상 발송
+- [x] SIGNUP purpose + 기존 코드 없음 → 신규 코드 저장 + 이메일 발송
+- [x] 기존 코드가 만료된 상태 → 신규 코드로 갱신 + 이메일 발송
+- [ ] PASSWORD_RESET purpose + 가입된 이메일 → 정상 발송
+
+#### sendCode — 에러/제한
+- [x] 재발송 쿨다운(설정값) 이내 재요청 → BadRequestException (AUTH_EMAIL_RESEND_COOLDOWN)
+- [ ] 이미 인증 완료된 코드가 유효 기간 내 존재 → 중복 발송 방지 분기
+- [ ] PASSWORD_RESET purpose + 존재하지 않는 이메일 → BadRequestException (AUTH_EMAIL_NOT_REGISTERED)
+
+#### verifyCode — 분기
+- [x] 올바른 코드 → verified=true + 상태 업데이트
+- [x] 잘못된 코드 → BadRequestException (AUTH_EMAIL_VERIFICATION_CODE_MISMATCH)
+- [x] 만료된 코드 → BadRequestException (AUTH_EMAIL_VERIFICATION_CODE_EXPIRED)
+- [x] 존재하지 않는 코드 레코드 → BadRequestException
+
+### AuthService — 추가 분기
+- [ ] refreshTokens — accessToken 서명 유효 + Redis refreshToken 만료 → UnauthorizedException + Redis에서 삭제
+- [ ] refreshTokens — 탈퇴한 사용자(deletedAt) → UnauthorizedException + Redis 정리
+- [ ] refreshTokens — 토큰 rotation 직후 이전 refreshToken 재사용 시도 → UnauthorizedException
+- [ ] logout — Redis에 refreshToken 없음 → 멱등 처리 (예외 없음) <!-- 행동 테스트 원칙 §6.1 위반(mock 호출 횟수만 검증)으로 제거 -->
+
+- [ ] login — 소셜 전용 계정(password 없음)에 이메일+패스워드 로그인 시도 → UnauthorizedException
+
+### AuthSocialService — 추가 분기
+- [x] processKakaoProfile — 프로필에 email 없음 → 필수 필드 누락 예외
+- [ ] processGoogleProfile — 이름이 공백만 포함 → fallback 이름으로 사용자 생성
+- [x] processKakaoProfile — 비활성화(isDeactivated) 사용자 → 적절한 예외
+- [ ] 프로필 preferredLanguage가 en/ko 아닌 값 → 기본 언어로 매핑
+- [ ] reRegisterSocial — 탈퇴한 지 오래된 사용자 → deletedAt null로 복구 정상 처리

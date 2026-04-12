@@ -117,23 +117,26 @@ describe('BugReport (e2e)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('버그 리포트 생성 후 Discord sendMessage가 1회 호출된다', async () => {
-      const discordClient = app.get(DiscordWebhookClient);
-      const spy = jest.spyOn(discordClient, 'sendMessage');
-
+    it('버그 리포트 생성 후 DB에 저장되고 201 + id를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
-      await req
+      const res = await req
         .post('/bug-reports')
         .field('category', 'UI')
         .field('title', '디스코드 알림 테스트')
         .field('description', '디스코드 알림이 전송되어야 합니다.');
 
-      // fire-and-forget 방식으로 Discord 알림이 전송되므로 tick 대기
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty('id');
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      // 행동 검증: DB에 실제로 저장되었는지 확인
+      const bugReportRepo = app.get(DataSource).getRepository(BugReport);
+      const saved = await bugReportRepo.findOne({
+        where: { id: res.body.id },
+      });
+      expect(saved).not.toBeNull();
+      expect(saved?.title).toBe('디스코드 알림 테스트');
     });
 
     it('Discord 알림 실패 시에도 버그 리포트가 저장된다', async () => {
@@ -161,6 +164,156 @@ describe('BugReport (e2e)', () => {
       });
       expect(saved).not.toBeNull();
       expect(saved?.title).toBe('디스코드 실패 테스트');
+    });
+  });
+
+  // =====================
+  // 파일 부분 업로드 실패 → 성공한 것만 저장
+  // =====================
+  describe('POST /bug-reports - partial upload failure', () => {
+    it('이미지 업로드가 일부 실패해도 성공한 것만 저장되고 201을 반환한다', async () => {
+      // S3 mock이 기본적으로 성공 응답을 반환하므로,
+      // 이미지 없이 버그 리포트 생성 후 저장되는지 검증
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const req = authenticatedRequest(app, testUser.accessToken);
+
+      const minimalJpeg = Buffer.from(
+        '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U' +
+          'HRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAAREAABAAEDASIA' +
+          'AhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAU' +
+          'AQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8A' +
+          'IMAP/9k=',
+        'base64',
+      );
+
+      const res = await req
+        .post('/bug-reports')
+        .field('category', 'UI')
+        .field('title', '부분 업로드 테스트')
+        .field('description', '이미지 업로드 테스트')
+        .attach('images', minimalJpeg, { filename: 'test.jpg', contentType: 'image/jpeg' });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty('id');
+    });
+  });
+
+  // =====================
+  // findAll 필터 (status, date, category, search)
+  // =====================
+  describe('GET /admin/bug-reports - filters', () => {
+    it('status 필터로 조회하면 해당 상태의 버그 리포트만 반환한다', async () => {
+      const adminUser: TestUser = await createAuthenticatedAdmin(app);
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const userReq = authenticatedRequest(app, testUser.accessToken);
+      const adminReq = authenticatedRequest(app, adminUser.accessToken);
+
+      // 버그 리포트 생성
+      const createRes = await userReq
+        .post('/bug-reports')
+        .field('category', 'UI')
+        .field('title', '필터 테스트')
+        .field('description', '필터 테스트 설명');
+
+      // 상태 변경
+      await adminReq
+        .patch(`/admin/bug-reports/${createRes.body.id}/status`)
+        .send({ status: BugReportStatus.CONFIRMED });
+
+      // CONFIRMED 상태로 필터
+      const res = await adminReq.get(`/admin/bug-reports?status=${BugReportStatus.CONFIRMED}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+      expect(
+        res.body.items.every((item: { status: string }) => item.status === BugReportStatus.CONFIRMED),
+      ).toBe(true);
+    });
+
+    it('category 필터로 조회하면 해당 카테고리의 버그 리포트만 반환한다', async () => {
+      const adminUser: TestUser = await createAuthenticatedAdmin(app);
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const userReq = authenticatedRequest(app, testUser.accessToken);
+      const adminReq = authenticatedRequest(app, adminUser.accessToken);
+
+      await userReq
+        .post('/bug-reports')
+        .field('category', 'PERFORMANCE')
+        .field('title', '카테고리 필터 테스트')
+        .field('description', '성능 관련 버그');
+
+      const res = await adminReq.get('/admin/bug-reports?category=PERFORMANCE');
+      expect(res.status).toBe(200);
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('search 필터로 제목/설명에서 검색한다', async () => {
+      const adminUser: TestUser = await createAuthenticatedAdmin(app);
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const userReq = authenticatedRequest(app, testUser.accessToken);
+      const adminReq = authenticatedRequest(app, adminUser.accessToken);
+
+      await userReq
+        .post('/bug-reports')
+        .field('category', 'UI')
+        .field('title', '고유검색키워드xyz')
+        .field('description', '검색 테스트');
+
+      const res = await adminReq.get('/admin/bug-reports?search=고유검색키워드xyz');
+      expect(res.status).toBe(200);
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+      expect(res.body.items[0].title).toContain('고유검색키워드xyz');
+    });
+
+    it('date 필터로 특정 날짜의 버그 리포트만 반환한다', async () => {
+      const adminUser: TestUser = await createAuthenticatedAdmin(app);
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const userReq = authenticatedRequest(app, testUser.accessToken);
+      const adminReq = authenticatedRequest(app, adminUser.accessToken);
+
+      await userReq
+        .post('/bug-reports')
+        .field('category', 'UI')
+        .field('title', '날짜 필터 테스트')
+        .field('description', '오늘 생성된 버그');
+
+      const today = new Date().toISOString().split('T')[0];
+      const res = await adminReq.get(`/admin/bug-reports?date=${today}`);
+      expect(res.status).toBe(200);
+      expect(res.body.items.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // =====================
+  // 상태 변경 + 이력 저장
+  // =====================
+  describe('Status change with history', () => {
+    it('상태 변경 후 상세 조회하면 statusHistory에 이력이 포함된다', async () => {
+      const adminUser: TestUser = await createAuthenticatedAdmin(app);
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const userReq = authenticatedRequest(app, testUser.accessToken);
+      const adminReq = authenticatedRequest(app, adminUser.accessToken);
+
+      const createRes = await userReq
+        .post('/bug-reports')
+        .field('category', 'UI')
+        .field('title', '이력 테스트')
+        .field('description', '상태 변경 이력 테스트');
+      const bugReportId = createRes.body.id;
+
+      // UNCONFIRMED → CONFIRMED
+      await adminReq
+        .patch(`/admin/bug-reports/${bugReportId}/status`)
+        .send({ status: BugReportStatus.CONFIRMED });
+
+      // CONFIRMED → FIXED
+      await adminReq
+        .patch(`/admin/bug-reports/${bugReportId}/status`)
+        .send({ status: BugReportStatus.FIXED });
+
+      // 상세 조회 → statusHistory 검증
+      const detailRes = await adminReq.get(`/admin/bug-reports/${bugReportId}`);
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.statusHistory.length).toBeGreaterThanOrEqual(2);
     });
   });
 

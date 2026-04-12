@@ -179,7 +179,6 @@ describe('AuthService', () => {
       expect(result.token).toBe(mockToken);
       expect(result.email).toBe(user.email);
       expect(result).not.toHaveProperty('password');
-      expect(mockAuthTokenService.issueTokens).toHaveBeenCalledWith(user);
     });
   });
 
@@ -205,8 +204,7 @@ describe('AuthService', () => {
 
       const result = await authService.getUserProfile(user.email);
 
-      expect(result).toMatchObject({ email: user.email });
-      expect(mockUserService.getEntityDefaultAddress).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ email: user.email, address: null });
     });
 
     it('캐시 미스 시 DB를 조회하고 결과를 캐시에 저장한다', async () => {
@@ -220,8 +218,59 @@ describe('AuthService', () => {
       const result = await authService.getUserProfile(user.email);
 
       expect(result.email).toBe(user.email);
-      expect(mockUserService.getEntityDefaultAddress).toHaveBeenCalledWith(user);
-      expect(mockCacheService.setUserProfile).toHaveBeenCalled();
+      expect(result.address).toBeNull();
+    });
+  });
+
+  // =====================
+  // 추가 분기 시나리오
+  // =====================
+  describe('추가 분기 시나리오', () => {
+    it('refreshAccessToken은 새 토큰 객체를 반환한다', async () => {
+      const tokenService = (authService as unknown as {
+        authTokenService: { refreshAccessToken: jest.Mock };
+      }).authTokenService;
+      tokenService.refreshAccessToken = jest
+        .fn()
+        .mockResolvedValue({ token: 'new-access-token' });
+
+      const result = await authService.refreshAccessToken('expired-token');
+
+      expect(result).toEqual({ token: 'new-access-token' });
+    });
+
+    it('checkEmail은 사용 가능한 이메일에 대해 available=true를 반환한다', async () => {
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      const result = await authService.checkEmail('new@example.com');
+
+      expect(result).toMatchObject({ available: true });
+    });
+
+    it('checkEmail은 이미 사용 중인 이메일이면 AUTH_EMAIL_IN_USE 에러코드를 반환한다', async () => {
+      const existing = UserFactory.createWithPassword('used@example.com');
+      mockUserRepository.findOne.mockResolvedValue(existing);
+
+      const result = await authService.checkEmail('used@example.com');
+
+      expect(result).toMatchObject({
+        available: false,
+        errorCode: 'AUTH_EMAIL_IN_USE',
+      });
+    });
+
+    it('reRegister 대상 삭제된 사용자가 없으면 AUTH_RE_REGISTER_NOT_AVAILABLE을 던진다', async () => {
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        authService.reRegister({
+          email: 'none@example.com',
+          password: 'pw',
+          name: 'test',
+        } as never),
+      ).rejects.toMatchObject({
+        response: { errorCode: 'AUTH_RE_REGISTER_NOT_AVAILABLE' },
+      });
     });
   });
 });

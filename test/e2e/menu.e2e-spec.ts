@@ -272,6 +272,34 @@ describe('Menu (e2e)', () => {
     });
   });
 
+  // ─── POST /menu/selections - merge existing ─────────────────────────────────
+
+  describe('POST /menu/selections - merge', () => {
+    it('같은 날 메뉴를 2번 선택하면 기존 선택에 merge된다', async () => {
+      const testUser: TestUser = await createAuthenticatedUser(app);
+
+      // 첫 번째 선택 (lunch)
+      const first = await api()
+        .post('/menu/selections')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ menus: [{ slot: 'lunch', name: '김치찌개' }] });
+      expect(first.status).toBe(201);
+      const firstId = first.body.selection.id;
+
+      // 두 번째 선택 (dinner) - 같은 날
+      const second = await api()
+        .post('/menu/selections')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ menus: [{ slot: 'dinner', name: '삼겹살' }] });
+      expect(second.status).toBe(201);
+
+      // 같은 selection에 merge되어야 함
+      expect(second.body.selection.id).toBe(firstId);
+      expect(second.body.selection.menuPayload.lunch).toContain('김치찌개');
+      expect(second.body.selection.menuPayload.dinner).toContain('삼겹살');
+    });
+  });
+
   // ─── PATCH /menu/selections/:id ──────────────────────────────────────────────
 
   describe('PATCH /menu/selections/:id', () => {
@@ -312,6 +340,48 @@ describe('Menu (e2e)', () => {
 
       // Service queries by both selectionId AND userId, so other user's selection appears as "not found" → 400
       expect(res.status).toBe(400);
+    });
+
+    it('특정 slot만 업데이트하면 해당 slot만 변경된다', async () => {
+      const testUser: TestUser = await createAuthenticatedUser(app);
+
+      // lunch와 dinner로 선택 생성
+      const createRes = await api()
+        .post('/menu/selections')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ menus: [
+          { slot: 'lunch', name: '김치찌개' },
+          { slot: 'dinner', name: '삼겹살' },
+        ] });
+      const selectionId = createRes.body.selection.id;
+
+      // lunch만 업데이트
+      const res = await api()
+        .patch(`/menu/selections/${selectionId}`)
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ lunch: ['된장찌개'] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.selection.menuPayload.lunch).toContain('된장찌개');
+      expect(res.body.selection.menuPayload.lunch).not.toContain('김치찌개');
+      // dinner는 변경되지 않아야 함
+      expect(res.body.selection.menuPayload.dinner).toContain('삼겹살');
+    });
+
+    it('cancel=true로 수정하면 menuPayload가 빈 배열이 된다', async () => {
+      const testUser: TestUser = await createAuthenticatedUser(app);
+      const selectionId = await createSelection(app, testUser.accessToken);
+
+      const res = await api()
+        .patch(`/menu/selections/${selectionId}`)
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ cancel: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.selection.menuPayload.breakfast).toHaveLength(0);
+      expect(res.body.selection.menuPayload.lunch).toHaveLength(0);
+      expect(res.body.selection.menuPayload.dinner).toHaveLength(0);
+      expect(res.body.selection.menuPayload.etc).toHaveLength(0);
     });
   });
 

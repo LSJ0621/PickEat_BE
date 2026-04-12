@@ -58,22 +58,19 @@ Backend:
 
 **구조**:
 ```typescript
-// 실제 앱 + 실제 DB + 외부 API만 mock
-beforeAll(async () => {
-  const module = await Test.createTestingModule({
-    imports: [AppModule],
-  })
-    .overrideProvider(GeminiClient).useValue(mockGeminiClient)
-    .overrideProvider(GooglePlacesClient).useValue(mockGooglePlacesClient)
-    .overrideProvider(OpenAiBatchClient).useValue(mockOpenAiBatchClient)
-    .overrideProvider(S3Client).useValue(mockS3Client)
-    .overrideProvider(DiscordWebhookClient).useValue(mockDiscordClient)
-    .overrideProvider(GoogleOAuthClient).useValue(mockGoogleOAuthClient)
-    .overrideProvider(KakaoOAuthClient).useValue(mockKakaoOAuthClient)
-    .compile();
+// 실제 앱 + 실제 DB + 외부 API는 E2E_MOCK=true로 자동 mock
+import { createE2EApp, closeE2EApp } from './setup';
 
-  app = module.createNestApplication();
-  await app.init();
+let app: INestApplication;
+
+beforeAll(async () => {
+  // E2E_MOCK=true 환경에서 ExternalModule이 자동으로
+  // 실제 Client를 유지하되 HTTP/SDK 호출만 mock 응답을 반환
+  app = await createE2EApp();
+});
+
+afterAll(async () => {
+  await closeE2EApp(app);
 });
 ```
 
@@ -313,6 +310,31 @@ describe('GooglePlacesClient', () => {
 | 잘못된 응답 형태 | 파싱 실패 → 에러 throw (앱 죽지 않음) |
 | 인증 만료 (401) | 적절한 에러 전파 |
 
+### Mock 허용 범위 명확화
+
+"외부 API" 정의: **비용이 발생하거나 외부 서비스에 응답을 받아오는 연동**.
+
+**Mock 허용 대상**:
+1. **외부 API Client** (HTTP/SDK 경계, 과금/외부 응답)
+   - OpenAI, Gemini, Google Places, OAuth(Google/Kakao), AWS S3, Discord Webhook
+   - mock 필수 (실제 API 호출 금지)
+2. **외부 API 래퍼 내부 Service**
+   - `OpenAiMenuService`, `GeminiPlacesService` 등 이름에 외부 제공자가 들어가고 내부적으로 외부 API를 호출하는 Service
+   - 외부 Client와 동등 취급, mock 허용
+3. **동일 도메인 내 분리 Service** (책임 분리 구조)
+   - 예: `auth.service`가 `AuthTokenService`/`AuthSocialService`/`AuthPasswordService`를 호출
+   - 도메인 루트 Service의 Unit 테스트에서 분리 Service mock 허용
+
+**Mock 금지 대상**:
+4. **다른 도메인의 내부 Service**
+   - 예: `place.service`가 `UserAddressService`를 호출
+   - mock 금지 — 실제 인스턴스 또는 실제 의존성 체인 사용 (Repository는 경량 mock 허용)
+5. **Repository는 실제 test DB 또는 경량 mock 허용** (TypeORM 규약)
+
+**Mock 철학**:
+- 단, §6.1 "행동 테스트, 구현 검증 금지" 엄수 — `toHaveBeenCalledWith` 같은 내부 호출 검증 금지
+- Mock은 "외부 경계 차단"이 목적, "내부 로직 추적"이 목적이 아님
+
 ---
 
 ## 5. 테스트 작성 규칙
@@ -391,19 +413,15 @@ API 테스트는 Docker PostgreSQL 테스트 DB를 사용한다.
 **격리 방식**: 테스트 파일 단위 격리
 
 ```typescript
-// test/utils/api-test-setup.ts
-beforeAll(async () => {
-  // AppModule 부트스트랩 + 외부 API Client override
-  const module = await Test.createTestingModule({
-    imports: [AppModule],
-  })
-    .overrideProvider(GeminiClient).useValue(mockGeminiClient)
-    .overrideProvider(GooglePlacesClient).useValue(mockGooglePlacesClient)
-    // ... 나머지 외부 API Client override
-    .compile();
+// test/e2e/setup/ 의 createE2EApp 사용
+import { createE2EApp, closeE2EApp } from './setup';
 
-  app = module.createNestApplication();
-  await app.init();
+let app: INestApplication;
+let dataSource: DataSource;
+
+beforeAll(async () => {
+  // E2E_MOCK=true 환경에서 외부 API 자동 mock
+  app = await createE2EApp();
   dataSource = app.get(DataSource);
 });
 
@@ -417,7 +435,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await app.close();
+  await closeE2EApp(app);
 });
 ```
 
@@ -492,15 +510,16 @@ pick-eat_be/
 │           ├── {service}.spec.ts         # 비즈니스 로직 Unit
 │           └── {guard|pipe}.spec.ts      # Guard/Pipe Unit
 ├── test/
-│   ├── api/                              # API 테스트 (신규)
-│   │   ├── auth.api.spec.ts
-│   │   ├── menu.api.spec.ts
-│   │   ├── user.api.spec.ts
-│   │   ├── user-place.api.spec.ts
-│   │   ├── rating.api.spec.ts
-│   │   ├── bug-report.api.spec.ts
-│   │   ├── notification.api.spec.ts
-│   │   └── admin.api.spec.ts
+│   ├── e2e/                              # E2E 테스트
+│   │   ├── auth.e2e-spec.ts
+│   │   ├── menu.e2e-spec.ts
+│   │   ├── user.e2e-spec.ts
+│   │   ├── user-place.e2e-spec.ts
+│   │   ├── rating.e2e-spec.ts
+│   │   ├── bug-report.e2e-spec.ts
+│   │   ├── address.e2e-spec.ts
+│   │   ├── admin.e2e-spec.ts
+│   │   └── setup/                        # E2E 공통 설정
 │   ├── fixtures/                         # 외부 API 응답 샘플
 │   │   ├── gemini/
 │   │   ├── google-places/
@@ -520,7 +539,7 @@ pick-eat_be/
 ```
 
 **네이밍 규칙**:
-- API 테스트: `{도메인}.api.spec.ts`
+- E2E 테스트: `{도메인}.e2e-spec.ts`
 - Unit 테스트: `{서비스명}.spec.ts`
 - Fixture: `{api명}/{시나리오}.json`
 
@@ -532,14 +551,11 @@ pick-eat_be/
 # Unit 테스트 (src/**/__tests__/*.spec.ts)
 pnpm test
 
-# API 테스트 (test/api/*.api.spec.ts)
-pnpm test:api
+# E2E 테스트 (test/e2e/*.e2e-spec.ts)
+pnpm test:e2e
 
-# 전체 테스트
-pnpm test:all
-
-# 커버리지
-pnpm test:cov
+# 합산 커버리지 (Unit + E2E)
+NODE_ENV=test E2E_MOCK=true npx jest --config jest.e2e.config.js --runInBand --forceExit --testRegex="(\.spec\.ts|\.e2e-spec\.ts)$" --coverage
 
 # 특정 모듈만
 pnpm test -- --testPathPattern=auth
@@ -549,7 +565,7 @@ pnpm test -- --testPathPattern=auth
 
 ```
 1. Backend Unit 테스트 (빠름, 30초)
-2. Backend API 테스트 (중간, 2-3분)
+2. Backend E2E 테스트 (중간, 2-3분)
 ```
 
 실패 시 다음 단계로 넘어가지 않는다.

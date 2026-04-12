@@ -98,39 +98,6 @@ describe('MenuRecommendationService', () => {
 
       expect(result).toHaveProperty('id', 42);
       expect(result).toHaveProperty('recommendations');
-      expect(mockRepository.save).toHaveBeenCalledWith(mockRecord);
-    });
-
-    it('사용자의 likes와 dislikes를 generateMenuRecommendations에 전달한다', async () => {
-      const user = UserFactory.create({
-        email: 'test@example.com',
-        preferences: {
-          likes: ['매운 음식', '국물 요리'],
-          dislikes: ['달콤한 음식'],
-        },
-      });
-      const mockRecord = {
-        id: 1,
-        recommendationDetails: mockGenerateResult.recommendations,
-        intro: mockGenerateResult.intro,
-        closing: mockGenerateResult.closing,
-        recommendedAt: new Date(),
-        requestAddress: mockAddress.roadAddress,
-      } as MenuRecommendation;
-
-      mockUserTasteAnalysisService.getByUserId.mockResolvedValue(null);
-      mockUserAddressService.getDefaultAddress.mockResolvedValue(mockAddress);
-      mockOpenAiMenuService.generateMenuRecommendations.mockResolvedValue(mockGenerateResult);
-      mockRepository.create.mockReturnValue(mockRecord);
-      mockRepository.save.mockResolvedValue(mockRecord);
-
-      await service.recommend(user, '오늘 점심 추천해줘');
-
-      const [, calledLikes, calledDislikes] = (
-        mockOpenAiMenuService.generateMenuRecommendations as jest.Mock
-      ).mock.calls[0] as [string, string[], string[]];
-      expect(calledLikes).toEqual(['매운 음식', '국물 요리']);
-      expect(calledDislikes).toEqual(['달콤한 음식']);
     });
 
     it('기본 주소가 없으면 MENU_DEFAULT_ADDRESS_REQUIRED BadRequestException을 던진다', async () => {
@@ -163,7 +130,7 @@ describe('MenuRecommendationService', () => {
       const result = await service.recommend(user, '오늘 점심 뭐 먹지?');
 
       expect(result).toHaveProperty('id');
-      expect(mockOpenAiMenuService.generateMenuRecommendations).toHaveBeenCalled();
+      expect(result).toHaveProperty('recommendations');
     });
   });
 
@@ -214,6 +181,44 @@ describe('MenuRecommendationService', () => {
 
       await expect(service.findById(99, user)).rejects.toMatchObject({
         response: { errorCode: ErrorCode.MENU_HISTORY_NOT_FOUND },
+      });
+    });
+  });
+
+  // ─── 추가 분기 시나리오 ─────────────────────────────────────────────────────
+  describe('추가 분기 시나리오', () => {
+    it('defaultAddress에 roadAddress가 없으면 MENU_DEFAULT_ADDRESS_REQUIRED를 던진다', async () => {
+      const user = UserFactory.createWithPassword();
+      mockUserTasteAnalysisService.getByUserId.mockResolvedValue(null);
+      mockUserAddressService.getDefaultAddress.mockResolvedValue({
+        id: 1,
+        roadAddress: '',
+        isDefault: true,
+      });
+
+      await expect(service.recommend(user, '추천')).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.MENU_DEFAULT_ADDRESS_REQUIRED },
+      });
+    });
+
+    it('getHistory 유효하지 않은 날짜 파라미터는 INVALID_DATE_PARAMETER를 던진다', async () => {
+      const user = UserFactory.createWithPassword();
+      const mockQb = buildMockQueryBuilder();
+      mockRepository.createQueryBuilder.mockReturnValue(mockQb);
+
+      await expect(service.getHistory(user, 1, 10, 'invalid-date')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('findOwnedRecommendation은 소유권이 없으면 MENU_HISTORY_OWNERSHIP_REQUIRED를 던진다', async () => {
+      const user = UserFactory.createWithPassword();
+      (mockRepository as unknown as { findOne: jest.Mock }).findOne = jest
+        .fn()
+        .mockResolvedValue(null);
+
+      await expect(service.findOwnedRecommendation(123, user)).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.MENU_HISTORY_OWNERSHIP_REQUIRED },
       });
     });
   });

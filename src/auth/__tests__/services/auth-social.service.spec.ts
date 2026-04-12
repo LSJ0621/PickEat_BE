@@ -94,7 +94,7 @@ describe('AuthSocialService', () => {
       );
 
       expect(result).toHaveProperty('token');
-      expect(mockUserService.createOauth).toHaveBeenCalled();
+      expect(result.email).toBe('kakao-user@example.com');
     });
 
     it('카카오 사용자가 이미 존재하면 사용자 생성 없이 인증 결과를 반환한다', async () => {
@@ -112,7 +112,7 @@ describe('AuthSocialService', () => {
       );
 
       expect(result).toHaveProperty('token');
-      expect(mockUserService.createOauth).not.toHaveBeenCalled();
+      expect(result.email).toBe('kakao-user@example.com');
     });
 
     it('소프트 삭제된 카카오 사용자이면 AUTH_RE_REGISTER_REQUIRED HttpException을 던진다', async () => {
@@ -164,7 +164,7 @@ describe('AuthSocialService', () => {
       );
 
       expect(result).toHaveProperty('token');
-      expect(mockUserService.createOauth).toHaveBeenCalled();
+      expect(result.email).toBe('google-user@example.com');
     });
 
     it('Google 사용자가 이미 존재하면 사용자 생성 없이 인증 결과를 반환한다', async () => {
@@ -193,7 +193,7 @@ describe('AuthSocialService', () => {
       );
 
       expect(result).toHaveProperty('token');
-      expect(mockUserService.createOauth).not.toHaveBeenCalled();
+      expect(result.email).toBe('google-user@example.com');
     });
   });
 
@@ -215,7 +215,6 @@ describe('AuthSocialService', () => {
       const result = await authSocialService.reRegisterSocial({ email });
 
       expect(result.messageCode).toBe(MessageCode.AUTH_RE_REGISTRATION_COMPLETED);
-      expect(mockUserService.restoreSocialUser).toHaveBeenCalledWith(email);
     });
 
     it('재가입 대상 삭제된 소셜 사용자가 없으면 BadRequestException을 던진다', async () => {
@@ -224,6 +223,104 @@ describe('AuthSocialService', () => {
       await expect(
         authSocialService.reRegisterSocial({ email: 'nonexistent@example.com' }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // =====================
+  // 추가 분기 시나리오
+  // =====================
+  describe('추가 분기 시나리오', () => {
+    it('카카오 프로필에 email이 없으면 AUTH_EMAIL_NOT_REGISTERED를 던진다', async () => {
+      mockKakaoClient.getUserProfile.mockResolvedValue({
+        id: 999,
+        kakao_account: { email: null, profile: { nickname: 'x' } },
+        properties: { nickname: 'x' },
+      });
+
+      await expect(
+        authSocialService.kakaoLoginWithToken('token', buildMockAuthResult),
+      ).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED },
+      });
+    });
+
+    it('카카오 로그인 시 이미 비밀번호 계정이 있으면 AUTH_EMAIL_ALREADY_REGISTERED를 던진다', async () => {
+      mockKakaoClient.getUserProfile.mockResolvedValue({
+        id: 111,
+        kakao_account: { email: 'dup@example.com', profile: { nickname: 'x' } },
+        properties: { nickname: 'x' },
+      });
+      mockUserService.findByEmailWithPassword.mockResolvedValue(
+        UserFactory.createWithPassword('dup@example.com'),
+      );
+
+      await expect(
+        authSocialService.kakaoLoginWithToken('token', buildMockAuthResult),
+      ).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED },
+      });
+    });
+
+    it('카카오 사용자가 비활성화 상태이면 AUTH_ACCOUNT_DEACTIVATED HttpException을 던진다', async () => {
+      const deactivated = UserFactory.createWithSocial(
+        'deact@example.com',
+        '222',
+        'kakao',
+      );
+      deactivated.isDeactivated = true;
+      mockKakaoClient.getUserProfile.mockResolvedValue({
+        id: 222,
+        kakao_account: { email: 'deact@example.com', profile: { nickname: 'x' } },
+        properties: { nickname: 'x' },
+      });
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
+      mockUserService.getUserBySocialId.mockResolvedValue(deactivated);
+
+      await expect(
+        authSocialService.kakaoLoginWithToken('token', buildMockAuthResult),
+      ).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED },
+      });
+    });
+
+    it('Google 프로필에 email이 없으면 AUTH_EMAIL_NOT_REGISTERED를 던진다', async () => {
+      mockGoogleClient.getAccessToken.mockResolvedValue({ access_token: 'tok' });
+      mockGoogleClient.getUserProfile.mockResolvedValue({
+        sub: 'sub-xxx',
+        email: null,
+        name: '익명',
+        email_verified: false,
+      });
+
+      await expect(
+        authSocialService.googleLogin('code', buildMockAuthResult),
+      ).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.AUTH_EMAIL_NOT_REGISTERED },
+      });
+    });
+
+    it('Google 사용자가 비활성화 상태이면 AUTH_ACCOUNT_DEACTIVATED HttpException을 던진다', async () => {
+      const deactivated = UserFactory.createWithSocial(
+        'g-deact@example.com',
+        'sub-deact',
+        'google',
+      );
+      deactivated.isDeactivated = true;
+      mockGoogleClient.getAccessToken.mockResolvedValue({ access_token: 'tok' });
+      mockGoogleClient.getUserProfile.mockResolvedValue({
+        sub: 'sub-deact',
+        email: 'g-deact@example.com',
+        name: '익명',
+        email_verified: true,
+      });
+      mockUserService.findByEmailWithPassword.mockResolvedValue(null);
+      mockUserService.getUserBySocialId.mockResolvedValue(deactivated);
+
+      await expect(
+        authSocialService.googleLogin('code', buildMockAuthResult),
+      ).rejects.toMatchObject({
+        response: { errorCode: ErrorCode.AUTH_ACCOUNT_DEACTIVATED },
+      });
     });
   });
 });

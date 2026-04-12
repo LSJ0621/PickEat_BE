@@ -149,4 +149,102 @@ describe('GeminiClient', () => {
       client.searchRestaurantsUnified('맛집', 37.5, 127.0, 'ko'),
     ).rejects.toThrow('Gemini API quota exceeded');
   });
+
+  it('응답 텍스트가 비어있으면 success=false로 빈 restaurants를 반환한다', async () => {
+    const emptyResponse = {
+      text: '',
+      candidates: [
+        {
+          content: { parts: [{ text: '' }], role: 'model' },
+          finishReason: 'STOP',
+          groundingMetadata: {
+            groundingChunks: [],
+            googleMapsWidgetContextToken: 'widget-token-empty',
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 10,
+        candidatesTokenCount: 0,
+        totalTokenCount: 10,
+      },
+    };
+    mockGenerateContent.mockResolvedValue(emptyResponse as unknown as GeminiApiResponse);
+
+    const result = await client.searchRestaurantsUnified(
+      '맛집',
+      37.5,
+      127.0,
+      'ko',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.restaurants).toEqual([]);
+    expect(result.googleMapsWidgetContextToken).toBe('widget-token-empty');
+  });
+
+  it('JSON 파싱이 완전히 실패하면 success=false를 반환한다', async () => {
+    mockGenerateContent.mockResolvedValue(
+      buildGeminiResponse('이건 JSON이 전혀 아닙니다'),
+    );
+
+    const result = await client.searchRestaurantsUnified(
+      '맛집',
+      37.5,
+      127.0,
+      'ko',
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.restaurants).toEqual([]);
+  });
+
+  it('단일 배치 내 동일 placeId는 중복 제거된다', async () => {
+    const restaurantJson = JSON.stringify({
+      restaurants: [
+        {
+          nameKo: '가게A',
+          nameEn: 'Store A',
+          nameLocal: null,
+          reason: '이유',
+          reasonTags: [],
+          addressKo: '주소A',
+          addressEn: 'addr A',
+          addressLocal: null,
+          latitude: 37.5,
+          longitude: 127.0,
+        },
+        {
+          nameKo: '가게A',
+          nameEn: 'Store A',
+          nameLocal: null,
+          reason: '이유2',
+          reasonTags: [],
+          addressKo: '주소A',
+          addressEn: 'addr A',
+          addressLocal: null,
+          latitude: 37.5,
+          longitude: 127.0,
+        },
+      ],
+    });
+
+    mockGenerateContent.mockResolvedValue(
+      buildGeminiResponse(`\`\`\`json\n${restaurantJson}\n\`\`\``, [
+        { maps: { placeId: 'place-dup-1', title: '가게A' } },
+      ]),
+    );
+
+    const result = await client.searchRestaurantsUnified(
+      '맛집',
+      37.5,
+      127.0,
+      'ko',
+    );
+
+    expect(result.success).toBe(true);
+    const withPlaceId = result.restaurants.filter((r) => r.placeId);
+    expect(withPlaceId).toHaveLength(1);
+    expect(withPlaceId[0].placeId).toBe('place-dup-1');
+  });
 });

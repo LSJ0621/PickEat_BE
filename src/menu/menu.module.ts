@@ -53,14 +53,14 @@ const isE2EMock = process.env.E2E_MOCK === 'true';
     MenuSelectionService,
     PlaceService,
     OpenAiMenuService,
-    OpenAiPlacesService,
     OpenAiCommunityPlacesService,
     GeminiPlacesService,
     CommunityPlaceService,
-    // TwoStageMenuService and its dependencies are provided by MockExternalModule in E2E mode
+    // E2E_MOCK=true: MockExternalModule에서 real class + mock OpenAI SDK로 제공
     ...(isE2EMock
       ? []
       : [
+          OpenAiPlacesService,
           TwoStageMenuService,
           Gpt4oMiniValidationService,
           Gpt51MenuService,

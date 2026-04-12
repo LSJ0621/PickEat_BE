@@ -126,15 +126,16 @@ describe('User (e2e)', () => {
       expect(loginRes.status).toBe(401);
     });
 
-    it('탈퇴 후 동일 토큰으로 요청하면 401 에러를 반환한다', async () => {
+    it('탈퇴 후 동일 토큰으로 요청하면 404 에러를 반환한다', async () => {
       const testUser: TestUser = await createAuthenticatedUser(app);
       const req = authenticatedRequest(app, testUser.accessToken);
 
       await req.delete('/user/me');
 
-      // 탈퇴 후 동일 accessToken으로 API 호출 시 차단되어야 함 (401 또는 404)
+      // 탈퇴(soft delete) 후 JWT는 유효하지만 getAuthenticatedEntity에서
+      // TypeORM이 soft-deleted 유저를 제외하므로 404 NOT_FOUND 반환
       const res = await req.patch('/user').send({ name: '탈퇴 후 수정 시도' });
-      expect([401, 404]).toContain(res.status);
+      expect(res.status).toBe(404);
     });
 
     it('인증 없이 요청하면 401 에러를 반환한다', async () => {

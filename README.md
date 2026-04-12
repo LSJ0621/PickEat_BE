@@ -166,3 +166,4 @@ pnpm run start:dev    # → http://localhost:3000
 | [Backend Structure](docs/backend-structure.md) | 모듈별 구조 및 레이어 설명 |
 | [Database Schema](docs/database-schema.md) | 13개 테이블 스키마 및 관계 |
 | [API Reference](docs/api-reference.md) | 75개 엔드포인트 명세 |
+| [Testing](docs/testing/README.md) | 546건 테스트 (Unit 320 + E2E 226) / Lines 커버리지 78.59% (Unit+E2E 합산) / BE E2E 45→0 회고 |

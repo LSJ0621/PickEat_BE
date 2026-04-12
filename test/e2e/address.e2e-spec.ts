@@ -461,6 +461,191 @@ describe('Address (e2e)', () => {
   });
 
   // =====================
+  // 캐시 HIT 테스트
+  // =====================
+  describe('Cache HIT', () => {
+    it('같은 사용자 주소를 2회 조회하면 두 번째는 캐시에서 반환된다', async () => {
+      const testUser = await createAuthenticatedUser(app);
+      await createAddress(testUser.accessToken);
+
+      // 첫 번째 조회 (캐시 MISS → DB 조회 → 캐시 저장)
+      const res1 = await api()
+        .get('/user/addresses')
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+      expect(res1.status).toBe(200);
+      expect(res1.body.addresses).toHaveLength(1);
+
+      // 두 번째 조회 (캐시 HIT)
+      const res2 = await api()
+        .get('/user/addresses')
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+      expect(res2.status).toBe(200);
+      expect(res2.body.addresses).toHaveLength(1);
+      expect(res2.body.addresses[0].id).toBe(res1.body.addresses[0].id);
+    });
+  });
+
+  // =====================
+  // 두 번째 주소 추가 시 isDefault 전환
+  // =====================
+  describe('Default address switching on second address', () => {
+    it('두 번째 주소를 isDefault=true로 추가하면 기존 주소의 isDefault가 false로 변경된다', async () => {
+      const testUser = await createAuthenticatedUser(app);
+
+      // 첫 번째 주소 (자동 isDefault=true)
+      const first = await createAddress(testUser.accessToken);
+      expect(first.body.isDefault).toBe(true);
+
+      // 두 번째 주소 (isDefault=true 명시)
+      const second = await createAddress(testUser.accessToken, altAddress, { isDefault: true });
+      expect(second.body.isDefault).toBe(true);
+
+      // 첫 번째 주소가 isDefault=false로 변경되었는지 확인
+      const listRes = await api()
+        .get('/user/addresses')
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+      const firstAddr = listRes.body.addresses.find(
+        (a: { id: number }) => a.id === first.body.id,
+      );
+      expect(firstAddr.isDefault).toBe(false);
+    });
+  });
+
+  // =====================
+  // updateAddress에서 latitude, longitude, alias 업데이트
+  // =====================
+  describe('PATCH /user/addresses/:id - extended fields', () => {
+    it('latitude, longitude, alias를 함께 업데이트할 수 있다', async () => {
+      const testUser = await createAuthenticatedUser(app);
+      const created = await createAddress(testUser.accessToken);
+
+      const res = await api()
+        .patch(`/user/addresses/${created.body.id}`)
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({
+          latitude: 37.555,
+          longitude: 127.055,
+          alias: '회사',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.latitude).toBe(37.555);
+      expect(res.body.longitude).toBe(127.055);
+      expect(res.body.alias).toBe('회사');
+    });
+  });
+
+  // =====================
+  // search address 삭제 시 플래그 재할당
+  // =====================
+  describe('Search address flag reassignment on delete', () => {
+    it('searchAddress를 삭제하면 다른 주소에 isSearchAddress 플래그가 재할당된다', async () => {
+      const testUser = await createAuthenticatedUser(app);
+
+      // 첫 번째 주소 (default + search)
+      const first = await createAddress(testUser.accessToken);
+      expect(first.body.isSearchAddress).toBe(true);
+
+      // 두 번째 주소
+      const second = await createAddress(testUser.accessToken, altAddress);
+
+      // 첫 번째 주소(search)를 검색 주소에서 해제, 두 번째를 검색 주소로 설정
+      await api()
+        .patch(`/user/addresses/${second.body.id}/search`)
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+
+      // 두 번째 주소(search) 삭제 → 첫 번째 주소에 isSearchAddress 재할당
+      // 단일 삭제로 테스트 (deleteAddress 사용)
+      // batch-delete로 non-default 주소 삭제
+      const deleteRes = await api()
+        .post('/user/addresses/batch-delete')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ ids: [second.body.id] });
+      expect(deleteRes.status).toBe(200);
+
+      // 남은 주소 확인
+      const listRes = await api()
+        .get('/user/addresses')
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+      expect(listRes.body.addresses).toHaveLength(1);
+      expect(listRes.body.addresses[0].isSearchAddress).toBe(true);
+    });
+  });
+
+  // =====================
+  // deleteAddresses 배치 삭제 — search 포함 시 재할당
+  // =====================
+  describe('Batch delete with search address reassignment', () => {
+    it('배치 삭제에서 searchAddress가 포함되면 남은 주소에 플래그가 재할당된다', async () => {
+      const testUser = await createAuthenticatedUser(app);
+
+      const first = await createAddress(testUser.accessToken);
+      const second = await createAddress(testUser.accessToken, altAddress);
+      const third = await createAddress(testUser.accessToken, {
+        address: '서울특별시 강남구 주소3',
+        roadAddress: '서울특별시 강남구 도로3',
+        postalCode: '06300',
+        latitude: '37.5100',
+        longitude: '127.0400',
+      });
+
+      // second를 searchAddress로 설정
+      await api()
+        .patch(`/user/addresses/${second.body.id}/search`)
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+
+      // second(searchAddress)와 third를 배치 삭제
+      const deleteRes = await api()
+        .post('/user/addresses/batch-delete')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ ids: [second.body.id, third.body.id] });
+      expect(deleteRes.status).toBe(200);
+
+      // first(default)에 searchAddress가 재할당되어야 함
+      const listRes = await api()
+        .get('/user/addresses')
+        .set('Authorization', `Bearer ${testUser.accessToken}`);
+      expect(listRes.body.addresses).toHaveLength(1);
+      expect(listRes.body.addresses[0].id).toBe(first.body.id);
+      expect(listRes.body.addresses[0].isSearchAddress).toBe(true);
+    });
+  });
+
+  // =====================
+  // updateSingleAddress 전체 경로 (PATCH /user/address)
+  // =====================
+  describe('PATCH /user/address - updateSingleAddress paths', () => {
+    it('주소가 없는 사용자가 요청하면 새 주소를 생성한다 (isDefault=true, isSearchAddress=true)', async () => {
+      const testUser = await createAuthenticatedUser(app);
+
+      const res = await api()
+        .patch('/user/address')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ selectedAddress: sampleAddress });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('isDefault', true);
+      expect(res.body).toHaveProperty('isSearchAddress', true);
+    });
+
+    it('기존 검색 주소가 있으면 해당 주소를 업데이트한다', async () => {
+      const testUser = await createAuthenticatedUser(app);
+
+      // 먼저 주소 생성 (isDefault=true, isSearchAddress=true)
+      await createAddress(testUser.accessToken);
+
+      // updateSingleAddress로 검색 주소 업데이트
+      const res = await api()
+        .patch('/user/address')
+        .set('Authorization', `Bearer ${testUser.accessToken}`)
+        .send({ selectedAddress: altAddress });
+
+      expect(res.status).toBe(200);
+      expect(res.body.roadAddress).toBe(altAddress.roadAddress);
+    });
+  });
+
+  // =====================
   // 주소 목록 조회 (GET /user/addresses)
   // =====================
   describe('GET /user/addresses', () => {
